@@ -1,0 +1,87 @@
+{
+    "id": "de.opentalk.mattermost-plugin",
+    "name": "OpenTalk Video",
+    "description": "Audio/Video conferencing in Mattermost via OpenTalk.",
+    "homepage_url": "https://gitlab.opencode.de/opentalk",
+    "support_url": "https://gitlab.opencode.de/opentalk",
+    "icon_path": "assets/icon.svg",
+    "version": "0.1.0",
+    "min_server_version": "9.0.0",
+    "server": {
+        "executables": {
+            "linux-amd64":   "server/dist/plugin-linux-amd64",
+            "linux-arm64":   "server/dist/plugin-linux-arm64",
+            "darwin-amd64":  "server/dist/plugin-darwin-amd64",
+            "darwin-arm64":  "server/dist/plugin-darwin-arm64",
+            "windows-amd64": "server/dist/plugin-windows-amd64.exe"
+        }
+    },
+    "webapp": {
+        "bundle_path": "webapp/dist/main.js"
+    },
+    "settings_schema": {
+        "header": "OpenTalk integration. Connect users via OIDC and create rooms in their name.",
+        "footer": "Source: https://gitlab.opencode.de/opentalk",
+        "sections": [
+            {
+                "key": "opentalk_server",
+                "title": "OpenTalk Server",
+                "settings": [
+                    {"key": "OpenTalkControllerURL", "type": "text",
+                     "display_name": "Controller URL",
+                     "help_text": "Base URL of the OpenTalk Controller, e.g. https://controller.opentalk.example",
+                     "default": ""},
+                    {"key": "OpenTalkFrontendURL", "type": "text",
+                     "display_name": "Frontend URL",
+                     "help_text": "Base URL of the OpenTalk Web Frontend, used for guest invite links.",
+                     "default": ""},
+                    {"key": "OpenTalkRoomserverURL", "type": "text",
+                     "display_name": "Roomserver URL (WebSocket)",
+                     "help_text": "Base WebSocket URL of the OpenTalk Roomserver, e.g. wss://controller.opentalk.example. The plugin appends /v1/signaling/<ticket>.",
+                     "default": ""},
+                    {"key": "LiveKitURL", "type": "text",
+                     "display_name": "LiveKit URL (optional override)",
+                     "help_text": "Override LiveKit endpoint. Leave empty to use what the Roomserver returns via the livekit signaling module.",
+                     "default": ""}
+                ]
+            },
+            {
+                "key": "auth",
+                "title": "Keycloak / OIDC",
+                "settings": [
+                    {"key": "OIDCAuthority", "type": "text",
+                     "display_name": "OIDC Authority",
+                     "help_text": "e.g. https://keycloak.example/realms/opentalk",
+                     "default": ""},
+                    {"key": "OIDCClientID", "type": "text",
+                     "display_name": "OIDC Client ID",
+                     "default": "mattermost-plugin-opentalk"},
+                    {"key": "OIDCClientSecret", "type": "text",
+                     "display_name": "OIDC Client Secret",
+                     "secret": true,
+                     "default": ""},
+                    {"key": "OIDCScopes", "type": "text",
+                     "display_name": "OIDC Scopes",
+                     "default": "openid email profile offline_access"},
+                    {"key": "TokenEncryptionKey", "type": "generated",
+                     "display_name": "Token Encryption Key",
+                     "help_text": "AES key used to encrypt OAuth tokens at rest. Auto-generated; rotate by clearing this field."}
+                ]
+            },
+            {
+                "key": "defaults",
+                "title": "Meeting Defaults",
+                "settings": [
+                    {"key": "DefaultEnableSIP", "type": "bool",
+                     "display_name": "Enable SIP dial-in by default", "default": false},
+                    {"key": "DefaultWaitingRoom", "type": "bool",
+                     "display_name": "Enable waiting room by default", "default": false},
+                    {"key": "EnableRinging", "type": "bool",
+                     "display_name": "Ring on DM calls (push notification)", "default": true},
+                    {"key": "InviteExpirationHours", "type": "number",
+                     "display_name": "Invite expiration (hours)", "default": 24}
+                ]
+            }
+        ]
+    }
+}
