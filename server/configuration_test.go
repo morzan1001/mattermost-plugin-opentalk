@@ -1,9 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest/mock"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
@@ -79,6 +83,27 @@ func TestConfiguration_IsValid(t *testing.T) {
 }
 
 func TestPlugin_OnConfigurationChange(t *testing.T) {
+	siteURL := "http://localhost:8065"
+	mmConfig := &model.Config{}
+	mmConfig.ServiceSettings.SiteURL = &siteURL
+
+	var oidcSrv *httptest.Server
+	oidcSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/.well-known/openid-configuration" {
+			json.NewEncoder(w).Encode(map[string]any{
+				"issuer":                                oidcSrv.URL,
+				"authorization_endpoint":                oidcSrv.URL + "/auth",
+				"token_endpoint":                        oidcSrv.URL + "/token",
+				"userinfo_endpoint":                     oidcSrv.URL + "/userinfo",
+				"jwks_uri":                              oidcSrv.URL + "/jwks",
+				"id_token_signing_alg_values_supported": []string{"RS256"},
+			})
+			return
+		}
+	}))
+	defer oidcSrv.Close()
+
 	t.Run("rejects invalid configuration", func(t *testing.T) {
 		api := &plugintest.API{}
 		api.On("LoadPluginConfiguration", mock.AnythingOfType("*main.Configuration")).
@@ -95,7 +120,7 @@ func TestPlugin_OnConfigurationChange(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("stores valid configuration", func(t *testing.T) {
+	t.Run("stores valid configuration and initializes oidc client", func(t *testing.T) {
 		api := &plugintest.API{}
 		api.On("LoadPluginConfiguration", mock.AnythingOfType("*main.Configuration")).
 			Return(func(dest interface{}) error {
@@ -103,12 +128,14 @@ func TestPlugin_OnConfigurationChange(t *testing.T) {
 				cfg.OpenTalkControllerURL = "https://controller.example"
 				cfg.OpenTalkFrontendURL = "https://opentalk.example"
 				cfg.OpenTalkRoomserverURL = "wss://controller.example"
-				cfg.OIDCAuthority = "https://keycloak.example/realms/opentalk"
+				cfg.OIDCAuthority = oidcSrv.URL
 				cfg.OIDCClientID = "mattermost-plugin-opentalk"
 				cfg.OIDCClientSecret = "secret"
+				cfg.OIDCScopes = "openid email profile offline_access"
 				cfg.InviteExpirationHours = 24
 				return nil
 			})
+		api.On("GetConfig").Return(mmConfig)
 
 		p := &Plugin{client: pluginapi.NewClient(api, nil)}
 		p.SetAPI(api)
@@ -116,6 +143,7 @@ func TestPlugin_OnConfigurationChange(t *testing.T) {
 		err := p.OnConfigurationChange()
 		assert.NoError(t, err)
 		assert.Equal(t, "https://controller.example", p.getConfiguration().OpenTalkControllerURL)
+		assert.NotNil(t, p.getOIDCClient(), "oidc client must be initialized after successful config change")
 	})
 
 	t.Run("propagates LoadPluginConfiguration error", func(t *testing.T) {

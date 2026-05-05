@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
+
+	"github.com/opentalk/mattermost-plugin-opentalk/server/oidc"
 )
 
 type Configuration struct {
@@ -88,5 +91,19 @@ func (p *Plugin) OnConfigurationChange() error {
 	}
 
 	p.setConfiguration(configuration)
+
+	redirectURL := fmt.Sprintf("%s/plugins/%s/oauth/callback", p.getSiteURL(), pluginID)
+	client, err := oidc.NewClient(context.Background(), oidc.Config{
+		Issuer:       configuration.OIDCAuthority,
+		ClientID:     configuration.OIDCClientID,
+		ClientSecret: configuration.OIDCClientSecret,
+		RedirectURL:  redirectURL,
+		Scopes:       splitScopes(configuration.OIDCScopes),
+	})
+	if err != nil {
+		return fmt.Errorf("oidc client init: %w", err)
+	}
+	p.setOIDCClient(client)
+
 	return nil
 }
