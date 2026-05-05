@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: .go-version
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+
+      - name: Install webapp deps
+        working-directory: webapp
+        run: npm ci
+
+      - name: Lint
+        run: make lint
+        continue-on-error: true  # phase-1: lint warnings allowed; tighten in phase 11
+
+      - name: Test
+        run: make test
+
+      - name: Build
+        run: make dist
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-bundle
+          path: dist/*.tar.gz
+          retention-days: 14
