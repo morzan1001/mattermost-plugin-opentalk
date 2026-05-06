@@ -287,6 +287,49 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 	if err := p.store.SaveActiveMeeting(am); err != nil {
 		return nil, fmt.Errorf("persist meeting (with post_id): %w", err)
 	}
+
+	ch, chErr := p.API.GetChannel(channelID)
+	if chErr == nil && ch != nil {
+		isDM := ch.Type == model.ChannelTypeDirect || ch.Type == model.ChannelTypeGroup
+		payload := map[string]any{
+			"channel_id":   channelID,
+			"room_id":      room.ID,
+			"host_user_id": mmUserID,
+			"host_name":    hostName,
+			"post_id":      botPost.Id,
+		}
+		if isDM {
+			// Resolve recipients (channel members minus host).
+			members, mErr := p.API.GetChannelMembers(channelID, 0, 100)
+			recipients := make([]string, 0, 4)
+			if mErr == nil {
+				for _, m := range members {
+					if m.UserId != mmUserID {
+						recipients = append(recipients, m.UserId)
+					}
+				}
+			}
+			payload["dm_user_ids"] = recipients
+			p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{ChannelId: channelID})
+
+			// Best-effort push notification per recipient.
+			for _, uid := range recipients {
+				push := &model.PushNotification{
+					Type:      model.PushTypeMessage,
+					Category:  model.CategoryCanReply,
+					ChannelId: channelID,
+					Message:   "Anruf von " + hostName,
+					SenderId:  p.botUserID,
+				}
+				if pErr := p.API.SendPushNotification(push, uid); pErr != nil {
+					p.API.LogWarn("[opentalk] push failed", "user", uid, "err", pErr.Error())
+				}
+			}
+		} else {
+			p.API.PublishWebSocketEvent("meeting_started", payload, &model.WebsocketBroadcast{ChannelId: channelID})
+		}
+	}
+
 	return am, nil
 }
 
