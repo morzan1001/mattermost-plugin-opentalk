@@ -52,16 +52,17 @@ beforeEach(() => {
 });
 
 describe('TileStrip', () => {
-    it('renders a diagnostic placeholder when there are no participants', () => {
+    it('renders nothing when the participants slice is empty', () => {
+        // Self gets a dedicated SelfPreview, so an empty (or self-only)
+        // participants slice means "no remote tiles to show" — the
+        // strip cleanly returns null.
         const store = makeStore({byId: {}, order: []});
-        const {getByTestId} = render(
+        const {container} = render(
             <Provider store={store}>
                 <TileStrip/>
             </Provider>,
         );
-        // The empty placeholder lets us tell at-a-glance whether the
-        // participants slice is empty (= controller-dispatch issue).
-        expect(getByTestId('tile-strip-empty')).toBeTruthy();
+        expect(container).toBeEmptyDOMElement();
     });
 
     it('renders 2 initials tiles and no overflow badge for 2 participants', () => {

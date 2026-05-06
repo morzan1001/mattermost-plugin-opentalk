@@ -28,6 +28,11 @@ export interface SessionState {
     expanded: boolean;
     minimized: boolean;
     joinedAt?: number;
+
+    /** OpenTalk-Roomserver participant id of the local user. Set on CONNECTED,
+     * cleared on DISCONNECTED. Used by the tile-strip to filter self out
+     * (self gets a dedicated SelfPreview instead). */
+    localParticipantId?: string;
 }
 
 const initial: SessionState = {
@@ -41,12 +46,13 @@ const initial: SessionState = {
     expanded: false,
     minimized: false,
     joinedAt: undefined,
+    localParticipantId: undefined,
 };
 
 export function connectStarted(payload: {channelID: string; roomID: string}) {
     return {type: ACTION_TYPES.CONNECT_STARTED, payload};
 }
-export function connected(payload: {participantCount: number; isHost?: boolean}) {
+export function connected(payload: {participantCount: number; isHost?: boolean; localParticipantId?: string}) {
     return {type: ACTION_TYPES.CONNECTED, payload};
 }
 export function participantsChanged(payload: {participantCount: number}) {
@@ -95,6 +101,7 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
             status: 'connected',
             participantCount: action.payload.participantCount,
             isHost: action.payload.isHost === true,
+            localParticipantId: action.payload.localParticipantId,
             error: undefined,
             joinedAt: Date.now(),
         };

@@ -76,10 +76,20 @@ export async function startConferenceConnection(
     client.on('connected', (data) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const isHost = (data as any).isHost === true;
-        store.dispatch(connected({participantCount: data.participants.length, isHost}));
+
+        // Self is always the first entry in data.participants because
+        // ConferenceRoom.connect() prepends it from the joinSuccess top-
+        // level id. Capture it so the UI can filter self out of the
+        // participant strip and render the SelfPreview tile instead.
+        const localParticipantId = data.participants[0]?.id;
+
+        store.dispatch(connected({
+            participantCount: data.participants.length,
+            isHost,
+            localParticipantId,
+        }));
 
         // Seed the participants slice with the full list from joinSuccess.
-        // ConferenceRoom.connect prepends self as the first entry in the list.
         store.dispatch(participantsBulkSet({
             participants: data.participants.map(toParticipantInfo),
         }));
@@ -100,10 +110,14 @@ export async function startConferenceConnection(
         bringUpLiveKit(url, token, store);
     });
     client.on('participant_joined', (p) => {
+        // eslint-disable-next-line no-console
+        console.warn('[opentalk] participant_joined', p?.id, p?.displayName);
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
         store.dispatch(participantAdded({participant: toParticipantInfo(p)}));
     });
     client.on('participant_left', ({id}) => {
+        // eslint-disable-next-line no-console
+        console.warn('[opentalk] participant_left', id);
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
         store.dispatch(participantRemoved({id}));
     });

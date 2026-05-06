@@ -1,6 +1,7 @@
 import React, {useState} from 'react';
 import {useSelector, useDispatch} from 'react-redux';
 
+import {SelfPreview} from './self_preview';
 import {TileStrip} from './tile_strip';
 
 import {leaveActiveConference, endActiveMeeting} from '../../conference/controller';
@@ -36,15 +37,10 @@ const MeetingMiniBar: React.FC = () => {
     });
 
     const resize = useResizable({
-        storageKey: 'opentalk:widget-size:v2',
-        defaultSize: {width: 600, height: 88},
-        minSize: {width: 540, height: 80},
+        storageKey: 'opentalk:widget-size:v3',
+        defaultSize: {width: 600, height: 220},
+        minSize: {width: 540, height: 100},
     });
-
-    // Only constrain widget WIDTH from the resize hook. Height is content-
-    // driven so the tile-strip row below the controls can grow with the
-    // number of participants without the user having to drag the SE handle.
-    const widgetWidthStyle: React.CSSProperties = {width: resize.style.width};
 
     const duration = useMeetingDuration(session.joinedAt);
 
@@ -112,7 +108,7 @@ const MeetingMiniBar: React.FC = () => {
                     fontFamily: 'Inter, system-ui, sans-serif',
                     overflow: 'hidden',
                     ...drag.style,
-                    ...widgetWidthStyle,
+                    ...resize.style,
                 }}
             >
                 {/* Drag handle — full-width grab strip at the top */}
@@ -172,6 +168,8 @@ const MeetingMiniBar: React.FC = () => {
                                 )}
                             </span>
 
+                            <SelfPreview/>
+
                             <div style={{flex: 1}}/>
 
                             <ControlsBar
@@ -184,15 +182,23 @@ const MeetingMiniBar: React.FC = () => {
 
                 </div>
 
-                {/* Tile-strip row — participant videos / initials, dragged with widget */}
+                {/* Tile-strip row — remote-participant videos / initials.
+                    Self gets a dedicated SelfPreview in the controls row
+                    above. flex:1 + overflow:auto so this row scrolls when
+                    the user resizes the widget short and there are more
+                    remote tiles than fit. */}
                 {session.status === 'connected' && (
                     <div
                         style={{
                             padding: '0 10px 10px 10px',
                             display: 'flex',
-                            alignItems: 'center',
+                            alignItems: 'flex-start',
                             gap: 6,
                             flexWrap: 'wrap',
+                            flex: 1,
+                            minHeight: 0,
+                            overflowY: 'auto',
+                            alignContent: 'flex-start',
                         }}
                     >
                         <TileStrip/>

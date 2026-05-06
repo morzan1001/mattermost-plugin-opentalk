@@ -119,7 +119,7 @@ const Tile: React.FC<{participant: ParticipantInfo; videoTrackId?: string}> = ({
 
 export const TileStrip: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const order = useSelector((s: any) => s[stateKey]?.participants?.order ?? [] as string[]);
+    const allOrder = useSelector((s: any) => s[stateKey]?.participants?.order ?? [] as string[]);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const byId = useSelector((s: any) => s[stateKey]?.participants?.byId ?? {});
@@ -127,25 +127,18 @@ export const TileStrip: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const perParticipant = useSelector((s: any) => s[stateKey]?.tracks?.perParticipant ?? {});
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const localId: string | undefined = useSelector((s: any) => s[stateKey]?.session?.localParticipantId);
+
+    // Self is rendered separately by SelfPreview, so the participant strip
+    // shows ONLY remote attendees.
+    const order: string[] = localId ? allOrder.filter((id: string) => id !== localId) : allOrder;
     const total = order.length;
 
     if (total === 0) {
-        // Diagnostic placeholder: lets us tell at-a-glance whether the
-        // participants slice is empty (= controller dispatch issue) vs.
-        // the strip is rendering but tiles look wrong.
-        return (
-            <span
-                data-testid='tile-strip-empty'
-                style={{
-                    fontSize: 11,
-                    fontStyle: 'italic',
-                    opacity: 0.5,
-                    padding: '0 8px',
-                }}
-            >
-                {'(keine Teilnehmer im Slice)'}
-            </span>
-        );
+        // No remote participants. The user is alone (or only-self in slice).
+        // Render nothing — SelfPreview handles the local-cam display.
+        return null;
     }
 
     const overflow = total > MAX_VISIBLE;
