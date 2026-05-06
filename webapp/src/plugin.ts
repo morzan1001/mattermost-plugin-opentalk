@@ -9,6 +9,8 @@ import PostTypeMeeting from './components/post_type_meeting/component';
 import MeetingMiniBar from './components/meeting_mini_bar/component';
 import AudioRenderer from './components/audio_renderer/component';
 import ExpandedView from './components/expanded_view/component';
+import IncomingCallModal from './components/incoming_call_modal/component';
+import {incomingCallReceived, incomingCallCleared} from './store/slice_incoming_calls';
 import OpenTalkIcon from './components/channel_header_button/icon';
 import {startMeetingAction} from './components/channel_header_button/action';
 import {getConnectionStatus} from './client/rest';
@@ -34,6 +36,25 @@ interface MeetingEndedMessage {
     data: {
         channel_id: string;
         room_id: string;
+    };
+}
+
+interface IncomingCallMessage {
+    data: {
+        channel_id: string;
+        room_id: string;
+        host_user_id: string;
+        host_name: string;
+        post_id?: string;
+        dm_user_ids?: string[];
+    };
+}
+
+interface IncomingCallDismissedMessage {
+    data: {
+        channel_id: string;
+        room_id: string;
+        mm_user_id: string;
     };
 }
 
@@ -81,12 +102,39 @@ export default class Plugin {
                 if (session?.status !== 'idle' && session?.channelID === msg.data.channel_id) {
                     leaveActiveConference();
                 }
+
+                // Always clear any pending incoming-call modal for this channel
+                store.dispatch(incomingCallCleared({channelID: msg.data.channel_id}));
+            },
+        );
+        registry.registerWebSocketEventHandler?.(
+            `custom_${pluginId}_incoming_call`,
+            (msg: IncomingCallMessage) => {
+                store.dispatch(incomingCallReceived({
+                    channelID: msg.data.channel_id,
+                    roomID: msg.data.room_id,
+                    hostUserID: msg.data.host_user_id,
+                    hostName: msg.data.host_name,
+                    receivedAt: Date.now(),
+                }));
+            },
+        );
+        registry.registerWebSocketEventHandler?.(
+            `custom_${pluginId}_incoming_call_dismissed`,
+            (msg: IncomingCallDismissedMessage) => {
+                // Only act if the dismissal was for THIS user (other tabs of same user)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const myId = (store.getState() as any)?.entities?.users?.currentUserId;
+                if (msg.data.mm_user_id === myId) {
+                    store.dispatch(incomingCallCleared({channelID: msg.data.channel_id}));
+                }
             },
         );
         registry.registerPostTypeComponent?.('custom_opentalk_meeting', PostTypeMeeting);
         registry.registerRootComponent?.(MeetingMiniBar);
         registry.registerRootComponent?.(AudioRenderer);
         registry.registerRootComponent?.(ExpandedView);
+        registry.registerRootComponent?.(IncomingCallModal);
 
         // VideoGrid (the bottom-right floating tiles from Phase 6) is no
         // longer registered: in Phase 7a the floating-widget's TileStrip
