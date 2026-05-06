@@ -26,6 +26,7 @@ func newHandler(api *plugintest.API) *Handler {
 		EncryptionKey: encKey,
 		SiteURL:       "http://localhost:8065",
 		PluginID:      "de.opentalk.mattermost-plugin",
+		FrontendURL:   "https://opentalk.example",
 	}
 }
 
@@ -111,14 +112,14 @@ func TestInfo_Connected(t *testing.T) {
 	assert.Contains(t, resp.Text, "kc-sub")
 }
 
-func TestAutocomplete_HasFourSubcommands(t *testing.T) {
+func TestAutocomplete_HasEightSubcommands(t *testing.T) {
 	data := AutocompleteData()
 	require.NotNil(t, data)
-	require.Len(t, data.SubCommands, 4)
+	require.Len(t, data.SubCommands, 8)
 	names := []string{}
 	for _, sc := range data.SubCommands {
 		names = append(names, sc.Trigger)
 	}
 	sort.Strings(names)
-	assert.Equal(t, "connect,disconnect,help,info", strings.Join(names, ","))
+	assert.Equal(t, "connect,dial-in,disconnect,end,help,info,join,start", strings.Join(names, ","))
 }
