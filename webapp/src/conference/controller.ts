@@ -278,3 +278,24 @@ export function _reset(): void {
     activeLiveKit = null;
     activeStore = null;
 }
+
+// Browser-debug introspection: surfaces the truthiness of the controller's
+// module-level singletons so the user can inspect them from the devtools
+// console (window.opentalk.state()) without relying on console.log filters.
+export function debugState(): {
+    hasClient: boolean;
+    hasLiveKit: boolean;
+    hasStore: boolean;
+    micEnabled: boolean | null;
+    camEnabled: boolean | null;
+    screenShareEnabled: boolean | null;
+    } {
+    return {
+        hasClient: activeClient !== null,
+        hasLiveKit: activeLiveKit !== null,
+        hasStore: activeStore !== null,
+        micEnabled: activeLiveKit ? activeLiveKit.isMicEnabled() : null,
+        camEnabled: activeLiveKit ? activeLiveKit.isCamEnabled() : null,
+        screenShareEnabled: activeLiveKit ? activeLiveKit.isScreenShareEnabled() : null,
+    };
+}

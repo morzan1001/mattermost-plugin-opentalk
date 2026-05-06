@@ -12,7 +12,15 @@ import VideoGrid from './components/video_grid/component';
 import OpenTalkIcon from './components/channel_header_button/icon';
 import {startMeetingAction} from './components/channel_header_button/action';
 import {getConnectionStatus} from './client/rest';
-import {setActiveStore} from './conference/controller';
+import {
+    setActiveStore,
+    toggleMic,
+    toggleCam,
+    toggleScreenShare,
+    leaveActiveConference,
+    endActiveMeeting,
+    debugState,
+} from './conference/controller';
 
 interface ConnectedStateMessage {
     data: {
@@ -34,6 +42,22 @@ export default class Plugin {
         // screen) can dispatch from RootComponents where useStore() returns
         // null in some Mattermost-Webapp versions.
         setActiveStore(store);
+
+        // Browser-devtools handle. Lets the user introspect controller state
+        // and trigger toggles from the console:
+        //   window.opentalk.state()      → { hasClient, hasLiveKit, ... }
+        //   await window.opentalk.toggleMic()
+        // Useful for diagnosing silent click-handler / connect failures.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).opentalk = {
+            state: debugState,
+            toggleMic,
+            toggleCam,
+            toggleScreenShare,
+            leave: leaveActiveConference,
+            end: endActiveMeeting,
+            build: '2026-05-06-diag2',
+        };
 
         registry.registerReducer?.(reducer);
         registry.registerWebSocketEventHandler?.(
