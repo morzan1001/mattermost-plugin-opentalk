@@ -115,6 +115,28 @@ func (p *Plugin) OnDeactivate() error {
 	return nil
 }
 
+// NotificationWillBePushed is called by the Mattermost server before any
+// push-notification is dispatched. Returning (nil, "<reason>") tells MM
+// to suppress this push. We use it to drop the duplicate notification
+// the standard pipeline would send for our custom_opentalk_meeting
+// posts (we already send our own call-flavored push from CreateMeeting).
+func (p *Plugin) NotificationWillBePushed(push *model.PushNotification, mmUserID string) (*model.PushNotification, string) {
+	if push == nil {
+		return push, ""
+	}
+	if push.PostId == "" {
+		return push, ""
+	}
+	pp, appErr := p.API.GetPost(push.PostId)
+	if appErr != nil || pp == nil {
+		return push, ""
+	}
+	if pp.Type == "custom_opentalk_meeting" {
+		return nil, "opentalk plugin owns this notification"
+	}
+	return push, ""
+}
+
 func (p *Plugin) getOIDCClient() *oidc.Client {
 	p.oidcMu.RLock()
 	defer p.oidcMu.RUnlock()
@@ -262,6 +284,12 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		return nil, fmt.Errorf("access token: %w", err)
 	}
 
+	// Guard: if a meeting is already active in this channel, return it as a
+	// sentinel so callers can branch with errors.Is(err, store.ErrMeetingAlreadyActive).
+	if existing, lErr := p.store.LoadActiveMeeting(channelID); lErr == nil && existing != nil {
+		return existing, store.ErrMeetingAlreadyActive
+	}
+
 	deviceSecret, err := generateDeviceSecret()
 	if err != nil {
 		return nil, err
@@ -352,12 +380,23 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 
 			// Best-effort push notification per recipient.
 			for _, uid := range recipients {
+				// Skip ringing users who set their MM status to Do Not Disturb.
+				// Slack mirrors this: "the call will not go through" if recipient is on DND.
+				status, _ := p.API.GetUserStatus(uid)
+				if status != nil && status.Status == model.StatusDnd {
+					continue
+				}
 				push := &model.PushNotification{
-					Type:      model.PushTypeMessage,
-					Category:  model.CategoryCanReply,
-					ChannelId: channelID,
-					Message:   "Anruf von " + hostName,
-					SenderId:  p.botUserID,
+					Version:     model.PushMessageV2,
+					Type:        model.PushTypeMessage,
+					SubType:     model.PushSubTypeCalls,
+					TeamId:      ch.TeamId,
+					ChannelId:   channelID,
+					PostId:      botPost.Id,
+					SenderId:    p.botUserID,
+					ChannelType: ch.Type,
+					Message:     "📞 " + hostName + " ruft an",
+					IsIdLoaded:  true,
 				}
 				if pErr := p.API.SendPushNotification(push, uid); pErr != nil {
 					p.API.LogWarn("[opentalk] push failed", "user", uid, "err", pErr.Error())

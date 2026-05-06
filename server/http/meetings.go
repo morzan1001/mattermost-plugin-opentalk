@@ -54,6 +54,19 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 		return
 	}
 
+	// Guard: reject a second concurrent meeting in the same channel.
+	if existing, lErr := h.Store.LoadActiveMeeting(body.ChannelID); lErr == nil && existing != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(nethttp.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":        "meeting already active in this channel",
+			"room_id":      existing.RoomID,
+			"post_id":      existing.PostID,
+			"host_user_id": existing.HostUserID,
+		})
+		return
+	}
+
 	room, err := h.OpenTalk.CreateRoom(token, opentalk.CreateRoomRequest{
 		EnableSIP:   h.Defaults.EnableSIP,
 		WaitingRoom: h.Defaults.WaitingRoom,

@@ -2,9 +2,16 @@ package store
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
+
+// ErrMeetingAlreadyActive is returned by callers that detect a live meeting
+// already persisted for a channel. The caller should treat the accompanying
+// *ActiveMeeting return value as the existing meeting rather than creating a
+// new one. Use errors.Is(err, store.ErrMeetingAlreadyActive) to branch.
+var ErrMeetingAlreadyActive = errors.New("meeting already active in this channel")
 
 // ActiveMeeting is per-channel state for a running OpenTalk meeting.
 // Tokens are NOT stored here – ticket/resumption are short-lived and live
