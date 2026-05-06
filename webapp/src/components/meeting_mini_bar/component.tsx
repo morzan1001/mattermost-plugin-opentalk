@@ -3,63 +3,14 @@ import {useSelector, useDispatch} from 'react-redux';
 
 import {TileStrip} from './tile_strip';
 
-import {leaveActiveConference, toggleMic, toggleCam, toggleScreenShare, endActiveMeeting} from '../../conference/controller';
+import {leaveActiveConference, endActiveMeeting} from '../../conference/controller';
 import {useDraggable} from '../../hooks/use_draggable';
 import {useMeetingDuration} from '../../hooks/use_meeting_duration';
 import {useResizable} from '../../hooks/use_resizable';
-import {setExpanded, setMinimized} from '../../store/slice_session';
-import {
-    MicIcon,
-    MicOffIcon,
-    VideoIcon,
-    CameraOffIcon,
-    ScreenShareIcon,
-    ScreenShareOffIcon,
-    HangupIcon,
-    MinimizeIcon,
-    ExpandIcon,
-} from '../icons';
+import {setMinimized} from '../../store/slice_session';
+import {ControlsBar} from '../controls_bar/component';
 
 const stateKey = 'plugins-de.opentalk.mattermost-plugin';
-
-const baseButtonStyle: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 36,
-    height: 36,
-    padding: 0,
-    borderRadius: 8,
-    border: 'none',
-    background: 'rgba(255,255,255,0.08)',
-    color: 'rgba(255,255,255,0.92)',
-    cursor: 'pointer',
-    transition: 'background 120ms',
-};
-
-const activeButtonStyle: React.CSSProperties = {
-    ...baseButtonStyle,
-    background: '#2d8cff',
-    color: 'white',
-};
-
-const dangerButtonStyle: React.CSSProperties = {
-    ...baseButtonStyle,
-    background: '#e3354c',
-    color: 'white',
-};
-
-const mutedDangerButtonStyle: React.CSSProperties = {
-    ...baseButtonStyle,
-    background: 'rgba(227, 53, 76, 0.18)',
-    color: '#ff7a8a',
-};
-
-const mutedButtonStyle: React.CSSProperties = {
-    ...baseButtonStyle,
-    background: 'rgba(255,255,255,0.04)',
-    color: 'rgba(255,255,255,0.55)',
-};
 
 const MeetingMiniBar: React.FC = () => {
     const dispatch = useDispatch();
@@ -224,67 +175,11 @@ const MeetingMiniBar: React.FC = () => {
 
                             <div style={{flex: 1}}/>
 
-                            <button
-                                type='button'
-                                style={session.micEnabled ? activeButtonStyle : mutedDangerButtonStyle}
-                                onClick={() => toggleMic()}
-                                title={session.micEnabled ? 'Mikrofon stummschalten' : 'Mikrofon einschalten'}
-                                aria-label={session.micEnabled ? 'Mikrofon stummschalten' : 'Mikrofon einschalten'}
-                            >
-                                {session.micEnabled ? <MicIcon/> : <MicOffIcon/>}
-                            </button>
-
-                            <button
-                                type='button'
-                                style={session.camEnabled ? activeButtonStyle : mutedButtonStyle}
-                                onClick={() => toggleCam()}
-                                title={session.camEnabled ? 'Kamera ausschalten' : 'Kamera einschalten'}
-                                aria-label={session.camEnabled ? 'Kamera ausschalten' : 'Kamera einschalten'}
-                            >
-                                {session.camEnabled ? <VideoIcon/> : <CameraOffIcon/>}
-                            </button>
-
-                            <button
-                                type='button'
-                                style={session.screenShareEnabled ? activeButtonStyle : mutedButtonStyle}
-                                onClick={() => toggleScreenShare()}
-                                title={session.screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}
-                                aria-label={session.screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}
-                            >
-                                {session.screenShareEnabled ? <ScreenShareOffIcon/> : <ScreenShareIcon/>}
-                            </button>
-
-                            <div style={{width: 1, height: 24, background: 'rgba(255,255,255,0.1)', margin: '0 4px'}}/>
-
-                            <button
-                                type='button'
-                                style={mutedButtonStyle}
-                                onClick={() => dispatch(setMinimized(true))}
-                                title='Minimieren'
-                                aria-label='Minimieren'
-                            >
-                                <MinimizeIcon/>
-                            </button>
-
-                            <button
-                                type='button'
-                                style={mutedButtonStyle}
-                                onClick={() => dispatch(setExpanded(true))}
-                                title='Vollbild'
-                                aria-label='Vollbild'
-                            >
-                                <ExpandIcon/>
-                            </button>
-
-                            <button
-                                type='button'
-                                style={dangerButtonStyle}
-                                onClick={onLeaveClick}
-                                title={isHost ? 'Verlassen / Meeting beenden' : 'Meeting verlassen'}
-                                aria-label={isHost ? 'Verlassen oder Meeting beenden' : 'Meeting verlassen'}
-                            >
-                                <HangupIcon/>
-                            </button>
+                            <ControlsBar
+                                showExpand={true}
+                                onLeave={onLeaveClick}
+                                onMinimize={() => dispatch(setMinimized(true))}
+                            />
                         </>
                     )}
 
