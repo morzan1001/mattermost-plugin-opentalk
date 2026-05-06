@@ -33,48 +33,67 @@ const formatDuration = (seconds: number): string => {
 
 const stateKey = 'plugins-de.opentalk.mattermost-plugin';
 
+// OpenTalk brand-accent: deep teal used as a single 4-px accent stripe down
+// the card's left edge. The rest of the card stays neutral so it blends with
+// both the light and dark Mattermost themes.
+const opentalkTeal = '#00B59C';
+const opentalkTealDark = '#008F7A';
+
 const cardStyle: React.CSSProperties = {
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'row',
     maxWidth: 480,
-    border: '1px solid var(--center-channel-color-rgb, rgba(63, 67, 80, 0.16))',
-    borderColor: 'rgba(63, 67, 80, 0.16)',
-    borderRadius: 12,
+    border: '1px solid rgba(63, 67, 80, 0.12)',
+    borderRadius: 10,
     background: 'var(--center-channel-bg, white)',
     overflow: 'hidden',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
     fontFamily: 'inherit',
+};
+
+const accentStripeStyle: React.CSSProperties = {
+    width: 4,
+    background: opentalkTeal,
+    flexShrink: 0,
+};
+
+const innerStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    minWidth: 0,
 };
 
 const headerStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     gap: 10,
-    padding: '12px 16px',
-    background: 'linear-gradient(135deg, #2d8cff 0%, #1768e0 100%)',
-    color: 'white',
+    padding: '12px 16px 8px',
+    color: 'var(--center-channel-color, #3f4350)',
+};
+
+const logoBadgeStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    background: 'rgba(0, 181, 156, 0.12)',
+    color: opentalkTealDark,
+    flexShrink: 0,
 };
 
 const bodyStyle: React.CSSProperties = {
-    padding: '14px 16px 16px',
+    padding: '0 16px 14px',
     display: 'flex',
     flexDirection: 'column',
     gap: 10,
 };
 
-const metaRowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    fontSize: 13,
-    color: 'var(--center-channel-color, #3f4350)',
-    opacity: 0.85,
-};
-
 const dialinStyle: React.CSSProperties = {
     fontSize: 12,
     fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-    background: 'rgba(63, 67, 80, 0.06)',
+    background: 'rgba(63, 67, 80, 0.05)',
     padding: '6px 10px',
     borderRadius: 6,
     color: 'var(--center-channel-color, #3f4350)',
@@ -87,7 +106,7 @@ const joinButtonStyle: React.CSSProperties = {
     gap: 8,
     width: '100%',
     padding: '10px 16px',
-    background: '#2d8cff',
+    background: opentalkTeal,
     color: 'white',
     border: 'none',
     borderRadius: 8,
@@ -96,7 +115,7 @@ const joinButtonStyle: React.CSSProperties = {
     letterSpacing: 0.2,
     cursor: 'pointer',
     transition: 'background 120ms',
-    marginTop: 4,
+    marginTop: 2,
 };
 
 const joinButtonDisabledStyle: React.CSSProperties = {
@@ -123,8 +142,8 @@ const livePulse: React.CSSProperties = {
     width: 6,
     height: 6,
     borderRadius: '50%',
-    background: '#3ad06a',
-    boxShadow: '0 0 0 0 rgba(58, 208, 106, 0.7)',
+    background: opentalkTeal,
+    boxShadow: '0 0 0 0 rgba(0, 181, 156, 0.7)',
 };
 
 const PostTypeMeeting: React.FC<Props> = ({post}) => {
@@ -157,14 +176,14 @@ const PostTypeMeeting: React.FC<Props> = ({post}) => {
     let statusBadge: React.ReactNode = null;
     if (p.status === 'STARTED') {
         statusBadge = (
-            <span style={{...statusBadgeBase, background: 'rgba(58, 208, 106, 0.16)', color: '#1a8a40'}}>
+            <span style={{...statusBadgeBase, background: 'rgba(0, 181, 156, 0.14)', color: opentalkTealDark}}>
                 <span style={livePulse}/>
                 {'Live'}
             </span>
         );
     } else if (p.status === 'ENDED') {
         statusBadge = (
-            <span style={{...statusBadgeBase, background: 'rgba(63, 67, 80, 0.1)', color: 'rgba(63, 67, 80, 0.7)'}}>
+            <span style={{...statusBadgeBase, background: 'rgba(63, 67, 80, 0.08)', color: 'rgba(63, 67, 80, 0.7)'}}>
                 {'Beendet'}
             </span>
         );
@@ -178,50 +197,53 @@ const PostTypeMeeting: React.FC<Props> = ({post}) => {
 
     return (
         <div style={cardStyle}>
-            <div style={headerStyle}>
-                <OpenTalkLogoIcon size={22}/>
-                <div style={{display: 'flex', flexDirection: 'column', lineHeight: 1.2}}>
-                    <span style={{fontSize: 14, fontWeight: 600}}>{'OpenTalk-Meeting'}</span>
-                    <span style={{fontSize: 11, opacity: 0.85}}>{'Audio · Video · Bildschirmfreigabe'}</span>
+            <div style={accentStripeStyle}/>
+            <div style={innerStyle}>
+                <div style={headerStyle}>
+                    <span style={logoBadgeStyle}>
+                        <OpenTalkLogoIcon size={20}/>
+                    </span>
+                    <div style={{display: 'flex', flexDirection: 'column', lineHeight: 1.25, minWidth: 0}}>
+                        <span style={{fontSize: 14, fontWeight: 600}}>{'OpenTalk-Meeting'}</span>
+                        <span style={{fontSize: 12, opacity: 0.6}}>
+                            <strong style={{fontWeight: 600}}>{`@${p.host_username}`}</strong>
+                            {' lädt ein'}
+                        </span>
+                    </div>
+                    {statusBadge && <div style={{marginLeft: 'auto'}}>{statusBadge}</div>}
                 </div>
-                {statusBadge && <div style={{marginLeft: 'auto'}}>{statusBadge}</div>}
-            </div>
-            <div style={bodyStyle}>
-                <div style={metaRowStyle}>
-                    <strong style={{color: 'var(--center-channel-color, #3f4350)'}}>{`@${p.host_username}`}</strong>
-                    <span style={{opacity: 0.6}}>{'lädt zum Meeting ein'}</span>
+                <div style={bodyStyle}>
+                    {p.dial_in_number && p.dial_in_pin && (
+                        <div style={dialinStyle}>
+                            {`Telefon ${p.dial_in_number} · PIN ${p.dial_in_pin}`}
+                        </div>
+                    )}
+
+                    {p.status === 'STARTED' && (
+                        <button
+                            type='button'
+                            onClick={onJoin}
+                            style={inMeetingAlready ? joinButtonDisabledStyle : joinButtonStyle}
+                            disabled={inMeetingAlready}
+                            title={inMeetingAlready ? 'Du bist bereits in einem Meeting' : 'Meeting beitreten'}
+                        >
+                            <VideoIcon/>
+                            <span>{inMeetingAlready ? 'Bereits im Meeting' : 'Meeting beitreten'}</span>
+                        </button>
+                    )}
+
+                    {p.status === 'ENDED' && p.duration_seconds && (
+                        <div style={{fontSize: 13, color: 'rgba(63, 67, 80, 0.7)'}}>
+                            {`Meeting beendet · Dauer ${formatDuration(p.duration_seconds)}`}
+                        </div>
+                    )}
+
+                    {p.status === 'MISSED' && (
+                        <div style={{fontSize: 13, color: 'rgba(63, 67, 80, 0.7)'}}>
+                            {'Meeting verpasst · niemand ist beigetreten'}
+                        </div>
+                    )}
                 </div>
-
-                {p.dial_in_number && p.dial_in_pin && (
-                    <div style={dialinStyle}>
-                        {`📞  ${p.dial_in_number}    · PIN ${p.dial_in_pin}`}
-                    </div>
-                )}
-
-                {p.status === 'STARTED' && (
-                    <button
-                        type='button'
-                        onClick={onJoin}
-                        style={inMeetingAlready ? joinButtonDisabledStyle : joinButtonStyle}
-                        disabled={inMeetingAlready}
-                        title={inMeetingAlready ? 'Du bist bereits in einem Meeting' : 'Meeting beitreten'}
-                    >
-                        <VideoIcon/>
-                        <span>{inMeetingAlready ? 'Bereits im Meeting' : 'Meeting beitreten'}</span>
-                    </button>
-                )}
-
-                {p.status === 'ENDED' && p.duration_seconds && (
-                    <div style={{fontSize: 13, color: 'rgba(63, 67, 80, 0.7)'}}>
-                        {`Meeting beendet · Dauer ${formatDuration(p.duration_seconds)}`}
-                    </div>
-                )}
-
-                {p.status === 'MISSED' && (
-                    <div style={{fontSize: 13, color: 'rgba(63, 67, 80, 0.7)'}}>
-                        {'Meeting verpasst · niemand ist beigetreten'}
-                    </div>
-                )}
             </div>
         </div>
     );
