@@ -168,9 +168,9 @@ const MeetingMiniBar: React.FC = () => {
                                 )}
                             </span>
 
-                            <SelfPreview/>
-
                             <div style={{flex: 1}}/>
+
+                            <SelfPreview/>
 
                             <ControlsBar
                                 showExpand={true}

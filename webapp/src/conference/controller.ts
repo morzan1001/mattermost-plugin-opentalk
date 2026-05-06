@@ -351,20 +351,36 @@ export function _reset(): void {
 // module-level singletons plus a snapshot of the participants/tracks slices
 // so the user can inspect them from the devtools console
 // (window.opentalk.state()) without relying on console.log filters.
-export function debugState(): Record<string, unknown> {
+//
+// Returns a **JSON string** rather than a live object so the devtools
+// console doesn't truncate large arrays/objects with "(3) […]".
+// Call window.opentalk.state() and copy-paste the entire returned string.
+export function debugState(): string {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stateSlice: any = activeStore?.getState()?.['plugins-de.opentalk.mattermost-plugin'] ?? {};
-    return {
+    const snapshot = {
         hasClient: activeClient !== null,
         hasLiveKit: activeLiveKit !== null,
         hasStore: activeStore !== null,
-        localIdentity: activeLiveKit ? activeLiveKit.getLocalIdentity() : null,
-        micEnabled: activeLiveKit ? activeLiveKit.isMicEnabled() : null,
-        camEnabled: activeLiveKit ? activeLiveKit.isCamEnabled() : null,
-        screenShareEnabled: activeLiveKit ? activeLiveKit.isScreenShareEnabled() : null,
-        sessionStatus: stateSlice.session?.status,
+        liveKitLocalIdentity: activeLiveKit ? activeLiveKit.getLocalIdentity() : null,
+        liveKitMicEnabled: activeLiveKit ? activeLiveKit.isMicEnabled() : null,
+        liveKitCamEnabled: activeLiveKit ? activeLiveKit.isCamEnabled() : null,
+        liveKitScreenShareEnabled: activeLiveKit ? activeLiveKit.isScreenShareEnabled() : null,
+        session: {
+            status: stateSlice.session?.status,
+            participantCount: stateSlice.session?.participantCount,
+            localParticipantId: stateSlice.session?.localParticipantId,
+            isHost: stateSlice.session?.isHost,
+            micEnabled: stateSlice.session?.micEnabled,
+            camEnabled: stateSlice.session?.camEnabled,
+            screenShareEnabled: stateSlice.session?.screenShareEnabled,
+            livekitConnected: stateSlice.session?.livekitConnected,
+            joinedAt: stateSlice.session?.joinedAt,
+        },
         participantsOrder: stateSlice.participants?.order,
         participantsById: stateSlice.participants?.byId,
         tracksPerParticipant: stateSlice.tracks?.perParticipant,
+        tracksActiveSpeakers: stateSlice.tracks?.activeSpeakers,
     };
+    return JSON.stringify(snapshot, null, 2);
 }
