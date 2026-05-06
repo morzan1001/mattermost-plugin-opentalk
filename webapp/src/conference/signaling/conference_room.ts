@@ -95,16 +95,6 @@ export class ConferenceRoom {
                 this.socket = new SignalingSocket(roomserverURL, ticket);
                 this.listener = new EventListener(this.socket);
 
-                // Diagnostic wire-log: prints every incoming signaling frame.
-                // Lets us see what the OpenTalk roomserver actually sends —
-                // critical when a namespace handler "looks right" but the
-                // frame doesn't arrive in the shape we expect (e.g. livekit
-                // credentials carrying the URL under a different key).
-                this.listener.onAny((msg) => {
-                    // eslint-disable-next-line no-console
-                    console.warn('[opentalk] WS frame:', msg.namespace + ':' + msg.payload.action, msg.payload);
-                });
-
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'joinSuccess', (payload: any) => {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any

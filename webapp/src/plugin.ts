@@ -32,22 +32,16 @@ interface ConnectedStateMessage {
 
 export default class Plugin {
     public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): Promise<void> {
-        // Boot-marker so we can tell from the browser console whether the
-        // latest bundle is actually running (vs. a cached older one).
-        // Uses warn() so it survives default console filters that hide log().
-        // eslint-disable-next-line no-console
-        console.warn('[opentalk] plugin initialize, build=2026-05-06-diag2');
-
         // Pin the redux store on the controller so toggle handlers (mic/cam/
         // screen) can dispatch from RootComponents where useStore() returns
         // null in some Mattermost-Webapp versions.
         setActiveStore(store);
 
-        // Browser-devtools handle. Lets the user introspect controller state
-        // and trigger toggles from the console:
+        // Browser-devtools handle for ad-hoc inspection of conference state:
         //   window.opentalk.state()      → { hasClient, hasLiveKit, ... }
         //   await window.opentalk.toggleMic()
-        // Useful for diagnosing silent click-handler / connect failures.
+        // Kept in production builds — it's read-only-ish and the bundle
+        // already exposes the same APIs to the React tree.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).opentalk = {
             state: debugState,
@@ -56,7 +50,6 @@ export default class Plugin {
             toggleScreenShare,
             leave: leaveActiveConference,
             end: endActiveMeeting,
-            build: '2026-05-06-diag2',
         };
 
         registry.registerReducer?.(reducer);

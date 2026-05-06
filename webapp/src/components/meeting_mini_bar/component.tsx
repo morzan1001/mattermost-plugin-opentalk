@@ -114,11 +114,7 @@ const MeetingMiniBar: React.FC = () => {
                     <button
                         type='button'
                         style={session.micEnabled ? activeButtonStyle : mutedDangerButtonStyle}
-                        onClick={() => {
-                            // eslint-disable-next-line no-console
-                            console.warn('[opentalk] mini-bar mic onClick');
-                            toggleMic();
-                        }}
+                        onClick={() => toggleMic()}
                         title={session.micEnabled ? 'Mikrofon stummschalten' : 'Mikrofon einschalten'}
                         aria-label={session.micEnabled ? 'Mikrofon stummschalten' : 'Mikrofon einschalten'}
                     >
@@ -128,11 +124,7 @@ const MeetingMiniBar: React.FC = () => {
                     <button
                         type='button'
                         style={session.camEnabled ? activeButtonStyle : mutedButtonStyle}
-                        onClick={() => {
-                            // eslint-disable-next-line no-console
-                            console.warn('[opentalk] mini-bar cam onClick');
-                            toggleCam();
-                        }}
+                        onClick={() => toggleCam()}
                         title={session.camEnabled ? 'Kamera ausschalten' : 'Kamera einschalten'}
                         aria-label={session.camEnabled ? 'Kamera ausschalten' : 'Kamera einschalten'}
                     >
@@ -142,11 +134,7 @@ const MeetingMiniBar: React.FC = () => {
                     <button
                         type='button'
                         style={session.screenShareEnabled ? activeButtonStyle : mutedButtonStyle}
-                        onClick={() => {
-                            // eslint-disable-next-line no-console
-                            console.warn('[opentalk] mini-bar screen onClick');
-                            toggleScreenShare();
-                        }}
+                        onClick={() => toggleScreenShare()}
                         title={session.screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}
                         aria-label={session.screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}
                     >

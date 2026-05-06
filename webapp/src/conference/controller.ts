@@ -69,8 +69,6 @@ export async function startConferenceConnection(
         }
     });
     client.on('livekit_credentials', ({url, token}) => {
-        // eslint-disable-next-line no-console
-        console.warn('[opentalk] livekit_credentials received, url=', url, 'token-len=', token.length);
         if (activeLiveKit) {
             // Already brought up (e.g. via the joinSuccess fallback above) —
             // a re-credentialing roundtrip would tear down active publications.
@@ -107,14 +105,10 @@ export async function startConferenceConnection(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): void {
-    // eslint-disable-next-line no-console
-    console.warn('[opentalk] bringUpLiveKit url=', url, 'token-len=', token.length);
     const lk = new LiveKitRoom();
     activeLiveKit = lk;
 
     lk.on('connected', () => {
-        // eslint-disable-next-line no-console
-        console.warn('[opentalk] LiveKit room connected');
         store.dispatch(setLivekitConnected(true));
 
         // Default-on: enable mic. User can toggle off via UI.
@@ -169,17 +163,12 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         store.dispatch(activeSpeakersChanged({speakers: speakers as string[]}));
     });
 
-    lk.connect(url, token).
-        then(() => {
-            // eslint-disable-next-line no-console
-            console.warn('[opentalk] LiveKit connect resolved');
-        }).
-        catch((err: Error) => {
-            // eslint-disable-next-line no-console
-            console.warn('[opentalk] LiveKit connect failed:', err.message);
-            store.dispatch(setLivekitConnected(false));
-            activeLiveKit = null;
-        });
+    lk.connect(url, token).catch((err: Error) => {
+        // eslint-disable-next-line no-console
+        console.warn('[opentalk] LiveKit connect failed:', err.message);
+        store.dispatch(setLivekitConnected(false));
+        activeLiveKit = null;
+    });
 }
 
 export async function leaveActiveConference(): Promise<void> {
@@ -233,8 +222,6 @@ export async function endActiveMeeting(): Promise<void> {
 }
 
 export async function toggleMic(): Promise<void> {
-    // eslint-disable-next-line no-console
-    console.warn('[opentalk] toggleMic called, activeLiveKit=', Boolean(activeLiveKit), 'activeStore=', Boolean(activeStore));
     if (!activeLiveKit || !activeStore) {
         return;
     }
@@ -248,8 +235,6 @@ export async function toggleMic(): Promise<void> {
 }
 
 export async function toggleCam(): Promise<void> {
-    // eslint-disable-next-line no-console
-    console.warn('[opentalk] toggleCam called, activeLiveKit=', Boolean(activeLiveKit), 'activeStore=', Boolean(activeStore));
     if (!activeLiveKit || !activeStore) {
         return;
     }
@@ -263,8 +248,6 @@ export async function toggleCam(): Promise<void> {
 }
 
 export async function toggleScreenShare(): Promise<void> {
-    // eslint-disable-next-line no-console
-    console.warn('[opentalk] toggleScreenShare called, activeLiveKit=', Boolean(activeLiveKit), 'activeStore=', Boolean(activeStore));
     if (!activeLiveKit || !activeStore) {
         return;
     }
