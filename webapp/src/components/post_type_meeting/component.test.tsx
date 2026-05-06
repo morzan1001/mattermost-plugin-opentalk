@@ -53,16 +53,16 @@ describe('PostTypeMeeting', () => {
         (startConferenceConnection as jest.Mock).mockClear();
     });
 
-    it('renders host + JOIN MEETING button for STARTED meeting', () => {
+    it('renders host + join button for STARTED meeting', () => {
         renderWithStore(basePost as any);
         expect(screen.getByText(/alice/)).toBeInTheDocument();
-        const join = screen.getByRole('button', {name: /JOIN MEETING/i});
+        const join = screen.getByRole('button', {name: /Meeting beitreten/i});
         expect(join).toBeInTheDocument();
     });
 
     it('calls startConferenceConnection when JOIN clicked', () => {
         renderWithStore(basePost as any);
-        fireEvent.click(screen.getByRole('button', {name: /JOIN MEETING/i}));
+        fireEvent.click(screen.getByRole('button', {name: /Meeting beitreten/i}));
         expect(startConferenceConnection).toHaveBeenCalledWith(
             'room-1',
             'ch-1',
@@ -74,7 +74,7 @@ describe('PostTypeMeeting', () => {
     it('shows dial-in line if SIP props present', () => {
         const p = {...basePost, props: {...basePost.props, dial_in_number: '+49 30 555 1234', dial_in_pin: '4242'}};
         renderWithStore(p as any);
-        expect(screen.getByText(/Dial-in/i)).toBeInTheDocument();
+        expect(screen.getByText(/PIN 4242/)).toBeInTheDocument();
         expect(screen.getByText(/4242/)).toBeInTheDocument();
     });
 
@@ -89,15 +89,15 @@ describe('PostTypeMeeting', () => {
             },
         };
         renderWithStore(p as any);
-        expect(screen.queryByRole('button', {name: /JOIN MEETING/i})).toBeNull();
-        expect(screen.getByText(/beendet/i)).toBeInTheDocument();
+        expect(screen.queryByRole("button", {name: /Meeting beitreten/i})).toBeNull();
+        expect(screen.getByText(/Meeting beendet/)).toBeInTheDocument();
         expect(screen.getByText(/15:00/)).toBeInTheDocument();
     });
 
     it('shows MISSED state', () => {
         const p = {...basePost, props: {...basePost.props, status: 'MISSED'}};
         renderWithStore(p as any);
-        expect(screen.queryByRole('button', {name: /JOIN MEETING/i})).toBeNull();
-        expect(screen.getByText(/verpasst/i)).toBeInTheDocument();
+        expect(screen.queryByRole("button", {name: /Meeting beitreten/i})).toBeNull();
+        expect(screen.getByText(/Meeting verpasst/)).toBeInTheDocument();
     });
 });
