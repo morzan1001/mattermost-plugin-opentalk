@@ -70,6 +70,6 @@ describe('startMeetingAction', () => {
         const action = startMeetingAction(makeStore(true));
         await action({id: 'ch-1'});
         expect(mockAlert).toHaveBeenCalled();
-        expect(mockAlert.mock.calls[0][0]).toContain('boom');
+        expect(mockAlert.mock.calls[0][0]).toContain('500');
     });
 });

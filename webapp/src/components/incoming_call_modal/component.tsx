@@ -9,6 +9,7 @@ import {
     incomingCallCleared,
     type IncomingCall,
 } from '../../store/slice_incoming_calls';
+import {selectCurrentDisplayName} from '../../util/display_name';
 
 const stateKey = 'plugins-de.opentalk.mattermost-plugin';
 
@@ -22,26 +23,7 @@ const IncomingCallModal: React.FC = () => {
     const sessionStatus = useSelector((s: any) => s?.[stateKey]?.session?.status ?? 'idle') as string;
 
     // Current display name: nickname > first+last > username (same as post_type_meeting)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const currentDisplayName = useSelector((s: any) => {
-        const id = s?.entities?.users?.currentUserId;
-        if (!id) {
-            return '';
-        }
-        const u = s?.entities?.users?.profiles?.[id];
-        if (!u) {
-            return '';
-        }
-        const nick = (u.nickname ?? '').trim();
-        if (nick) {
-            return nick;
-        }
-        const full = ((u.first_name ?? '') + ' ' + (u.last_name ?? '')).trim();
-        if (full) {
-            return full;
-        }
-        return u.username ?? '';
-    });
+    const currentDisplayName = useSelector(selectCurrentDisplayName);
 
     // Pick the most recent non-dismissed incoming call
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

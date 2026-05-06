@@ -2,6 +2,7 @@ import React from 'react';
 import {useStore, useSelector} from 'react-redux';
 
 import {startConferenceConnection} from '../../conference/controller';
+import {selectCurrentDisplayName} from '../../util/display_name';
 import {OpenTalkLogoIcon, VideoIcon} from '../icons';
 
 interface PostProps {
@@ -153,26 +154,7 @@ const PostTypeMeeting: React.FC<Props> = ({post}) => {
     // the server uses (see displayNameOf in server/plugin.go). This is what
     // OpenTalk shows on participant tiles, so keeping client and server
     // attribution in sync matters.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const currentDisplayName = useSelector((s: any) => {
-        const id = s?.entities?.users?.currentUserId;
-        if (!id) {
-            return '';
-        }
-        const u = s?.entities?.users?.profiles?.[id];
-        if (!u) {
-            return '';
-        }
-        const nick = (u.nickname ?? '').trim();
-        if (nick) {
-            return nick;
-        }
-        const full = ((u.first_name ?? '') + ' ' + (u.last_name ?? '')).trim();
-        if (full) {
-            return full;
-        }
-        return u.username ?? '';
-    });
+    const currentDisplayName = useSelector(selectCurrentDisplayName);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sessionStatus: string = useSelector((s: any) => s?.[stateKey]?.session?.status ?? 'idle');

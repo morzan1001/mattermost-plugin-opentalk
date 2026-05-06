@@ -11,6 +11,7 @@ import AudioRenderer from './components/audio_renderer/component';
 import ExpandedView from './components/expanded_view/component';
 import IncomingCallModal from './components/incoming_call_modal/component';
 import {incomingCallReceived, incomingCallCleared} from './store/slice_incoming_calls';
+import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
 import {registerOpenTalkUserSettings} from './user_settings';
 import OpenTalkIcon from './components/channel_header_button/icon';
 import {startMeetingAction} from './components/channel_header_button/action';
@@ -48,6 +49,17 @@ interface IncomingCallMessage {
         host_name: string;
         post_id?: string;
         dm_user_ids?: string[];
+        created_at_unix_ms?: number;
+    };
+}
+
+interface MeetingStartedMessage {
+    data: {
+        channel_id: string;
+        room_id: string;
+        host_user_id: string;
+        host_name: string;
+        post_id?: string;
         created_at_unix_ms?: number;
     };
 }
@@ -140,6 +152,22 @@ export default class Plugin {
 
                 // Always clear any pending incoming-call modal for this channel
                 store.dispatch(incomingCallCleared({channelID: msg.data.channel_id}));
+
+                // Clear the active-meetings slice entry for this channel
+                store.dispatch(activeMeetingEnded({channelID: msg.data.channel_id}));
+            },
+        );
+        registry.registerWebSocketEventHandler?.(
+            `custom_${pluginId}_meeting_started`,
+            (msg: MeetingStartedMessage) => {
+                store.dispatch(activeMeetingStarted({
+                    channelID: msg.data.channel_id,
+                    roomID: msg.data.room_id,
+                    hostUserID: msg.data.host_user_id,
+                    hostName: msg.data.host_name,
+                    postID: msg.data.post_id,
+                    receivedAt: Date.now(),
+                }));
             },
         );
         registry.registerWebSocketEventHandler?.(

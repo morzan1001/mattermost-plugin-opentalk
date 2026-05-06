@@ -33,23 +33,26 @@ function pluginURL(path: string): string {
 }
 
 export async function createMeeting(channelID: string, deviceSecret: string): Promise<CreateMeetingResponse> {
-    const r = await fetch(pluginURL('/api/v1/meetings'), {
+    const r = await fetch('/plugins/de.opentalk.mattermost-plugin/api/v1/meetings', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-
-            // Mattermost rejects unauthenticated state-changing requests
-            // unless this header is present (anti-CSRF guard).
             'X-Requested-With': 'XMLHttpRequest',
         },
         credentials: 'include',
         body: JSON.stringify({channel_id: channelID, device_secret: deviceSecret}),
     });
-    if (!r.ok) {
-        const text = await r.text();
-        throw new Error(`createMeeting ${r.status}: ${text}`);
+    if (r.status === 409) {
+        const body = (await r.json()) as {error?: string; room_id: string; post_id?: string; host_user_id?: string};
+        const err: Error & {status?: number; existing?: typeof body} = new Error(body.error ?? 'meeting already active');
+        err.status = 409;
+        err.existing = body;
+        throw err;
     }
-    return r.json();
+    if (!r.ok) {
+        throw new Error(`createMeeting failed: ${r.status}`);
+    }
+    return (await r.json()) as CreateMeetingResponse;
 }
 
 export interface JoinMeetingResponse {
