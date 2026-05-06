@@ -101,7 +101,11 @@ export class ConferenceRoom {
                     const list = [self, ...others];
                     this.participants = list;
                     this.state = 'connected';
-                    this.emit('connected', {participants: list, livekit: payload.livekit});
+                    this.emit('connected', {
+                        participants: list,
+                        livekit: payload.livekit,
+                        isHost: payload.is_room_owner === true || payload.isRoomOwner === true,
+                    });
                 });
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any

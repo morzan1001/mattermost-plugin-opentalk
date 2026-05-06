@@ -22,6 +22,7 @@ export interface SessionState {
     camEnabled: boolean;
     screenShareEnabled: boolean;
     livekitConnected: boolean;
+    isHost: boolean;
 }
 
 const initial: SessionState = {
@@ -31,12 +32,13 @@ const initial: SessionState = {
     camEnabled: false,
     screenShareEnabled: false,
     livekitConnected: false,
+    isHost: false,
 };
 
 export function connectStarted(payload: {channelID: string; roomID: string}) {
     return {type: ACTION_TYPES.CONNECT_STARTED, payload};
 }
-export function connected(payload: {participantCount: number}) {
+export function connected(payload: {participantCount: number; isHost?: boolean}) {
     return {type: ACTION_TYPES.CONNECTED, payload};
 }
 export function participantsChanged(payload: {participantCount: number}) {
@@ -78,6 +80,7 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
             ...state,
             status: 'connected',
             participantCount: action.payload.participantCount,
+            isHost: action.payload.isHost === true,
             error: undefined,
         };
     case ACTION_TYPES.PARTICIPANTS_CHANGED:
