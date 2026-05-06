@@ -1,7 +1,8 @@
 import React, {useState} from 'react';
-import {useSelector} from 'react-redux';
+import {useSelector, useDispatch} from 'react-redux';
 
 import {leaveActiveConference, toggleMic, toggleCam, toggleScreenShare, endActiveMeeting} from '../../conference/controller';
+import {setExpanded, setMinimized} from '../../store/slice_session';
 import {
     MicIcon,
     MicOffIcon,
@@ -10,6 +11,8 @@ import {
     ScreenShareIcon,
     ScreenShareOffIcon,
     HangupIcon,
+    MinimizeIcon,
+    ExpandIcon,
 } from '../icons';
 
 const stateKey = 'plugins-de.opentalk.mattermost-plugin';
@@ -54,10 +57,13 @@ const mutedButtonStyle: React.CSSProperties = {
 };
 
 const MeetingMiniBar: React.FC = () => {
+    const dispatch = useDispatch();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = useSelector((s: any) => s?.[stateKey]?.session ?? {status: 'idle', participantCount: 0});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const isHost = useSelector((s: any) => s?.[stateKey]?.session?.isHost ?? false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isMinimized = useSelector((s: any) => s?.[stateKey]?.session?.minimized === true);
     const [showLeavePrompt, setShowLeavePrompt] = useState(false);
 
     if (session.status === 'idle') {
@@ -71,6 +77,38 @@ const MeetingMiniBar: React.FC = () => {
             leaveActiveConference();
         }
     };
+
+    if (session.status === 'connected' && isMinimized) {
+        return (
+            <button
+                type='button'
+                onClick={() => dispatch(setMinimized(false))}
+                title='Wiederherstellen'
+                aria-label='Wiederherstellen'
+                style={{
+                    position: 'fixed',
+                    bottom: 16,
+                    right: 16,
+                    width: 60,
+                    height: 60,
+                    borderRadius: '50%',
+                    border: 'none',
+                    background: '#1c2230',
+                    color: 'white',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
+                    fontFamily: 'Inter, system-ui, sans-serif',
+                    fontSize: 13,
+                    fontWeight: 600,
+                }}
+            >
+                {session.participantCount}
+            </button>
+        );
+    }
 
     return (
         <div
@@ -142,6 +180,26 @@ const MeetingMiniBar: React.FC = () => {
                     </button>
 
                     <div style={{width: 1, height: 24, background: 'rgba(255,255,255,0.1)', margin: '0 4px'}}/>
+
+                    <button
+                        type='button'
+                        style={mutedButtonStyle}
+                        onClick={() => dispatch(setMinimized(true))}
+                        title='Minimieren'
+                        aria-label='Minimieren'
+                    >
+                        <MinimizeIcon/>
+                    </button>
+
+                    <button
+                        type='button'
+                        style={mutedButtonStyle}
+                        onClick={() => dispatch(setExpanded(true))}
+                        title='Vollbild'
+                        aria-label='Vollbild'
+                    >
+                        <ExpandIcon/>
+                    </button>
 
                     <button
                         type='button'
