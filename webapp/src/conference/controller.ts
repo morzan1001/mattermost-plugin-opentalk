@@ -110,14 +110,10 @@ export async function startConferenceConnection(
         bringUpLiveKit(url, token, store);
     });
     client.on('participant_joined', (p) => {
-        // eslint-disable-next-line no-console
-        console.warn('[opentalk] participant_joined', p?.id, p?.displayName);
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
         store.dispatch(participantAdded({participant: toParticipantInfo(p)}));
     });
     client.on('participant_left', ({id}) => {
-        // eslint-disable-next-line no-console
-        console.warn('[opentalk] participant_left', id);
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
         store.dispatch(participantRemoved({id}));
     });
@@ -172,6 +168,22 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         trackRegistry.clear();
     });
 
+    // LiveKit publishes screen-share as kind:'video' with source:'screen_share'.
+    // If we lump both into kind:'video', the screen-track overwrites the
+    // cam-track in the slice and remote viewers stop seeing the publisher's
+    // camera as soon as they start sharing. Differentiate by source.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const trackKindOf = (sub: any): TrackKind => {
+        if (sub.track?.kind === 'audio') {
+            return 'audio';
+        }
+        const source = sub.publication?.source ?? sub.track?.source;
+        if (source === 'screen_share' || source === 'screenShare' || source === 'screen-share') {
+            return 'screen';
+        }
+        return 'video';
+    };
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     lk.on('track_subscribed', (sub: any) => {
         const trackId: string = sub.publication?.trackSid ?? sub.track?.sid;
@@ -179,10 +191,9 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
             return;
         }
         trackRegistry.register(trackId, sub.track);
-        const kind: TrackKind = sub.track.kind === 'audio' ? 'audio' : 'video';
         store.dispatch(trackSubscribed({
             participantId: sub.participant.identity,
-            kind,
+            kind: trackKindOf(sub),
             trackId,
         }));
     });
@@ -193,10 +204,9 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         if (trackId) {
             trackRegistry.unregister(trackId);
         }
-        const kind: TrackKind = sub.track.kind === 'audio' ? 'audio' : 'video';
         store.dispatch(trackUnsubscribed({
             participantId: sub.participant.identity,
-            kind,
+            kind: trackKindOf(sub),
         }));
     });
 

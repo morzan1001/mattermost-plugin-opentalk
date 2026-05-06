@@ -36,18 +36,32 @@ const MeetingMiniBar: React.FC = () => {
         },
     });
 
-    const resize = useResizable({
-        storageKey: 'opentalk:widget-size:v4',
-        defaultSize: {width: 540, height: 76},
-        minSize: {width: 440, height: 64},
-    });
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const remoteCount: number = useSelector((s: any) => {
         const order = s?.[stateKey]?.participants?.order ?? [];
         const localId = s?.[stateKey]?.session?.localParticipantId;
         return localId ? order.filter((id: string) => id !== localId).length : order.length;
     });
+
+    // Dynamic min-size: the widget never shrinks below "fits current
+    // content". Adding self-cam bumps the min-width by 72px (preview tile
+    // + gap); a non-empty tile-strip row bumps min-height to fit one row
+    // of 128x72 tiles. User resize larger always wins.
+    const baseMinWidth = 440;
+    const minWidth = baseMinWidth + (session.camEnabled ? 72 : 0);
+    const minHeight = remoteCount > 0 ? 180 : 64;
+
+    const resize = useResizable({
+        storageKey: 'opentalk:widget-size:v5',
+        defaultSize: {width: minWidth, height: minHeight},
+        minSize: {width: minWidth, height: minHeight},
+    });
+
+    // Clamp the rendered size to the *current* dynamic minimums even when
+    // the persisted size from a previous session was smaller (e.g. user
+    // had cam off when they resized, then enables cam).
+    const widgetWidth = Math.max(typeof resize.style.width === 'number' ? resize.style.width : minWidth, minWidth);
+    const widgetHeight = Math.max(typeof resize.style.height === 'number' ? resize.style.height : minHeight, minHeight);
 
     const duration = useMeetingDuration(session.joinedAt);
 
@@ -115,7 +129,8 @@ const MeetingMiniBar: React.FC = () => {
                     fontFamily: 'Inter, system-ui, sans-serif',
                     overflow: 'hidden',
                     ...drag.style,
-                    ...resize.style,
+                    width: widgetWidth,
+                    height: widgetHeight,
                 }}
             >
                 {/* Drag handle — full-width grab strip at the top */}

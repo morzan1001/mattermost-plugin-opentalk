@@ -95,14 +95,6 @@ export class ConferenceRoom {
                 this.socket = new SignalingSocket(roomserverURL, ticket);
                 this.listener = new EventListener(this.socket);
 
-                // Diagnostic wire-log — re-enabled while we figure out why
-                // participantConnected doesn't seem to reach a host when a
-                // 2nd user joins from another device. Strip once verified.
-                this.listener.onAny((msg) => {
-                    // eslint-disable-next-line no-console
-                    console.warn('[opentalk] WS frame:', msg.namespace + ':' + msg.payload.action, msg.payload);
-                });
-
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'joinSuccess', (payload: any) => {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -148,25 +140,44 @@ export class ConferenceRoom {
                     }
                 });
 
+                // The OpenTalk roomserver actually emits `control:joined`
+                // and `control:left` (verified via wire-log on v26.x). The
+                // upstream-frontend type definitions in modules/core.ts
+                // keep `participantConnected`/`participantDisconnected` as
+                // legacy aliases — listen for both so we're forward-compat.
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                this.listener.on(CoreNamespace, 'participantConnected', (payload: any) => {
+                const onJoinedFrame = (payload: any) => {
                     if (this.state !== 'connected') {
                         return;
                     }
-                    const p = this.normalizeParticipant(payload.participant ?? payload);
-                    this.participants.push(p);
+                    const ctrl = payload.control ?? payload.participant ?? payload;
+                    const p = this.normalizeParticipant({
+                        id: payload.id ?? ctrl.id,
+                        display_name: ctrl.display_name ?? ctrl.displayName ?? payload.display_name ?? payload.displayName,
+                        role: ctrl.role ?? payload.role,
+                    });
+
+                    // De-dupe in case the roomserver re-emits or both event
+                    // names fire — push only when not already present.
+                    if (!this.participants.some((existing) => existing.id === p.id)) {
+                        this.participants.push(p);
+                    }
                     this.emit('participant_joined', p);
-                });
+                };
+                this.listener.on(CoreNamespace, 'joined', onJoinedFrame);
+                this.listener.on(CoreNamespace, 'participantConnected', onJoinedFrame);
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                this.listener.on(CoreNamespace, 'participantDisconnected', (payload: any) => {
+                const onLeftFrame = (payload: any) => {
                     if (this.state !== 'connected') {
                         return;
                     }
                     const id = payload.id ?? payload.participantId;
                     this.participants = this.participants.filter((p) => p.id !== id);
                     this.emit('participant_left', {id});
-                });
+                };
+                this.listener.on(CoreNamespace, 'left', onLeftFrame);
+                this.listener.on(CoreNamespace, 'participantDisconnected', onLeftFrame);
 
                 // OpenTalk delivers LiveKit bootstrap as a separate frame
                 // {namespace:'livekit', payload:{action:'credentials', publicUrl, token, room}}

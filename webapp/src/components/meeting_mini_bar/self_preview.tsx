@@ -25,22 +25,16 @@ export const SelfPreview: React.FC = () => {
     const elRef = useRef<HTMLVideoElement | null>(null);
 
     useEffect(() => {
-        // eslint-disable-next-line no-console
-        console.warn('[opentalk] self-preview effect, trackId=', trackId, 'el=', Boolean(elRef.current));
         if (!trackId) {
             return undefined;
         }
         const track = trackRegistry.get(trackId);
-        // eslint-disable-next-line no-console
-        console.warn('[opentalk] self-preview registry-lookup, has-track=', Boolean(track));
         const el = elRef.current;
         if (!track || !el) {
             return undefined;
         }
         try {
             track.attach(el);
-            // eslint-disable-next-line no-console
-            console.warn('[opentalk] self-preview attached');
         } catch (e) {
             // eslint-disable-next-line no-console
             console.warn('[opentalk] self-preview attach failed:', e);
