@@ -1,9 +1,9 @@
 const ACTION_TYPES = {
-    ADDED: 'opentalk/participants/ADDED',
-    REMOVED: 'opentalk/participants/REMOVED',
-    BULK_SET: 'opentalk/participants/BULK_SET',
-    SPEAKING_CHANGED: 'opentalk/participants/SPEAKING_CHANGED',
-    RESET: 'opentalk/participants/RESET',
+    ADDED: 'opentalk/participants/added',
+    REMOVED: 'opentalk/participants/removed',
+    BULK_SET: 'opentalk/participants/bulk_set',
+    SPEAKING_CHANGED: 'opentalk/participants/speaking_changed',
+    RESET: 'opentalk/participants/reset',
 } as const;
 
 export interface ParticipantInfo {
