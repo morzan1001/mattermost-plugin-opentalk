@@ -1,7 +1,12 @@
 import React, {useState} from 'react';
 import {useSelector, useDispatch} from 'react-redux';
 
+import {TileStrip} from './tile_strip';
+
 import {leaveActiveConference, toggleMic, toggleCam, toggleScreenShare, endActiveMeeting} from '../../conference/controller';
+import {useDraggable} from '../../hooks/use_draggable';
+import {useMeetingDuration} from '../../hooks/use_meeting_duration';
+import {useResizable} from '../../hooks/use_resizable';
 import {setExpanded, setMinimized} from '../../store/slice_session';
 import {
     MicIcon,
@@ -66,7 +71,27 @@ const MeetingMiniBar: React.FC = () => {
     const isMinimized = useSelector((s: any) => s?.[stateKey]?.session?.minimized === true);
     const [showLeavePrompt, setShowLeavePrompt] = useState(false);
 
+    const drag = useDraggable({
+        storageKey: 'opentalk:widget-position',
+        defaultPosition: {
+            x: typeof window === 'undefined' ? 16 : window.innerWidth - 360,
+            y: typeof window === 'undefined' ? 16 : window.innerHeight - 100,
+        },
+    });
+
+    const resize = useResizable({
+        storageKey: 'opentalk:widget-size',
+        defaultSize: {width: 340, height: 88},
+        minSize: {width: 280, height: 80},
+    });
+
+    const duration = useMeetingDuration(session.joinedAt);
+
     if (session.status === 'idle') {
+        return null;
+    }
+
+    if (session.expanded) {
         return null;
     }
 
@@ -114,180 +139,236 @@ const MeetingMiniBar: React.FC = () => {
         <div
             className='opentalk-mini-bar'
             style={{
-                position: 'fixed',
-                bottom: 16,
-                right: 16,
                 background: '#1c2230',
                 color: 'white',
-                padding: 10,
+                padding: 0,
                 borderRadius: 12,
                 display: 'flex',
-                alignItems: 'center',
-                gap: 8,
+                flexDirection: 'column',
                 zIndex: 9999,
                 boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
                 fontFamily: 'Inter, system-ui, sans-serif',
+                overflow: 'hidden',
+                ...drag.style,
+                ...resize.style,
             }}
         >
-            {session.status === 'connecting' && (
-                <span style={{padding: '0 12px', fontSize: 13}}>{'Verbinde mit OpenTalk-Meeting …'}</span>
-            )}
-            {session.status === 'leaving' && (
-                <span style={{padding: '0 12px', fontSize: 13}}>{'Trenne …'}</span>
-            )}
-            {session.status === 'connected' && (
-                <>
-                    <span
-                        style={{
-                            padding: '0 8px 0 4px',
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: 'rgba(255,255,255,0.8)',
-                        }}
-                    >
-                        {session.participantCount}
-                        {' Teilnehmer'}
-                    </span>
-
-                    <button
-                        type='button'
-                        style={session.micEnabled ? activeButtonStyle : mutedDangerButtonStyle}
-                        onClick={() => toggleMic()}
-                        title={session.micEnabled ? 'Mikrofon stummschalten' : 'Mikrofon einschalten'}
-                        aria-label={session.micEnabled ? 'Mikrofon stummschalten' : 'Mikrofon einschalten'}
-                    >
-                        {session.micEnabled ? <MicIcon/> : <MicOffIcon/>}
-                    </button>
-
-                    <button
-                        type='button'
-                        style={session.camEnabled ? activeButtonStyle : mutedButtonStyle}
-                        onClick={() => toggleCam()}
-                        title={session.camEnabled ? 'Kamera ausschalten' : 'Kamera einschalten'}
-                        aria-label={session.camEnabled ? 'Kamera ausschalten' : 'Kamera einschalten'}
-                    >
-                        {session.camEnabled ? <VideoIcon/> : <CameraOffIcon/>}
-                    </button>
-
-                    <button
-                        type='button'
-                        style={session.screenShareEnabled ? activeButtonStyle : mutedButtonStyle}
-                        onClick={() => toggleScreenShare()}
-                        title={session.screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}
-                        aria-label={session.screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}
-                    >
-                        {session.screenShareEnabled ? <ScreenShareOffIcon/> : <ScreenShareIcon/>}
-                    </button>
-
-                    <div style={{width: 1, height: 24, background: 'rgba(255,255,255,0.1)', margin: '0 4px'}}/>
-
-                    <button
-                        type='button'
-                        style={mutedButtonStyle}
-                        onClick={() => dispatch(setMinimized(true))}
-                        title='Minimieren'
-                        aria-label='Minimieren'
-                    >
-                        <MinimizeIcon/>
-                    </button>
-
-                    <button
-                        type='button'
-                        style={mutedButtonStyle}
-                        onClick={() => dispatch(setExpanded(true))}
-                        title='Vollbild'
-                        aria-label='Vollbild'
-                    >
-                        <ExpandIcon/>
-                    </button>
-
-                    <button
-                        type='button'
-                        style={dangerButtonStyle}
-                        onClick={onLeaveClick}
-                        title={isHost ? 'Verlassen / Meeting beenden' : 'Meeting verlassen'}
-                        aria-label={isHost ? 'Verlassen oder Meeting beenden' : 'Meeting verlassen'}
-                    >
-                        <HangupIcon/>
-                    </button>
-                </>
-            )}
-
-            {showLeavePrompt && (
+            {/* Drag handle — full-width grab strip at the top */}
+            <div
+                {...drag.handleProps}
+                style={{
+                    height: 16,
+                    cursor: 'grab',
+                    borderRadius: '8px 8px 0 0',
+                    userSelect: 'none',
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
                 <div
                     style={{
-                        position: 'absolute',
-                        bottom: 'calc(100% + 8px)',
-                        right: 0,
-                        background: '#22293a',
-                        color: 'white',
-                        padding: 16,
-                        borderRadius: 10,
-                        boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
-                        minWidth: 260,
+                        width: 24,
+                        height: 3,
+                        borderRadius: 2,
+                        background: 'rgba(255,255,255,0.2)',
                     }}
-                    role='dialog'
-                    aria-label='Meeting verlassen oder beenden?'
-                >
-                    <div style={{fontSize: 14, fontWeight: 600, marginBottom: 4}}>{'Meeting verlassen?'}</div>
-                    <div style={{fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 14}}>
-                        {'Du bist Host. Möchtest du nur dich selbst entfernen oder das Meeting für alle beenden?'}
-                    </div>
-                    <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
-                        <button
-                            type='button'
+                />
+            </div>
+
+            {/* Main content row */}
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '0 10px 10px 10px',
+                    flex: 1,
+                    minWidth: 0,
+                }}
+            >
+                {session.status === 'connecting' && (
+                    <span style={{padding: '0 12px', fontSize: 13}}>{'Verbinde mit OpenTalk-Meeting …'}</span>
+                )}
+                {session.status === 'leaving' && (
+                    <span style={{padding: '0 12px', fontSize: 13}}>{'Trenne …'}</span>
+                )}
+                {session.status === 'connected' && (
+                    <>
+                        <span
                             style={{
-                                padding: '8px 12px',
-                                borderRadius: 6,
-                                border: '1px solid rgba(255,255,255,0.15)',
-                                background: 'transparent',
-                                color: 'white',
-                                cursor: 'pointer',
+                                padding: '0 8px 0 4px',
                                 fontSize: 13,
-                            }}
-                            onClick={() => {
-                                setShowLeavePrompt(false);
-                                leaveActiveConference();
+                                fontWeight: 500,
+                                color: 'rgba(255,255,255,0.8)',
                             }}
                         >
-                            {'Nur mich verlassen'}
-                        </button>
+                            {session.participantCount}
+                            {' Teilnehmer'}
+                            {duration && (
+                                <span style={{opacity: 0.7, marginLeft: 6}}>{`· ${duration}`}</span>
+                            )}
+                        </span>
+
+                        <TileStrip/>
+
                         <button
                             type='button'
-                            style={{
-                                padding: '8px 12px',
-                                borderRadius: 6,
-                                border: 'none',
-                                background: '#e3354c',
-                                color: 'white',
-                                cursor: 'pointer',
-                                fontSize: 13,
-                                fontWeight: 600,
-                            }}
-                            onClick={() => {
-                                setShowLeavePrompt(false);
-                                endActiveMeeting();
-                            }}
+                            style={session.micEnabled ? activeButtonStyle : mutedDangerButtonStyle}
+                            onClick={() => toggleMic()}
+                            title={session.micEnabled ? 'Mikrofon stummschalten' : 'Mikrofon einschalten'}
+                            aria-label={session.micEnabled ? 'Mikrofon stummschalten' : 'Mikrofon einschalten'}
                         >
-                            {'Meeting für alle beenden'}
+                            {session.micEnabled ? <MicIcon/> : <MicOffIcon/>}
                         </button>
+
                         <button
                             type='button'
-                            style={{
-                                padding: '6px 12px',
-                                borderRadius: 6,
-                                border: 'none',
-                                background: 'transparent',
-                                color: 'rgba(255,255,255,0.55)',
-                                cursor: 'pointer',
-                                fontSize: 12,
-                            }}
-                            onClick={() => setShowLeavePrompt(false)}
+                            style={session.camEnabled ? activeButtonStyle : mutedButtonStyle}
+                            onClick={() => toggleCam()}
+                            title={session.camEnabled ? 'Kamera ausschalten' : 'Kamera einschalten'}
+                            aria-label={session.camEnabled ? 'Kamera ausschalten' : 'Kamera einschalten'}
                         >
-                            {'Abbrechen'}
+                            {session.camEnabled ? <VideoIcon/> : <CameraOffIcon/>}
                         </button>
+
+                        <button
+                            type='button'
+                            style={session.screenShareEnabled ? activeButtonStyle : mutedButtonStyle}
+                            onClick={() => toggleScreenShare()}
+                            title={session.screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}
+                            aria-label={session.screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}
+                        >
+                            {session.screenShareEnabled ? <ScreenShareOffIcon/> : <ScreenShareIcon/>}
+                        </button>
+
+                        <div style={{width: 1, height: 24, background: 'rgba(255,255,255,0.1)', margin: '0 4px'}}/>
+
+                        <button
+                            type='button'
+                            style={mutedButtonStyle}
+                            onClick={() => dispatch(setMinimized(true))}
+                            title='Minimieren'
+                            aria-label='Minimieren'
+                        >
+                            <MinimizeIcon/>
+                        </button>
+
+                        <button
+                            type='button'
+                            style={mutedButtonStyle}
+                            onClick={() => dispatch(setExpanded(true))}
+                            title='Vollbild'
+                            aria-label='Vollbild'
+                        >
+                            <ExpandIcon/>
+                        </button>
+
+                        <button
+                            type='button'
+                            style={dangerButtonStyle}
+                            onClick={onLeaveClick}
+                            title={isHost ? 'Verlassen / Meeting beenden' : 'Meeting verlassen'}
+                            aria-label={isHost ? 'Verlassen oder Meeting beenden' : 'Meeting verlassen'}
+                        >
+                            <HangupIcon/>
+                        </button>
+                    </>
+                )}
+
+                {showLeavePrompt && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            bottom: 'calc(100% + 8px)',
+                            right: 0,
+                            background: '#22293a',
+                            color: 'white',
+                            padding: 16,
+                            borderRadius: 10,
+                            boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
+                            minWidth: 260,
+                        }}
+                        role='dialog'
+                        aria-label='Meeting verlassen oder beenden?'
+                    >
+                        <div style={{fontSize: 14, fontWeight: 600, marginBottom: 4}}>{'Meeting verlassen?'}</div>
+                        <div style={{fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 14}}>
+                            {'Du bist Host. Möchtest du nur dich selbst entfernen oder das Meeting für alle beenden?'}
+                        </div>
+                        <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
+                            <button
+                                type='button'
+                                style={{
+                                    padding: '8px 12px',
+                                    borderRadius: 6,
+                                    border: '1px solid rgba(255,255,255,0.15)',
+                                    background: 'transparent',
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    fontSize: 13,
+                                }}
+                                onClick={() => {
+                                    setShowLeavePrompt(false);
+                                    leaveActiveConference();
+                                }}
+                            >
+                                {'Nur mich verlassen'}
+                            </button>
+                            <button
+                                type='button'
+                                style={{
+                                    padding: '8px 12px',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    background: '#e3354c',
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                }}
+                                onClick={() => {
+                                    setShowLeavePrompt(false);
+                                    endActiveMeeting();
+                                }}
+                            >
+                                {'Meeting für alle beenden'}
+                            </button>
+                            <button
+                                type='button'
+                                style={{
+                                    padding: '6px 12px',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: 'rgba(255,255,255,0.55)',
+                                    cursor: 'pointer',
+                                    fontSize: 12,
+                                }}
+                                onClick={() => setShowLeavePrompt(false)}
+                            >
+                                {'Abbrechen'}
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
+            </div>
+
+            {/* Resize handle — SE corner, only when not minimized */}
+            {!isMinimized && (
+                <div
+                    {...resize.handleProps}
+                    style={{
+                        position: 'absolute',
+                        right: 0,
+                        bottom: 0,
+                        width: 12,
+                        height: 12,
+                        cursor: 'nwse-resize',
+                        background: 'transparent',
+                    }}
+                />
             )}
         </div>
     );
