@@ -9,18 +9,36 @@ const stateKey = 'plugins-de.opentalk.mattermost-plugin';
 const MAX_VISIBLE = 4;
 
 const tileStyle: React.CSSProperties = {
-    width: 56,
-    height: 40,
+    width: 128,
+    height: 72,
     borderRadius: 6,
     overflow: 'hidden',
     background: 'rgba(255,255,255,0.08)',
+    position: 'relative',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    fontSize: 12,
+    fontSize: 18,
     fontWeight: 600,
     color: 'white',
+};
+
+const tileLabelStyle: React.CSSProperties = {
+    position: 'absolute',
+    bottom: 2,
+    left: 4,
+    right: 4,
+    fontSize: 11,
+    fontWeight: 500,
+    color: 'white',
+    background: 'rgba(0,0,0,0.5)',
+    padding: '1px 5px',
+    borderRadius: 3,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    textAlign: 'center',
 };
 
 const badgeStyle: React.CSSProperties = {
@@ -94,6 +112,7 @@ const Tile: React.FC<{participant: ParticipantInfo; videoTrackId?: string}> = ({
             ) : (
                 initialsOf(participant.displayName)
             )}
+            <span style={tileLabelStyle}>{participant.displayName || participant.id.slice(0, 8)}</span>
         </div>
     );
 };
