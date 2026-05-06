@@ -71,18 +71,23 @@ const MeetingMiniBar: React.FC = () => {
     const isMinimized = useSelector((s: any) => s?.[stateKey]?.session?.minimized === true);
     const [showLeavePrompt, setShowLeavePrompt] = useState(false);
 
+    // Storage-key suffix bumped to v2 because the layout changed
+    // significantly (added drag-handle, tile-strip, mini/expand, resize),
+    // making any size persisted from earlier builds undersized — content
+    // would overflow and the rightmost buttons (hangup, expand) would get
+    // clipped under overflow:hidden.
     const drag = useDraggable({
-        storageKey: 'opentalk:widget-position',
+        storageKey: 'opentalk:widget-position:v2',
         defaultPosition: {
-            x: typeof window === 'undefined' ? 16 : window.innerWidth - 640,
+            x: typeof window === 'undefined' ? 16 : window.innerWidth - 620,
             y: typeof window === 'undefined' ? 16 : window.innerHeight - 100,
         },
     });
 
     const resize = useResizable({
-        storageKey: 'opentalk:widget-size',
-        defaultSize: {width: 620, height: 88},
-        minSize: {width: 480, height: 80},
+        storageKey: 'opentalk:widget-size:v2',
+        defaultSize: {width: 600, height: 88},
+        minSize: {width: 540, height: 80},
     });
 
     const duration = useMeetingDuration(session.joinedAt);

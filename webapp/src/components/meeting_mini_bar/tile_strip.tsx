@@ -9,16 +9,16 @@ const stateKey = 'plugins-de.opentalk.mattermost-plugin';
 const MAX_VISIBLE = 4;
 
 const tileStyle: React.CSSProperties = {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+    width: 56,
+    height: 40,
+    borderRadius: 6,
     overflow: 'hidden',
     background: 'rgba(255,255,255,0.08)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 600,
     color: 'white',
 };
@@ -111,7 +111,22 @@ export const TileStrip: React.FC = () => {
     const total = order.length;
 
     if (total === 0) {
-        return null;
+        // Diagnostic placeholder: lets us tell at-a-glance whether the
+        // participants slice is empty (= controller dispatch issue) vs.
+        // the strip is rendering but tiles look wrong.
+        return (
+            <span
+                data-testid='tile-strip-empty'
+                style={{
+                    fontSize: 11,
+                    fontStyle: 'italic',
+                    opacity: 0.5,
+                    padding: '0 8px',
+                }}
+            >
+                {'(keine Teilnehmer im Slice)'}
+            </span>
+        );
     }
 
     const overflow = total > MAX_VISIBLE;

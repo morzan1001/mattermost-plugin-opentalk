@@ -8,7 +8,6 @@ import {id as pluginId} from './manifest';
 import PostTypeMeeting from './components/post_type_meeting/component';
 import MeetingMiniBar from './components/meeting_mini_bar/component';
 import AudioRenderer from './components/audio_renderer/component';
-import VideoGrid from './components/video_grid/component';
 import OpenTalkIcon from './components/channel_header_button/icon';
 import {startMeetingAction} from './components/channel_header_button/action';
 import {getConnectionStatus} from './client/rest';
@@ -62,7 +61,11 @@ export default class Plugin {
         registry.registerPostTypeComponent?.('custom_opentalk_meeting', PostTypeMeeting);
         registry.registerRootComponent?.(MeetingMiniBar);
         registry.registerRootComponent?.(AudioRenderer);
-        registry.registerRootComponent?.(VideoGrid);
+
+        // VideoGrid (the bottom-right floating tiles from Phase 6) is no
+        // longer registered: in Phase 7a the floating-widget's TileStrip
+        // already shows participant videos, and Phase 7b's Expanded-View
+        // will own the fullscreen grid surface.
 
         const headerIcon = React.createElement(OpenTalkIcon);
         registry.registerChannelHeaderButtonAction?.(

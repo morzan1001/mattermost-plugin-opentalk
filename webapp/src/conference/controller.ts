@@ -334,22 +334,23 @@ export function _reset(): void {
 }
 
 // Browser-debug introspection: surfaces the truthiness of the controller's
-// module-level singletons so the user can inspect them from the devtools
-// console (window.opentalk.state()) without relying on console.log filters.
-export function debugState(): {
-    hasClient: boolean;
-    hasLiveKit: boolean;
-    hasStore: boolean;
-    micEnabled: boolean | null;
-    camEnabled: boolean | null;
-    screenShareEnabled: boolean | null;
-} {
+// module-level singletons plus a snapshot of the participants/tracks slices
+// so the user can inspect them from the devtools console
+// (window.opentalk.state()) without relying on console.log filters.
+export function debugState(): Record<string, unknown> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stateSlice: any = activeStore?.getState()?.['plugins-de.opentalk.mattermost-plugin'] ?? {};
     return {
         hasClient: activeClient !== null,
         hasLiveKit: activeLiveKit !== null,
         hasStore: activeStore !== null,
+        localIdentity: activeLiveKit ? activeLiveKit.getLocalIdentity() : null,
         micEnabled: activeLiveKit ? activeLiveKit.isMicEnabled() : null,
         camEnabled: activeLiveKit ? activeLiveKit.isCamEnabled() : null,
         screenShareEnabled: activeLiveKit ? activeLiveKit.isScreenShareEnabled() : null,
+        sessionStatus: stateSlice.session?.status,
+        participantsOrder: stateSlice.participants?.order,
+        participantsById: stateSlice.participants?.byId,
+        tracksPerParticipant: stateSlice.tracks?.perParticipant,
     };
 }

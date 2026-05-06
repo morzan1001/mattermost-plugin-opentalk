@@ -52,14 +52,16 @@ beforeEach(() => {
 });
 
 describe('TileStrip', () => {
-    it('renders nothing when there are no participants', () => {
+    it('renders a diagnostic placeholder when there are no participants', () => {
         const store = makeStore({byId: {}, order: []});
-        const {container} = render(
+        const {getByTestId} = render(
             <Provider store={store}>
                 <TileStrip/>
             </Provider>,
         );
-        expect(container).toBeEmptyDOMElement();
+        // The empty placeholder lets us tell at-a-glance whether the
+        // participants slice is empty (= controller-dispatch issue).
+        expect(getByTestId('tile-strip-empty')).toBeTruthy();
     });
 
     it('renders 2 initials tiles and no overflow badge for 2 participants', () => {
