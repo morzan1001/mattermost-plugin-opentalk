@@ -9,6 +9,7 @@ import PostTypeMeeting from './components/post_type_meeting/component';
 import MeetingMiniBar from './components/meeting_mini_bar/component';
 import AudioRenderer from './components/audio_renderer/component';
 import ExpandedView from './components/expanded_view/component';
+import ChannelCallToast from './components/channel_call_toast/component';
 import IncomingCallModal from './components/incoming_call_modal/component';
 import {incomingCallReceived, incomingCallCleared} from './store/slice_incoming_calls';
 import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
@@ -227,6 +228,7 @@ export default class Plugin {
         registry.registerRootComponent?.(AudioRenderer);
         registry.registerRootComponent?.(ExpandedView);
         registry.registerRootComponent?.(IncomingCallModal);
+        registry.registerRootComponent?.(ChannelCallToast);
 
         // VideoGrid (the bottom-right floating tiles from Phase 6) is no
         // longer registered: in Phase 7a the floating-widget's TileStrip
