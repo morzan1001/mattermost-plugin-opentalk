@@ -37,9 +37,16 @@ const MeetingMiniBar: React.FC = () => {
     });
 
     const resize = useResizable({
-        storageKey: 'opentalk:widget-size:v3',
-        defaultSize: {width: 600, height: 220},
-        minSize: {width: 540, height: 100},
+        storageKey: 'opentalk:widget-size:v4',
+        defaultSize: {width: 540, height: 76},
+        minSize: {width: 440, height: 64},
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const remoteCount: number = useSelector((s: any) => {
+        const order = s?.[stateKey]?.participants?.order ?? [];
+        const localId = s?.[stateKey]?.session?.localParticipantId;
+        return localId ? order.filter((id: string) => id !== localId).length : order.length;
     });
 
     const duration = useMeetingDuration(session.joinedAt);
@@ -168,9 +175,9 @@ const MeetingMiniBar: React.FC = () => {
                                 )}
                             </span>
 
-                            <div style={{flex: 1}}/>
-
                             <SelfPreview/>
+
+                            <div style={{flex: 1}}/>
 
                             <ControlsBar
                                 showExpand={true}
@@ -184,10 +191,9 @@ const MeetingMiniBar: React.FC = () => {
 
                 {/* Tile-strip row — remote-participant videos / initials.
                     Self gets a dedicated SelfPreview in the controls row
-                    above. flex:1 + overflow:auto so this row scrolls when
-                    the user resizes the widget short and there are more
-                    remote tiles than fit. */}
-                {session.status === 'connected' && (
+                    above. Only rendered when there are remote attendees,
+                    so a solo widget collapses to just one row. */}
+                {session.status === 'connected' && remoteCount > 0 && (
                     <div
                         style={{
                             padding: '0 10px 10px 10px',

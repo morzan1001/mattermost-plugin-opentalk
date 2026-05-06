@@ -95,6 +95,14 @@ export class ConferenceRoom {
                 this.socket = new SignalingSocket(roomserverURL, ticket);
                 this.listener = new EventListener(this.socket);
 
+                // Diagnostic wire-log — re-enabled while we figure out why
+                // participantConnected doesn't seem to reach a host when a
+                // 2nd user joins from another device. Strip once verified.
+                this.listener.onAny((msg) => {
+                    // eslint-disable-next-line no-console
+                    console.warn('[opentalk] WS frame:', msg.namespace + ':' + msg.payload.action, msg.payload);
+                });
+
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'joinSuccess', (payload: any) => {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
