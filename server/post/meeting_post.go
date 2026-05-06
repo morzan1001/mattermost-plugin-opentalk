@@ -65,7 +65,13 @@ func ApplyEndedStatus(p *model.Post, endedAt time.Time) {
 	p.AddProp("duration_seconds", duration)
 }
 
-// ApplyMissedStatus is for DM-Calls where every recipient declined.
-func ApplyMissedStatus(p *model.Post) {
+// ApplyMissedStatus mutates the post in place to reflect a "missed" custom-
+// post-status (DM call where all recipients declined or timed out).
+func ApplyMissedStatus(p *model.Post, when time.Time) {
+	if p.Props == nil {
+		p.Props = model.StringInterface{}
+	}
 	p.AddProp("status", "MISSED")
+	p.AddProp("ended_at", when.Unix())
+	// Don't include duration; MISSED implies no one joined.
 }

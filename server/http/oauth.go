@@ -43,6 +43,10 @@ type Handlers struct {
 	// ENDED via the same Post-API the slash-command handler uses.
 	PostGetter  func(postID string) (*model.Post, error)
 	PostUpdater func(p *model.Post) error
+
+	// Phase 8a additions: dismiss endpoint uses ChannelMembersOf to detect
+	// when all DM recipients have declined so it can auto-MISSED the meeting.
+	ChannelMembersOf func(channelID string) []string
 }
 
 type MeetingDefaults struct {

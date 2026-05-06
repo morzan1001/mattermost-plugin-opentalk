@@ -50,3 +50,51 @@ func (s *Store) LoadActiveMeeting(channelID string) (*ActiveMeeting, error) {
 func (s *Store) DeleteActiveMeeting(channelID string) error {
 	return s.Delete(meetingKey(channelID))
 }
+
+func dismissalKey(channelID, roomID string) string {
+	return "dismiss_" + channelID + "_" + roomID
+}
+
+// AddDismissal records that mmUserID has dismissed the call in (channelID, roomID).
+// Returns the full updated set of dismissing user-IDs.
+func (s *Store) AddDismissal(channelID, roomID, mmUserID string) ([]string, error) {
+	set, _ := s.LoadDismissals(channelID, roomID)
+	seen := make(map[string]bool, len(set))
+	for _, u := range set {
+		seen[u] = true
+	}
+	if !seen[mmUserID] {
+		set = append(set, mmUserID)
+	}
+	raw, err := json.Marshal(set)
+	if err != nil {
+		return nil, err
+	}
+	// 1h TTL — keep the set well past the call's lifetime to avoid races.
+	if err := s.Set(dismissalKey(channelID, roomID), raw, int64((1*time.Hour).Seconds())); err != nil {
+		return nil, err
+	}
+	return set, nil
+}
+
+// LoadDismissals returns the set of user-IDs that have dismissed the call
+// in (channelID, roomID). Returns nil, nil when no dismissals have been recorded.
+func (s *Store) LoadDismissals(channelID, roomID string) ([]string, error) {
+	raw, err := s.Get(dismissalKey(channelID, roomID))
+	if err != nil {
+		if err == ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var set []string
+	if err := json.Unmarshal(raw, &set); err != nil {
+		return nil, err
+	}
+	return set, nil
+}
+
+// DeleteDismissals removes the dismissal set for (channelID, roomID).
+func (s *Store) DeleteDismissals(channelID, roomID string) error {
+	return s.Delete(dismissalKey(channelID, roomID))
+}

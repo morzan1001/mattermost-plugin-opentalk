@@ -18,5 +18,6 @@ func NewRouter(handlers *Handlers) *mux.Router {
 	r.HandleFunc("/api/v1/meetings", handlers.MeetingsCreate).Methods(nethttp.MethodPost)
 	r.HandleFunc("/api/v1/meetings/{room_id}/join", handlers.MeetingsJoin).Methods(nethttp.MethodPost)
 	r.HandleFunc("/api/v1/meetings/end", handlers.MeetingsEnd).Methods(nethttp.MethodPost)
+	r.HandleFunc("/api/v1/meetings/dismiss", handlers.MeetingsDismiss).Methods(nethttp.MethodPost)
 	return r
 }

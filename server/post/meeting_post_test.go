@@ -65,6 +65,8 @@ func TestApplyMissedStatus_SetsStatus(t *testing.T) {
 		RoomID:     "r",
 		InviteCode: "i",
 	}, "https://o.example", "u")
-	ApplyMissedStatus(p)
+	now := time.Now()
+	ApplyMissedStatus(p, now)
 	assert.Equal(t, "MISSED", p.GetProp("status"))
+	assert.Equal(t, now.Unix(), p.GetProp("ended_at"))
 }

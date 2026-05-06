@@ -217,6 +217,20 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 		PostUpdater: func(mp *model.Post) error {
 			return p.client.Post.UpdatePost(mp)
 		},
+
+		// Phase 8a: dismiss endpoint needs the member list to detect when all
+		// DM recipients have declined (auto-MISSED transition).
+		ChannelMembersOf: func(channelID string) []string {
+			members, err := p.API.GetChannelMembers(channelID, 0, 100)
+			if err != nil || members == nil {
+				return nil
+			}
+			out := make([]string, 0, len(members))
+			for _, m := range members {
+				out = append(out, m.UserId)
+			}
+			return out
+		},
 	}
 	pluginhttp.NewRouter(handlers).ServeHTTP(w, r)
 }
