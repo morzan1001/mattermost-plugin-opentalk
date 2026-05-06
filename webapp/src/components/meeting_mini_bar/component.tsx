@@ -52,10 +52,9 @@ const MeetingMiniBar: React.FC = () => {
         return null;
     }
 
-    // NOTE: Phase 7b will add the Expanded-View component which then takes over
-    // the screen. Until that ships, the widget stays visible regardless of the
-    // expanded flag — otherwise clicking the expand-button would hide the widget
-    // with nothing to replace it.
+    if (session.expanded) {
+        return null;
+    }
 
     const onLeaveClick = () => {
         if (isHost) {

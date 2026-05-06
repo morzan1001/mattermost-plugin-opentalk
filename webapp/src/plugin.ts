@@ -8,6 +8,7 @@ import {id as pluginId} from './manifest';
 import PostTypeMeeting from './components/post_type_meeting/component';
 import MeetingMiniBar from './components/meeting_mini_bar/component';
 import AudioRenderer from './components/audio_renderer/component';
+import ExpandedView from './components/expanded_view/component';
 import OpenTalkIcon from './components/channel_header_button/icon';
 import {startMeetingAction} from './components/channel_header_button/action';
 import {getConnectionStatus} from './client/rest';
@@ -61,6 +62,7 @@ export default class Plugin {
         registry.registerPostTypeComponent?.('custom_opentalk_meeting', PostTypeMeeting);
         registry.registerRootComponent?.(MeetingMiniBar);
         registry.registerRootComponent?.(AudioRenderer);
+        registry.registerRootComponent?.(ExpandedView);
 
         // VideoGrid (the bottom-right floating tiles from Phase 6) is no
         // longer registered: in Phase 7a the floating-widget's TileStrip
