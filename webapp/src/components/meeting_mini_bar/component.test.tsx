@@ -57,7 +57,7 @@ describe('MeetingMiniBar', () => {
         expect(screen.getByTitle('Mikrofon stummschalten')).toBeInTheDocument();
         expect(screen.getByTitle('Kamera einschalten')).toBeInTheDocument();
         expect(screen.getByTitle('Bildschirm teilen')).toBeInTheDocument();
-        expect(screen.getByRole('button', {name: /Verlassen/})).toBeInTheDocument();
+        expect(screen.getByRole("button", {name: /Meeting verlassen/})).toBeInTheDocument();
     });
 
     it('clicking mic button calls toggleMic', () => {
@@ -96,7 +96,7 @@ describe('MeetingMiniBar', () => {
                 <MeetingMiniBar/>
             </Provider>,
         );
-        fireEvent.click(screen.getByRole('button', {name: /Verlassen/}));
+        fireEvent.click(screen.getByRole("button", {name: /Meeting verlassen/}));
         expect(leaveActiveConference).toHaveBeenCalled();
     });
 });
