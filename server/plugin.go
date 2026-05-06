@@ -186,6 +186,19 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			}
 			return u.Username
 		},
+
+		// Phase 6: end-meeting endpoint reuses the same Post API the slash-
+		// command handler uses (server/command/end.go).
+		PostGetter: func(postID string) (*model.Post, error) {
+			pp, appErr := p.API.GetPost(postID)
+			if appErr != nil {
+				return nil, appErr
+			}
+			return pp, nil
+		},
+		PostUpdater: func(mp *model.Post) error {
+			return p.client.Post.UpdatePost(mp)
+		},
 	}
 	pluginhttp.NewRouter(handlers).ServeHTTP(w, r)
 }

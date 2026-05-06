@@ -38,6 +38,11 @@ type Handlers struct {
 	// user has a UserInfo record in the KV store.
 	IsConnected func(mmUserID string) bool
 	UsernameOf  func(mmUserID string) string
+
+	// Phase 6 additions: end-meeting endpoint mutates the bot-post status to
+	// ENDED via the same Post-API the slash-command handler uses.
+	PostGetter  func(postID string) (*model.Post, error)
+	PostUpdater func(p *model.Post) error
 }
 
 type MeetingDefaults struct {

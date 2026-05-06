@@ -214,3 +214,60 @@ func (h *Handlers) MeetingsJoin(w nethttp.ResponseWriter, r *nethttp.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
 }
+
+type endMeetingRequest struct {
+	ChannelID string `json:"channel_id"`
+}
+
+// MeetingsEnd is the host-only "end meeting for everyone" endpoint. Looks up
+// the ActiveMeeting by channel, verifies the requester is the host, marks the
+// custom-post as ENDED, deletes the ActiveMeeting record, and broadcasts a
+// meeting_ended ws-event so other clients tear down their session.
+func (h *Handlers) MeetingsEnd(w nethttp.ResponseWriter, r *nethttp.Request) {
+	mmUserID := r.Header.Get("Mattermost-User-ID")
+	if mmUserID == "" {
+		nethttp.Error(w, "unauthorized", nethttp.StatusUnauthorized)
+		return
+	}
+	var body endMeetingRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		nethttp.Error(w, "bad request: "+err.Error(), nethttp.StatusBadRequest)
+		return
+	}
+	if body.ChannelID == "" {
+		nethttp.Error(w, "channel_id required", nethttp.StatusBadRequest)
+		return
+	}
+
+	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
+	if err != nil {
+		nethttp.Error(w, "no active meeting in this channel", nethttp.StatusNotFound)
+		return
+	}
+	if am.HostUserID != mmUserID {
+		nethttp.Error(w, "only the host can end the meeting", nethttp.StatusForbidden)
+		return
+	}
+
+	// Mark post ENDED (best-effort; meeting state is gone after this).
+	if am.PostID != "" && h.PostGetter != nil && h.PostUpdater != nil {
+		if p, getErr := h.PostGetter(am.PostID); getErr == nil && p != nil {
+			post.ApplyEndedStatus(p, time.Now().UTC())
+			_ = h.PostUpdater(p)
+		}
+	}
+
+	if delErr := h.Store.DeleteActiveMeeting(body.ChannelID); delErr != nil {
+		nethttp.Error(w, "delete meeting: "+delErr.Error(), nethttp.StatusInternalServerError)
+		return
+	}
+
+	if h.BroadcastFunc != nil {
+		h.BroadcastFunc("meeting_ended", map[string]any{
+			"channel_id": body.ChannelID,
+			"room_id":    am.RoomID,
+		})
+	}
+
+	w.WriteHeader(nethttp.StatusNoContent)
+}
