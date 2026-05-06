@@ -11,6 +11,7 @@ import AudioRenderer from './components/audio_renderer/component';
 import ExpandedView from './components/expanded_view/component';
 import ChannelCallToast from './components/channel_call_toast/component';
 import IncomingCallModal from './components/incoming_call_modal/component';
+import SwitchCallModal from './components/switch_call_modal/component';
 import {incomingCallReceived, incomingCallCleared} from './store/slice_incoming_calls';
 import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
 import {registerOpenTalkUserSettings} from './user_settings';
@@ -228,6 +229,7 @@ export default class Plugin {
         registry.registerRootComponent?.(AudioRenderer);
         registry.registerRootComponent?.(ExpandedView);
         registry.registerRootComponent?.(IncomingCallModal);
+        registry.registerRootComponent?.(SwitchCallModal);
         registry.registerRootComponent?.(ChannelCallToast);
 
         // VideoGrid (the bottom-right floating tiles from Phase 6) is no
