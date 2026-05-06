@@ -22,16 +22,16 @@ Vollständige Architektur und Sequenzen: siehe Design-Spec.
 
 | Phase | Inhalt | Status |
 |---|---|---|
-| 0 | Spike: Signaling-Extraktion, EUPL-Lizenz, Lifecycle-Events, lokale Test-Instanz, Smoke-Test | offen |
-| 1 | Repo-Bootstrap: `plugin.json`, Makefile, CI, Bot-User | wartet auf Phase 0 |
-| 2 | Auth-Skeleton: OIDC-Code-Flow, Token-Storage | wartet |
-| 3 | OpenTalk-REST-Client (Go) | wartet |
-| 4 | Custom-Post + Slash-Commands | wartet |
-| 5 | Signaling-Lib portieren | wartet |
-| 6 | LiveKit-Integration | wartet |
-| 7 | Floating-Widget + Expanded-View | wartet |
-| 8 | DM-Ringing + Push-Notifications | wartet |
-| 9 | Meeting-Lifecycle + Resilience | wartet |
+| 0 | Spike: Signaling-Extraktion, EUPL-Lizenz, Lifecycle-Events, lokale Test-Instanz, Smoke-Test | ✅ |
+| 1 | Repo-Bootstrap: `plugin.json`, Makefile, CI, Bot-User | ✅ |
+| 2 | Auth-Skeleton: OIDC-Code-Flow, Token-Storage | ✅ |
+| 3 | OpenTalk-REST-Client (Go) | ✅ |
+| 4 | Custom-Post + Slash-Commands | ✅ |
+| 5 | Signaling-Lib portieren | ✅ |
+| 6 | LiveKit-Integration | ✅ |
+| 7 | Floating-Widget + Expanded-View | ✅ |
+| 8 | DM-Ringing + Push-Notifications + Channel-Toast | ✅ |
+| 9 | Meeting-Lifecycle + Resilience (Reconnect, TTL-Reaper, Hand-Raise) | offen |
 | 10 | Testing (Unit + E2E) | wartet |
 | 11 | Doku + Release | wartet |
 
