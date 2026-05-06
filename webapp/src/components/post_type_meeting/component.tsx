@@ -149,13 +149,29 @@ const livePulse: React.CSSProperties = {
 const PostTypeMeeting: React.FC<Props> = ({post}) => {
     const store = useStore();
 
+    // Display name with the same nickname > first+last > username priority
+    // the server uses (see displayNameOf in server/plugin.go). This is what
+    // OpenTalk shows on participant tiles, so keeping client and server
+    // attribution in sync matters.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const currentUsername = useSelector((s: any) => {
+    const currentDisplayName = useSelector((s: any) => {
         const id = s?.entities?.users?.currentUserId;
         if (!id) {
             return '';
         }
-        return s?.entities?.users?.profiles?.[id]?.username ?? '';
+        const u = s?.entities?.users?.profiles?.[id];
+        if (!u) {
+            return '';
+        }
+        const nick = (u.nickname ?? '').trim();
+        if (nick) {
+            return nick;
+        }
+        const full = ((u.first_name ?? '') + ' ' + (u.last_name ?? '')).trim();
+        if (full) {
+            return full;
+        }
+        return u.username ?? '';
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,7 +186,7 @@ const PostTypeMeeting: React.FC<Props> = ({post}) => {
         }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const channelID = (post as any).channel_id ?? '';
-        startConferenceConnection(p.room_id, channelID, currentUsername, store);
+        startConferenceConnection(p.room_id, channelID, currentDisplayName, store);
     };
 
     let statusBadge: React.ReactNode = null;

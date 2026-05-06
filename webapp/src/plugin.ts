@@ -30,6 +30,13 @@ interface ConnectedStateMessage {
     };
 }
 
+interface MeetingEndedMessage {
+    data: {
+        channel_id: string;
+        room_id: string;
+    };
+}
+
 export default class Plugin {
     public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): Promise<void> {
         // Pin the redux store on the controller so toggle handlers (mic/cam/
@@ -57,6 +64,23 @@ export default class Plugin {
             `custom_${pluginId}_user_connected_state`,
             (msg: ConnectedStateMessage) => {
                 store.dispatch(setConnected(msg.data.connected === true, msg.data.email));
+            },
+        );
+
+        // When the host ends the meeting "for everyone", the server
+        // broadcasts custom_<plugin>_meeting_ended to all members of
+        // the channel. Each remote client that is currently in the
+        // affected meeting tears down its conference + LiveKit so the
+        // user is dropped out of the room. Without this handler the
+        // host would leave but other participants would stay connected.
+        registry.registerWebSocketEventHandler?.(
+            `custom_${pluginId}_meeting_ended`,
+            (msg: MeetingEndedMessage) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const session: any = (store.getState() as any)?.['plugins-de.opentalk.mattermost-plugin']?.session;
+                if (session?.status !== 'idle' && session?.channelID === msg.data.channel_id) {
+                    leaveActiveConference();
+                }
             },
         );
         registry.registerPostTypeComponent?.('custom_opentalk_meeting', PostTypeMeeting);

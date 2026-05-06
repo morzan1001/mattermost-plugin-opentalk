@@ -127,6 +127,24 @@ func splitScopes(s string) []string {
 	return strings.Fields(s)
 }
 
+// displayNameOf returns the user's preferred display name in this priority:
+// nickname > first+last > username. Falls back to username on any nil/empty.
+// Used wherever the plugin shows a human-readable participant name (bot-
+// post host attribution, OpenTalk join displayName, etc.).
+func displayNameOf(u *model.User) string {
+	if u == nil {
+		return ""
+	}
+	if nick := strings.TrimSpace(u.Nickname); nick != "" {
+		return nick
+	}
+	full := strings.TrimSpace(u.FirstName + " " + u.LastName)
+	if full != "" {
+		return full
+	}
+	return u.Username
+}
+
 // ServeHTTP routes plugin HTTP requests through the gorilla/mux-Router in
 // server/http. Returns 503 if the plugin has not been configured yet (i.e.,
 // OnConfigurationChange has not produced a valid OIDC client).
@@ -171,7 +189,7 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			if err != nil || u == nil {
 				return ""
 			}
-			return u.Username
+			return displayNameOf(u)
 		},
 
 		IsConnected: func(mmUserID string) bool {
@@ -184,7 +202,7 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			if err != nil || u == nil {
 				return ""
 			}
-			return u.Username
+			return displayNameOf(u)
 		},
 
 		// Phase 6: end-meeting endpoint reuses the same Post API the slash-
@@ -258,7 +276,7 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 
 	hostName := mmUserID
 	if u, err := p.API.GetUser(mmUserID); err == nil && u != nil {
-		hostName = u.Username
+		hostName = displayNameOf(u)
 	}
 	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostName)
 	botPost.UserId = p.botUserID
