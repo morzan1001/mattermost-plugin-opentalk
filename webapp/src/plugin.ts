@@ -47,7 +47,27 @@ interface IncomingCallMessage {
         host_name: string;
         post_id?: string;
         dm_user_ids?: string[];
+        created_at_unix_ms?: number;
     };
+}
+
+const ringtoneSettingKey = 'opentalk:ringtone-enabled';
+
+// Stale threshold: ignore incoming-call broadcasts older than this. Matches
+// the modal's auto-decline timer, so anything we'd have auto-dismissed by
+// now is also too old to ring for.
+const incomingCallFreshnessMs = 30000;
+
+function ringtoneEnabled(): boolean {
+    if (typeof window === 'undefined') {
+        return true;
+    }
+    try {
+        const v = window.localStorage.getItem(ringtoneSettingKey);
+        return v !== 'false';
+    } catch {
+        return true;
+    }
 }
 
 interface IncomingCallDismissedMessage {
@@ -78,6 +98,20 @@ export default class Plugin {
             toggleScreenShare,
             leave: leaveActiveConference,
             end: endActiveMeeting,
+
+            // User-facing toggle for the incoming-call ringtone. Persists
+            // in localStorage. Call window.opentalk.ringtone(false) to
+            // suppress all incoming-call modals; window.opentalk.ringtone(true)
+            // to re-enable. Returns the new state.
+            ringtone: (enabled: boolean): boolean => {
+                try {
+                    window.localStorage.setItem(ringtoneSettingKey, enabled ? 'true' : 'false');
+                } catch {
+                    /* swallow — quota or private mode */
+                }
+                return enabled;
+            },
+            ringtoneStatus: (): boolean => ringtoneEnabled(),
         };
 
         registry.registerReducer?.(reducer);
@@ -110,6 +144,29 @@ export default class Plugin {
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_incoming_call`,
             (msg: IncomingCallMessage) => {
+                // Three layered guards against unwanted ringing:
+                // 1. User opted out of ringtone via window.opentalk.ringtone(false)
+                if (!ringtoneEnabled()) {
+                    return;
+                }
+
+                // 2. Don't ring the host (defense-in-depth — the server
+                //    OmitUsers's the host already, but a stale WS frame on
+                //    reconnect or a multi-tab session could still deliver).
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const myId: string | undefined = (store.getState() as any)?.entities?.users?.currentUserId;
+                if (myId && msg.data.host_user_id === myId) {
+                    return;
+                }
+
+                // 3. Drop stale broadcasts. If the WS reconnects after the
+                //    ring window has already passed there's nothing useful
+                //    to do beyond making noise.
+                const createdAt = msg.data.created_at_unix_ms;
+                if (createdAt && Date.now() - createdAt > incomingCallFreshnessMs) {
+                    return;
+                }
+
                 store.dispatch(incomingCallReceived({
                     channelID: msg.data.channel_id,
                     roomID: msg.data.room_id,

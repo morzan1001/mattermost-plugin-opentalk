@@ -311,6 +311,12 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 			"host_user_id": mmUserID,
 			"host_name":    hostName,
 			"post_id":      botPost.Id,
+
+			// Freshness marker so the webapp can ignore broadcasts that
+			// arrive on a late WS-reconnect / plugin re-activate (we don't
+			// want to ring the user for a meeting that was started 5 min
+			// ago and is essentially stale).
+			"created_at_unix_ms": time.Now().UnixMilli(),
 		}
 		if isDM {
 			// Resolve recipients (channel members minus host).
@@ -324,7 +330,13 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 				}
 			}
 			payload["dm_user_ids"] = recipients
-			p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{ChannelId: channelID})
+
+			// OmitUsers excludes the host from receiving their own ring —
+			// otherwise creating a DM-meeting makes the host ring themselves.
+			p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{
+				ChannelId: channelID,
+				OmitUsers: map[string]bool{mmUserID: true},
+			})
 
 			// Best-effort push notification per recipient.
 			for _, uid := range recipients {
@@ -340,7 +352,12 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 				}
 			}
 		} else {
-			p.API.PublishWebSocketEvent("meeting_started", payload, &model.WebsocketBroadcast{ChannelId: channelID})
+			// Channel meeting (Phase 8b ChannelCallToast). Host doesn't need
+			// a toast for their own meeting.
+			p.API.PublishWebSocketEvent("meeting_started", payload, &model.WebsocketBroadcast{
+				ChannelId: channelID,
+				OmitUsers: map[string]bool{mmUserID: true},
+			})
 		}
 	}
 
