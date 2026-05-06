@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mattermost/mattermost/server/public/model"
 
 	"github.com/opentalk/mattermost-plugin-opentalk/server/oidc"
 	"github.com/opentalk/mattermost-plugin-opentalk/server/opentalk"
@@ -25,6 +26,18 @@ type Handlers struct {
 	RoomserverURL  string
 	Defaults       MeetingDefaults
 	AccessTokenFor func(mmUserID string) (string, error)
+
+	// Phase 4 additions: bot-post creation alongside meeting create.
+	BotUserID      string
+	FrontendURL    string
+	CreatePost     func(*model.Post) (*model.Post, error)
+	HostUsernameOf func(mmUserID string) string
+
+	// Phase 5 additions: join-meeting endpoint dispatches between
+	// StartRoom (registered) and StartInvited (guest) based on whether the
+	// user has a UserInfo record in the KV store.
+	IsConnected func(mmUserID string) bool
+	UsernameOf  func(mmUserID string) string
 }
 
 type MeetingDefaults struct {

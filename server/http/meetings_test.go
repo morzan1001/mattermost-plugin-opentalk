@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorilla/mux"
+	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest/mock"
 	"github.com/stretchr/testify/assert"
@@ -39,9 +41,12 @@ func TestMeetingsCreate_HappyPath(t *testing.T) {
 	defer otSrv.Close()
 
 	api := &plugintest.API{}
+	// May be called multiple times: once before bot-post creation, once after
+	// PostID is persisted. testify allows the same On() to match repeat calls.
 	api.On("KVSetWithExpiry", mock.MatchedBy(func(k string) bool { return strings.HasPrefix(k, "meeting_") }),
 		mock.Anything, int64(0)).Return(nil)
 
+	var capturedPost *model.Post
 	h := &Handlers{
 		Store:         store.New(api),
 		EncryptionKey: []byte("0123456789abcdef0123456789abcdef"),
@@ -53,6 +58,15 @@ func TestMeetingsCreate_HappyPath(t *testing.T) {
 			InviteExpirationHours: 24,
 		},
 		AccessTokenFor: func(_ string) (string, error) { return "tok", nil },
+		BotUserID:      "bot-uid",
+		FrontendURL:    "https://opentalk.example",
+		CreatePost: func(p *model.Post) (*model.Post, error) {
+			p.Id = "post-1"
+			p.UserId = "bot-uid"
+			capturedPost = p
+			return p, nil
+		},
+		HostUsernameOf: func(_ string) string { return "alice" },
 	}
 
 	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev"}`)
@@ -69,6 +83,12 @@ func TestMeetingsCreate_HappyPath(t *testing.T) {
 	assert.Equal(t, "inv-1", resp["invite_code"])
 	assert.Equal(t, "room-1#xyz", resp["ticket"])
 	assert.Equal(t, "wss://controller.example", resp["roomserver_url"])
+
+	require.NotNil(t, capturedPost, "expected bot-post to be created")
+	assert.Equal(t, "custom_opentalk_meeting", capturedPost.Type)
+	assert.Equal(t, "alice", capturedPost.GetProp("host_username"))
+	assert.Contains(t, capturedPost.Message, "https://opentalk.example/invite/inv-1")
+	assert.Equal(t, "post-1", resp["post_id"])
 }
 
 func TestMeetingsCreate_RejectsMissingUserHeader(t *testing.T) {
@@ -99,5 +119,136 @@ func TestMeetingsCreate_PropagatesAccessTokenError(t *testing.T) {
 	req.Header.Set("Mattermost-User-ID", "host")
 	rr := httptest.NewRecorder()
 	h.MeetingsCreate(rr, req)
+	assert.Equal(t, nethttp.StatusUnauthorized, rr.Code)
+}
+
+func TestMeetingsJoin_RegisteredUserPath(t *testing.T) {
+	var receivedAuth, receivedPath string
+	otSrv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == nethttp.MethodPost && r.URL.Path == "/v1/rooms/room-1/start" {
+			receivedAuth = r.Header.Get("Authorization")
+			receivedPath = r.URL.Path
+			w.Write([]byte(`{"ticket":"room-1#abc","resumption":"res-1"}`))
+			return
+		}
+		w.WriteHeader(nethttp.StatusNotFound)
+	}))
+	defer otSrv.Close()
+
+	api := &plugintest.API{}
+	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1"}
+	raw, _ := json.Marshal(am)
+	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
+
+	h := &Handlers{
+		Store:          store.New(api),
+		OpenTalk:       opentalk.NewClient(otSrv.URL),
+		RoomserverURL:  "wss://rs.example",
+		AccessTokenFor: func(_ string) (string, error) { return "tok-xyz", nil },
+		IsConnected:    func(_ string) bool { return true },
+		UsernameOf:     func(_ string) string { return "alice" },
+	}
+
+	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev-1"}`)
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-1/join", body)
+	req.Header.Set("Mattermost-User-ID", "u1")
+	rr := httptest.NewRecorder()
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
+	router.ServeHTTP(rr, req)
+
+	require.Equal(t, nethttp.StatusOK, rr.Code, rr.Body.String())
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+	assert.Equal(t, "room-1#abc", resp["ticket"])
+	assert.Equal(t, "res-1", resp["resumption"])
+	assert.Equal(t, "wss://rs.example", resp["roomserver_url"])
+	assert.Equal(t, "Bearer tok-xyz", receivedAuth)
+	assert.Equal(t, "/v1/rooms/room-1/start", receivedPath)
+}
+
+func TestMeetingsJoin_GuestPathUsesInvite(t *testing.T) {
+	var receivedAuth string
+	var receivedBody map[string]any
+	otSrv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == nethttp.MethodPost && r.URL.Path == "/v1/rooms/room-1/start_invited" {
+			receivedAuth = r.Header.Get("Authorization")
+			json.NewDecoder(r.Body).Decode(&receivedBody)
+			w.Write([]byte(`{"ticket":"room-1#guest","resumption":"res-g"}`))
+			return
+		}
+	}))
+	defer otSrv.Close()
+
+	api := &plugintest.API{}
+	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1"}
+	raw, _ := json.Marshal(am)
+	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
+
+	h := &Handlers{
+		Store:         store.New(api),
+		OpenTalk:      opentalk.NewClient(otSrv.URL),
+		RoomserverURL: "wss://rs.example",
+		IsConnected:   func(_ string) bool { return false },
+		UsernameOf:    func(_ string) string { return "bob" },
+	}
+
+	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev-2"}`)
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-1/join", body)
+	req.Header.Set("Mattermost-User-ID", "u-guest")
+	rr := httptest.NewRecorder()
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
+	router.ServeHTTP(rr, req)
+
+	require.Equal(t, nethttp.StatusOK, rr.Code, rr.Body.String())
+	assert.Empty(t, receivedAuth, "guest path must not send Authorization")
+	assert.Equal(t, "inv-1", receivedBody["invite_code"])
+	assert.Equal(t, "bob", receivedBody["display_name"])
+	assert.Equal(t, "dev-2", receivedBody["device_secret"])
+}
+
+func TestMeetingsJoin_NoActiveMeeting(t *testing.T) {
+	api := &plugintest.API{}
+	api.On("KVGet", "meeting_ch-x").Return([]byte(nil), nil)
+
+	h := &Handlers{Store: store.New(api)}
+	body := strings.NewReader(`{"channel_id":"ch-x","device_secret":"dev"}`)
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-x/join", body)
+	req.Header.Set("Mattermost-User-ID", "u1")
+	rr := httptest.NewRecorder()
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
+	router.ServeHTTP(rr, req)
+	assert.Equal(t, nethttp.StatusNotFound, rr.Code)
+}
+
+func TestMeetingsJoin_RoomMismatch(t *testing.T) {
+	api := &plugintest.API{}
+	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1"}
+	raw, _ := json.Marshal(am)
+	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
+
+	h := &Handlers{Store: store.New(api)}
+	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev"}`)
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-WRONG/join", body)
+	req.Header.Set("Mattermost-User-ID", "u1")
+	rr := httptest.NewRecorder()
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
+	router.ServeHTTP(rr, req)
+	assert.Equal(t, nethttp.StatusBadRequest, rr.Code)
+}
+
+func TestMeetingsJoin_RejectsMissingUserHeader(t *testing.T) {
+	h := &Handlers{}
+	body := strings.NewReader(`{"channel_id":"ch","device_secret":"dev"}`)
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-1/join", body)
+	rr := httptest.NewRecorder()
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
+	router.ServeHTTP(rr, req)
 	assert.Equal(t, nethttp.StatusUnauthorized, rr.Code)
 }

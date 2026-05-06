@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	nethttp "net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
@@ -15,6 +18,7 @@ import (
 	pluginhttp "github.com/opentalk/mattermost-plugin-opentalk/server/http"
 	"github.com/opentalk/mattermost-plugin-opentalk/server/oidc"
 	"github.com/opentalk/mattermost-plugin-opentalk/server/opentalk"
+	"github.com/opentalk/mattermost-plugin-opentalk/server/post"
 	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
 )
 
@@ -70,12 +74,27 @@ func (p *Plugin) OnActivate() error {
 func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	cfg := p.getConfiguration()
 	h := &command.Handler{
-		API:           p.API,
-		Store:         p.store,
-		OIDCClient:    p.getOIDCClient(),
-		EncryptionKey: []byte(cfg.TokenEncryptionKey),
-		SiteURL:       p.getSiteURL(),
-		PluginID:      pluginID,
+		API:            p.API,
+		Store:          p.store,
+		OIDCClient:     p.getOIDCClient(),
+		EncryptionKey:  []byte(cfg.TokenEncryptionKey),
+		SiteURL:        p.getSiteURL(),
+		PluginID:       pluginID,
+		FrontendURL:    cfg.OpenTalkFrontendURL,
+		MeetingCreator: p.CreateMeeting,
+		PostGetter: func(postID string) (*model.Post, error) {
+			mp, appErr := p.API.GetPost(postID)
+			if appErr != nil {
+				return nil, appErr
+			}
+			return mp, nil
+		},
+		PostUpdater: func(mp *model.Post) error {
+			return p.client.Post.UpdatePost(mp)
+		},
+		Broadcaster: func(event string, payload map[string]any) {
+			p.API.PublishWebSocketEvent(event, payload, &model.WebsocketBroadcast{})
+		},
 	}
 	return h.Execute(args)
 }
@@ -135,8 +154,117 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			InviteExpirationHours: cfg.InviteExpirationHours,
 		},
 		AccessTokenFor: p.accessTokenFor,
+
+		BotUserID:   p.botUserID,
+		FrontendURL: cfg.OpenTalkFrontendURL,
+		// pluginapi.PostService.CreatePost mutates the input post in-place
+		// (server-assigned Id, CreateAt, ...) and returns only error. We
+		// adapt to the (post, error) signature the handler expects.
+		CreatePost: func(mp *model.Post) (*model.Post, error) {
+			if err := p.client.Post.CreatePost(mp); err != nil {
+				return nil, err
+			}
+			return mp, nil
+		},
+		HostUsernameOf: func(mmUserID string) string {
+			u, err := p.API.GetUser(mmUserID)
+			if err != nil || u == nil {
+				return ""
+			}
+			return u.Username
+		},
+
+		IsConnected: func(mmUserID string) bool {
+			cfg := p.getConfiguration()
+			_, err := p.store.LoadUserInfo([]byte(cfg.TokenEncryptionKey), mmUserID)
+			return err == nil
+		},
+		UsernameOf: func(mmUserID string) string {
+			u, err := p.API.GetUser(mmUserID)
+			if err != nil || u == nil {
+				return ""
+			}
+			return u.Username
+		},
 	}
 	pluginhttp.NewRouter(handlers).ServeHTTP(w, r)
+}
+
+// CreateMeeting orchestrates room creation, invite generation, an initial
+// host start-ticket, KV persistence, and the bot-authored custom-post for
+// the given channel. Returns the persisted ActiveMeeting (with PostID).
+//
+// Used by both the HTTP handler and the /opentalk start slash command.
+// device_secret is generated here for callers that don't have one (slash-
+// command path). Returns an error if the user is not connected to OpenTalk.
+func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting, error) {
+	cfg := p.getConfiguration()
+
+	token, err := p.accessTokenFor(mmUserID)
+	if err != nil {
+		return nil, fmt.Errorf("access token: %w", err)
+	}
+
+	deviceSecret, err := generateDeviceSecret()
+	if err != nil {
+		return nil, err
+	}
+
+	ot := opentalk.NewClient(cfg.OpenTalkControllerURL)
+
+	room, err := ot.CreateRoom(token, opentalk.CreateRoomRequest{
+		EnableSIP:   cfg.DefaultEnableSIP,
+		WaitingRoom: cfg.DefaultWaitingRoom,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create room: %w", err)
+	}
+
+	expiry := time.Now().Add(time.Duration(cfg.InviteExpirationHours) * time.Hour).UTC()
+	invite, err := ot.CreateInvite(token, room.ID, opentalk.CreateInviteRequest{Expiration: &expiry})
+	if err != nil {
+		return nil, fmt.Errorf("create invite: %w", err)
+	}
+
+	if _, err := ot.StartRoom(token, room.ID, opentalk.StartRequest{DeviceSecret: deviceSecret}); err != nil {
+		return nil, fmt.Errorf("start room: %w", err)
+	}
+
+	am := &store.ActiveMeeting{
+		ChannelID:     channelID,
+		RoomID:        room.ID,
+		InviteCode:    invite.InviteCode,
+		HostUserID:    mmUserID,
+		CreatedAt:     time.Now().UTC(),
+		LastHeartbeat: time.Now().UTC(),
+		EnableSIP:     cfg.DefaultEnableSIP,
+	}
+	if err := p.store.SaveActiveMeeting(am); err != nil {
+		return nil, fmt.Errorf("persist meeting: %w", err)
+	}
+
+	hostName := mmUserID
+	if u, err := p.API.GetUser(mmUserID); err == nil && u != nil {
+		hostName = u.Username
+	}
+	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostName)
+	botPost.UserId = p.botUserID
+	if err := p.client.Post.CreatePost(botPost); err != nil {
+		return nil, fmt.Errorf("post meeting card: %w", err)
+	}
+	am.PostID = botPost.Id
+	if err := p.store.SaveActiveMeeting(am); err != nil {
+		return nil, fmt.Errorf("persist meeting (with post_id): %w", err)
+	}
+	return am, nil
+}
+
+func generateDeviceSecret() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate device secret: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
 
 // accessTokenFor returns a fresh OIDC access token for the given Mattermost
