@@ -12,6 +12,7 @@ import VideoGrid from './components/video_grid/component';
 import OpenTalkIcon from './components/channel_header_button/icon';
 import {startMeetingAction} from './components/channel_header_button/action';
 import {getConnectionStatus} from './client/rest';
+import {setActiveStore} from './conference/controller';
 
 interface ConnectedStateMessage {
     data: {
@@ -23,6 +24,11 @@ interface ConnectedStateMessage {
 
 export default class Plugin {
     public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): Promise<void> {
+        // Pin the redux store on the controller so toggle handlers (mic/cam/
+        // screen) can dispatch from RootComponents where useStore() returns
+        // null in some Mattermost-Webapp versions.
+        setActiveStore(store);
+
         registry.registerReducer?.(reducer);
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_user_connected_state`,

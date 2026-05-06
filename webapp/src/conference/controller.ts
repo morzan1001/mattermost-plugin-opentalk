@@ -27,6 +27,20 @@ import {
 let activeClient: OpenTalkConferenceClient | null = null;
 let activeLiveKit: LiveKitRoom | null = null;
 
+// The Mattermost-Webapp's <Provider> tree does not always reach plugin-
+// rendered RootComponents (e.g. our MeetingMiniBar) reliably — useStore()
+// can return null in that context, which silently swallows onClick handlers
+// that try to dispatch through it. We therefore stash the store at plugin-
+// initialize time and let the toggle exports use it directly, no React-
+// context indirection.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let activeStore: Store<any, Action> | null = null;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function setActiveStore(store: Store<any, Action>): void {
+    activeStore = store;
+}
+
 export async function startConferenceConnection(
     roomID: string,
     channelID: string,
@@ -43,7 +57,9 @@ export async function startConferenceConnection(
     activeClient = client;
 
     client.on('connected', (data) => {
-        store.dispatch(connected({participantCount: data.participants.length}));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const isHost = (data as any).isHost === true;
+        store.dispatch(connected({participantCount: data.participants.length, isHost}));
 
         // Phase 6: bring up LiveKit if joinSuccess included a livekit bootstrap.
         if (data.livekit?.url && data.livekit?.token) {
@@ -163,46 +179,75 @@ export async function leaveActiveConference(): Promise<void> {
     await c.leave();
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function toggleMic(store: Store<any, Action>): Promise<void> {
-    if (!activeLiveKit) {
+// endActiveMeeting tells the plugin server to terminate the meeting for
+// every participant. Used by the host's "Meeting beenden"-Button. Same
+// teardown as leaveActiveConference plus a server-side POST so the
+// custom-post is marked ENDED and other participants get the meeting_ended
+// ws-event.
+export async function endActiveMeeting(): Promise<void> {
+    if (!activeStore) {
+        await leaveActiveConference();
+        return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const channelID: string | undefined = activeStore.getState()?.['plugins-de.opentalk.mattermost-plugin']?.session?.channelID;
+    await leaveActiveConference();
+    if (!channelID) {
+        return;
+    }
+    try {
+        await fetch('/plugins/de.opentalk.mattermost-plugin/api/v1/meetings/end', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'include',
+            body: JSON.stringify({channel_id: channelID}),
+        });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[opentalk] endActiveMeeting failed:', (err as Error).message);
+    }
+}
+
+export async function toggleMic(): Promise<void> {
+    if (!activeLiveKit || !activeStore) {
         return;
     }
     if (activeLiveKit.isMicEnabled()) {
         await activeLiveKit.disableMic();
-        store.dispatch(setMicEnabled(false));
+        activeStore.dispatch(setMicEnabled(false));
     } else {
         await activeLiveKit.enableMic();
-        store.dispatch(setMicEnabled(true));
+        activeStore.dispatch(setMicEnabled(true));
     }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function toggleCam(store: Store<any, Action>): Promise<void> {
-    if (!activeLiveKit) {
+export async function toggleCam(): Promise<void> {
+    if (!activeLiveKit || !activeStore) {
         return;
     }
     if (activeLiveKit.isCamEnabled()) {
         await activeLiveKit.disableCam();
-        store.dispatch(setCamEnabled(false));
+        activeStore.dispatch(setCamEnabled(false));
     } else {
         await activeLiveKit.enableCam();
-        store.dispatch(setCamEnabled(true));
+        activeStore.dispatch(setCamEnabled(true));
     }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function toggleScreenShare(store: Store<any, Action>): Promise<void> {
-    if (!activeLiveKit) {
+export async function toggleScreenShare(): Promise<void> {
+    if (!activeLiveKit || !activeStore) {
         return;
     }
     if (activeLiveKit.isScreenShareEnabled()) {
         await activeLiveKit.disableScreenShare();
-        store.dispatch(setScreenShareEnabled(false));
+        activeStore.dispatch(setScreenShareEnabled(false));
     } else {
         try {
             await activeLiveKit.enableScreenShare();
-            store.dispatch(setScreenShareEnabled(true));
+            activeStore.dispatch(setScreenShareEnabled(true));
         } catch (err) {
             // User cancelled the screen-picker dialog -> exception. Treat as no-op.
             // eslint-disable-next-line no-console
@@ -216,4 +261,5 @@ export async function toggleScreenShare(store: Store<any, Action>): Promise<void
 export function _reset(): void {
     activeClient = null;
     activeLiveKit = null;
+    activeStore = null;
 }
