@@ -3,8 +3,17 @@ import type {Store, Action} from 'redux';
 import {OpenTalkConferenceClient} from './client';
 import {LiveKitRoom} from './livekit/room';
 import * as trackRegistry from './livekit/track_registry';
+import type {Participant} from './signaling/modules/core';
 
 import {getOrCreateDeviceSecret} from '../client/rest';
+import {
+    participantAdded,
+    participantRemoved,
+    participantsBulkSet,
+    speakingChanged,
+    participantsReset,
+    type ParticipantInfo,
+} from '../store/slice_participants';
 import {
     connectStarted,
     connected,
@@ -23,6 +32,14 @@ import {
     tracksReset,
     type TrackKind,
 } from '../store/slice_tracks';
+
+const ALLOWED_ROLES = new Set<string>(['moderator', 'user', 'guest']);
+
+/** Maps a signaling Participant to the slice's ParticipantInfo shape. */
+function toParticipantInfo(p: Participant): ParticipantInfo {
+    const role = (p.role && ALLOWED_ROLES.has(p.role)) ? p.role as ParticipantInfo['role'] : undefined;
+    return {id: p.id, displayName: p.displayName, role};
+}
 
 let activeClient: OpenTalkConferenceClient | null = null;
 let activeLiveKit: LiveKitRoom | null = null;
@@ -61,6 +78,12 @@ export async function startConferenceConnection(
         const isHost = (data as any).isHost === true;
         store.dispatch(connected({participantCount: data.participants.length, isHost}));
 
+        // Seed the participants slice with the full list from joinSuccess.
+        // ConferenceRoom.connect prepends self as the first entry in the list.
+        store.dispatch(participantsBulkSet({
+            participants: data.participants.map(toParticipantInfo),
+        }));
+
         // Some upstream OpenTalk builds inline livekit-bootstrap into joinSuccess.
         // Most current ones don't — they send a separate `livekit:credentials`
         // frame which we handle below. Keeping this fallback is harmless.
@@ -76,18 +99,22 @@ export async function startConferenceConnection(
         }
         bringUpLiveKit(url, token, store);
     });
-    client.on('participant_joined', () => {
+    client.on('participant_joined', (p) => {
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
+        store.dispatch(participantAdded({participant: toParticipantInfo(p)}));
     });
-    client.on('participant_left', () => {
+    client.on('participant_left', ({id}) => {
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
+        store.dispatch(participantRemoved({id}));
     });
     client.on('closed', () => {
         store.dispatch(disconnected());
+        store.dispatch(participantsReset());
         activeClient = null;
     });
     client.on('error', (err) => {
         store.dispatch(connectError({error: err.message}));
+        store.dispatch(participantsReset());
         activeClient = null;
     });
 
@@ -161,6 +188,7 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
 
     lk.on('active_speakers_changed', (speakers: unknown) => {
         store.dispatch(activeSpeakersChanged({speakers: speakers as string[]}));
+        store.dispatch(speakingChanged({speakers: speakers as string[]}));
     });
 
     lk.connect(url, token).catch((err: Error) => {
