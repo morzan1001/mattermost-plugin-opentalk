@@ -119,11 +119,35 @@ export class ConferenceRoom {
                     const list = [self, ...others];
                     this.participants = list;
                     this.state = 'connected';
+
+                    // Normalize livekit bootstrap if present in joinSuccess.
+                    // OpenTalk inlines {publicUrl, room, token} here on
+                    // current builds; older variants may use {url, token} or
+                    // ship them via a separate livekit:credentials frame
+                    // (handled below).
+                    let livekit: {url: string; token: string} | undefined;
+                    if (payload.livekit && typeof payload.livekit === 'object') {
+                        const lk = payload.livekit as Record<string, unknown>;
+                        const url = (lk.publicUrl ?? lk.public_url ?? lk.url) as string | undefined;
+                        const token = lk.token as string | undefined;
+                        if (url && token) {
+                            livekit = {url, token};
+                        }
+                    }
+
                     this.emit('connected', {
                         participants: list,
-                        livekit: payload.livekit,
+                        livekit,
                         isHost: payload.is_room_owner === true || payload.isRoomOwner === true,
                     });
+
+                    // Also emit livekit_credentials so the controller path is
+                    // uniform regardless of whether the server inlines the
+                    // bootstrap in joinSuccess or sends it as a separate
+                    // frame. The controller is idempotent on this signal.
+                    if (livekit) {
+                        this.emit('livekit_credentials', livekit);
+                    }
                 });
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
