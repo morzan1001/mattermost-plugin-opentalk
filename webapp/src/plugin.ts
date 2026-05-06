@@ -11,6 +11,7 @@ import AudioRenderer from './components/audio_renderer/component';
 import ExpandedView from './components/expanded_view/component';
 import IncomingCallModal from './components/incoming_call_modal/component';
 import {incomingCallReceived, incomingCallCleared} from './store/slice_incoming_calls';
+import {registerOpenTalkUserSettings} from './user_settings';
 import OpenTalkIcon from './components/channel_header_button/icon';
 import {startMeetingAction} from './components/channel_header_button/action';
 import {getConnectionStatus} from './client/rest';
@@ -187,6 +188,8 @@ export default class Plugin {
                 }
             },
         );
+        registerOpenTalkUserSettings(registry);
+
         registry.registerPostTypeComponent?.('custom_opentalk_meeting', PostTypeMeeting);
         registry.registerRootComponent?.(MeetingMiniBar);
         registry.registerRootComponent?.(AudioRenderer);
