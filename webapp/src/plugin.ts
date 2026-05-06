@@ -24,6 +24,11 @@ interface ConnectedStateMessage {
 
 export default class Plugin {
     public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): Promise<void> {
+        // Boot-marker so we can tell from the browser console whether the
+        // latest bundle is actually running (vs. a cached older one).
+        // eslint-disable-next-line no-console
+        console.log('[opentalk] plugin initialize, build=2026-05-06-diag');
+
         // Pin the redux store on the controller so toggle handlers (mic/cam/
         // screen) can dispatch from RootComponents where useStore() returns
         // null in some Mattermost-Webapp versions.
