@@ -8,6 +8,8 @@ const ACTION_TYPES = {
     SET_CAM_ENABLED: 'opentalk/session/set_cam_enabled',
     SET_SCREEN_SHARE_ENABLED: 'opentalk/session/set_screen_share_enabled',
     SET_LIVEKIT_CONNECTED: 'opentalk/session/set_livekit_connected',
+    SET_EXPANDED: 'opentalk/session/set_expanded',
+    SET_MINIMIZED: 'opentalk/session/set_minimized',
 } as const;
 
 export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'leaving';
@@ -23,6 +25,9 @@ export interface SessionState {
     screenShareEnabled: boolean;
     livekitConnected: boolean;
     isHost: boolean;
+    expanded: boolean;
+    minimized: boolean;
+    joinedAt?: number;
 }
 
 const initial: SessionState = {
@@ -33,6 +38,9 @@ const initial: SessionState = {
     screenShareEnabled: false,
     livekitConnected: false,
     isHost: false,
+    expanded: false,
+    minimized: false,
+    joinedAt: undefined,
 };
 
 export function connectStarted(payload: {channelID: string; roomID: string}) {
@@ -62,6 +70,12 @@ export function setScreenShareEnabled(value: boolean) {
 export function setLivekitConnected(value: boolean) {
     return {type: ACTION_TYPES.SET_LIVEKIT_CONNECTED, payload: {value}};
 }
+export function setExpanded(value: boolean) {
+    return {type: ACTION_TYPES.SET_EXPANDED, payload: {value}};
+}
+export function setMinimized(value: boolean) {
+    return {type: ACTION_TYPES.SET_MINIMIZED, payload: {value}};
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAction = {type: string; payload?: any};
@@ -82,6 +96,7 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
             participantCount: action.payload.participantCount,
             isHost: action.payload.isHost === true,
             error: undefined,
+            joinedAt: Date.now(),
         };
     case ACTION_TYPES.PARTICIPANTS_CHANGED:
         return {...state, participantCount: action.payload.participantCount};
@@ -97,6 +112,10 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
         return {...state, screenShareEnabled: action.payload.value};
     case ACTION_TYPES.SET_LIVEKIT_CONNECTED:
         return {...state, livekitConnected: action.payload.value};
+    case ACTION_TYPES.SET_EXPANDED:
+        return {...state, expanded: action.payload.value};
+    case ACTION_TYPES.SET_MINIMIZED:
+        return {...state, minimized: action.payload.value};
     default:
         return state;
     }

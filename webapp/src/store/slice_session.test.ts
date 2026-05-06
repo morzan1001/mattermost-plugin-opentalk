@@ -9,6 +9,8 @@ import {
     setCamEnabled,
     setScreenShareEnabled,
     setLivekitConnected,
+    setExpanded,
+    setMinimized,
 } from './slice_session';
 
 describe('sessionReducer', () => {
@@ -21,6 +23,8 @@ describe('sessionReducer', () => {
             camEnabled: false,
             screenShareEnabled: false,
             livekitConnected: false,
+            expanded: false,
+            minimized: false,
         });
     });
 
@@ -36,10 +40,13 @@ describe('sessionReducer', () => {
             camEnabled: false,
             screenShareEnabled: false,
             livekitConnected: false,
+            expanded: false,
+            minimized: false,
         });
     });
 
     it('reflects connected and clears error', () => {
+        const before = Date.now();
         const next = sessionReducer(
             {
                 status: 'connecting',
@@ -48,16 +55,21 @@ describe('sessionReducer', () => {
                 participantCount: 0,
                 error: 'old',
                 micEnabled: false,
-            isHost: false,
+                isHost: false,
                 camEnabled: false,
                 screenShareEnabled: false,
                 livekitConnected: false,
+                expanded: false,
+                minimized: false,
             },
             connected({participantCount: 3}),
         );
+        const after = Date.now();
         expect(next.status).toBe('connected');
         expect(next.participantCount).toBe(3);
         expect(next.error).toBeUndefined();
+        expect(next.joinedAt).toBeGreaterThanOrEqual(before);
+        expect(next.joinedAt).toBeLessThanOrEqual(after);
     });
 
     it('reflects participantsChanged', () => {
@@ -68,10 +80,12 @@ describe('sessionReducer', () => {
                 roomID: 'r',
                 participantCount: 3,
                 micEnabled: false,
-            isHost: false,
+                isHost: false,
                 camEnabled: false,
                 screenShareEnabled: false,
                 livekitConnected: false,
+                expanded: false,
+                minimized: false,
             },
             participantsChanged({participantCount: 4}),
         );
@@ -86,9 +100,13 @@ describe('sessionReducer', () => {
                 roomID: 'r',
                 participantCount: 3,
                 micEnabled: true,
+                isHost: false,
                 camEnabled: true,
                 screenShareEnabled: true,
                 livekitConnected: true,
+                expanded: true,
+                minimized: true,
+                joinedAt: 12345,
             },
             disconnected(),
         );
@@ -100,6 +118,8 @@ describe('sessionReducer', () => {
             camEnabled: false,
             screenShareEnabled: false,
             livekitConnected: false,
+            expanded: false,
+            minimized: false,
         });
     });
 
@@ -111,15 +131,21 @@ describe('sessionReducer', () => {
                 roomID: 'r',
                 participantCount: 0,
                 micEnabled: false,
-            isHost: false,
+                isHost: false,
                 camEnabled: false,
                 screenShareEnabled: false,
                 livekitConnected: false,
+                expanded: true,
+                minimized: false,
+                joinedAt: 99999,
             },
             connectError({error: 'boom'}),
         );
         expect(next.status).toBe('idle');
         expect(next.error).toBe('boom');
+        expect(next.expanded).toBe(false);
+        expect(next.minimized).toBe(false);
+        expect(next.joinedAt).toBeUndefined();
     });
 
     it('toggles micEnabled', () => {
@@ -148,5 +174,19 @@ describe('sessionReducer', () => {
         expect(s.livekitConnected).toBe(true);
         s = sessionReducer(s, setLivekitConnected(false));
         expect(s.livekitConnected).toBe(false);
+    });
+
+    it('setExpanded sets expanded field', () => {
+        let s = sessionReducer(undefined, setExpanded(true));
+        expect(s.expanded).toBe(true);
+        s = sessionReducer(s, setExpanded(false));
+        expect(s.expanded).toBe(false);
+    });
+
+    it('setMinimized sets minimized field', () => {
+        let s = sessionReducer(undefined, setMinimized(true));
+        expect(s.minimized).toBe(true);
+        s = sessionReducer(s, setMinimized(false));
+        expect(s.minimized).toBe(false);
     });
 });
