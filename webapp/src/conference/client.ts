@@ -8,10 +8,16 @@ export interface ConnectedEvent {
     livekit?: {url: string; token: string};
 }
 
+export interface LiveKitCredentialsEvent {
+    url: string;
+    token: string;
+}
+
 export type ConferenceEvent =
     | 'connected'
     | 'participant_joined'
     | 'participant_left'
+    | 'livekit_credentials'
     | 'closed'
     | 'error';
 
@@ -44,6 +50,7 @@ export class OpenTalkConferenceClient {
     public on(event: 'connected', cb: (data: ConnectedEvent) => void): () => void;
     public on(event: 'participant_joined', cb: (p: Participant) => void): () => void;
     public on(event: 'participant_left', cb: (data: {id: string}) => void): () => void;
+    public on(event: 'livekit_credentials', cb: (data: LiveKitCredentialsEvent) => void): () => void;
     public on(event: 'closed', cb: (data: {code: number}) => void): () => void;
     public on(event: 'error', cb: (err: Error) => void): () => void;
 

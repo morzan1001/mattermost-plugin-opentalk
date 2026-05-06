@@ -61,10 +61,22 @@ export async function startConferenceConnection(
         const isHost = (data as any).isHost === true;
         store.dispatch(connected({participantCount: data.participants.length, isHost}));
 
-        // Phase 6: bring up LiveKit if joinSuccess included a livekit bootstrap.
+        // Some upstream OpenTalk builds inline livekit-bootstrap into joinSuccess.
+        // Most current ones don't — they send a separate `livekit:credentials`
+        // frame which we handle below. Keeping this fallback is harmless.
         if (data.livekit?.url && data.livekit?.token) {
             bringUpLiveKit(data.livekit.url, data.livekit.token, store);
         }
+    });
+    client.on('livekit_credentials', ({url, token}) => {
+        // eslint-disable-next-line no-console
+        console.warn('[opentalk] livekit_credentials received, url=', url, 'token-len=', token.length);
+        if (activeLiveKit) {
+            // Already brought up (e.g. via the joinSuccess fallback above) —
+            // a re-credentialing roundtrip would tear down active publications.
+            return;
+        }
+        bringUpLiveKit(url, token, store);
     });
     client.on('participant_joined', () => {
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
@@ -289,7 +301,7 @@ export function debugState(): {
     micEnabled: boolean | null;
     camEnabled: boolean | null;
     screenShareEnabled: boolean | null;
-    } {
+} {
     return {
         hasClient: activeClient !== null,
         hasLiveKit: activeLiveKit !== null,

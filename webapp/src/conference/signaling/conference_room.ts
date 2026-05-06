@@ -15,6 +15,7 @@
 import {EventListener} from './event_listener';
 import {buildFrame} from './frame';
 import {CoreNamespace, type Participant} from './modules/core';
+import {LivekitNamespace} from './modules/livekit';
 import {SignalingSocket} from './socket';
 
 export interface AuthProvider {
@@ -27,7 +28,13 @@ export interface AuthProvider {
 
 export type RoomState = 'idle' | 'authenticating' | 'connecting' | 'connected' | 'leaving' | 'closed';
 
-type EventName = 'connected' | 'participant_joined' | 'participant_left' | 'closed' | 'error';
+type EventName =
+    | 'connected'
+    | 'participant_joined'
+    | 'participant_left'
+    | 'livekit_credentials'
+    | 'closed'
+    | 'error';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Listener = (data?: any) => void;
@@ -44,6 +51,7 @@ export class ConferenceRoom {
         connected: [],
         participant_joined: [],
         participant_left: [],
+        livekit_credentials: [],
         closed: [],
         error: [],
     };
@@ -126,6 +134,19 @@ export class ConferenceRoom {
                     const id = payload.id ?? payload.participantId;
                     this.participants = this.participants.filter((p) => p.id !== id);
                     this.emit('participant_left', {id});
+                });
+
+                // OpenTalk delivers LiveKit bootstrap as a separate frame
+                // {namespace:'livekit', payload:{action:'credentials', publicUrl, token, room}}
+                // *after* joinSuccess — not embedded in joinSuccess itself.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(LivekitNamespace, 'credentials', (payload: any) => {
+                    const url = payload.publicUrl ?? payload.public_url ?? payload.url;
+                    const token = payload.token;
+                    if (!url || !token) {
+                        return;
+                    }
+                    this.emit('livekit_credentials', {url, token});
                 });
 
                 this.socket.on('open', () => {
