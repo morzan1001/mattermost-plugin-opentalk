@@ -74,15 +74,15 @@ const MeetingMiniBar: React.FC = () => {
     const drag = useDraggable({
         storageKey: 'opentalk:widget-position',
         defaultPosition: {
-            x: typeof window === 'undefined' ? 16 : window.innerWidth - 360,
+            x: typeof window === 'undefined' ? 16 : window.innerWidth - 640,
             y: typeof window === 'undefined' ? 16 : window.innerHeight - 100,
         },
     });
 
     const resize = useResizable({
         storageKey: 'opentalk:widget-size',
-        defaultSize: {width: 340, height: 88},
-        minSize: {width: 280, height: 80},
+        defaultSize: {width: 620, height: 88},
+        minSize: {width: 480, height: 80},
     });
 
     const duration = useMeetingDuration(session.joinedAt);
@@ -91,9 +91,10 @@ const MeetingMiniBar: React.FC = () => {
         return null;
     }
 
-    if (session.expanded) {
-        return null;
-    }
+    // NOTE: Phase 7b will add the Expanded-View component which then takes over
+    // the screen. Until that ships, the widget stays visible regardless of the
+    // expanded flag — otherwise clicking the expand-button would hide the widget
+    // with nothing to replace it.
 
     const onLeaveClick = () => {
         if (isHost) {

@@ -1,6 +1,7 @@
 import {
     Room,
     RoomEvent,
+    Track,
     type RemoteTrack,
     type RemoteTrackPublication,
     type RemoteParticipant,
@@ -88,7 +89,7 @@ export class LiveKitRoom {
     }
 
     public isMicEnabled(): boolean {
-        return !!this.micTrack;
+        return Boolean(this.micTrack);
     }
 
     public async enableCam(opts?: CamOptions): Promise<void> {
@@ -107,7 +108,7 @@ export class LiveKitRoom {
     }
 
     public isCamEnabled(): boolean {
-        return !!this.camTrack;
+        return Boolean(this.camTrack);
     }
 
     public async enableScreenShare(): Promise<void> {
@@ -120,6 +121,24 @@ export class LiveKitRoom {
 
     public isScreenShareEnabled(): boolean {
         return this.room.localParticipant.isScreenShareEnabled;
+    }
+
+    /** Local participant's identity, matching the OpenTalk-Roomserver
+     * participant id. Used to key local-track-publications into the same
+     * tracks slice that holds remote subscriptions. */
+    public getLocalIdentity(): string {
+        return this.room.localParticipant.identity;
+    }
+
+    /** The currently-published local screen-share video track, if any. */
+    public getLocalScreenTrack(): LocalVideoTrack | undefined {
+        const pubs = this.room.localParticipant.getTrackPublications();
+        for (const pub of pubs) {
+            if (pub.source === Track.Source.ScreenShare && pub.track) {
+                return pub.track as LocalVideoTrack;
+            }
+        }
+        return undefined;
     }
 
     public on(event: LiveKitEvent, cb: Listener): () => void {

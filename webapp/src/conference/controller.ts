@@ -262,15 +262,34 @@ export async function toggleMic(): Promise<void> {
     }
 }
 
+// localTrackId returns a stable id for a published local track so we can
+// register it in track_registry and key it into the tracks slice. LiveKit's
+// LocalTrack.sid is undefined until the publication round-trips; fall back
+// to a deterministic synthesized id keyed on participant + kind.
+function localTrackId(lk: LiveKitRoom, kind: 'video' | 'screen'): string {
+    return `local:${lk.getLocalIdentity()}:${kind}`;
+}
+
 export async function toggleCam(): Promise<void> {
     if (!activeLiveKit || !activeStore) {
         return;
     }
-    if (activeLiveKit.isCamEnabled()) {
-        await activeLiveKit.disableCam();
+    const lk = activeLiveKit;
+    const localId = lk.getLocalIdentity();
+    if (lk.isCamEnabled()) {
+        const trackId = localTrackId(lk, 'video');
+        trackRegistry.unregister(trackId);
+        activeStore.dispatch(trackUnsubscribed({participantId: localId, kind: 'video'}));
+        await lk.disableCam();
         activeStore.dispatch(setCamEnabled(false));
     } else {
-        await activeLiveKit.enableCam();
+        await lk.enableCam();
+        if (lk.camTrack) {
+            const trackId = localTrackId(lk, 'video');
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            trackRegistry.register(trackId, lk.camTrack as any);
+            activeStore.dispatch(trackSubscribed({participantId: localId, kind: 'video', trackId}));
+        }
         activeStore.dispatch(setCamEnabled(true));
     }
 }
@@ -279,12 +298,24 @@ export async function toggleScreenShare(): Promise<void> {
     if (!activeLiveKit || !activeStore) {
         return;
     }
-    if (activeLiveKit.isScreenShareEnabled()) {
-        await activeLiveKit.disableScreenShare();
+    const lk = activeLiveKit;
+    const localId = lk.getLocalIdentity();
+    if (lk.isScreenShareEnabled()) {
+        const trackId = localTrackId(lk, 'screen');
+        trackRegistry.unregister(trackId);
+        activeStore.dispatch(trackUnsubscribed({participantId: localId, kind: 'screen'}));
+        await lk.disableScreenShare();
         activeStore.dispatch(setScreenShareEnabled(false));
     } else {
         try {
-            await activeLiveKit.enableScreenShare();
+            await lk.enableScreenShare();
+            const screenTrack = lk.getLocalScreenTrack();
+            if (screenTrack) {
+                const trackId = localTrackId(lk, 'screen');
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                trackRegistry.register(trackId, screenTrack as any);
+                activeStore.dispatch(trackSubscribed({participantId: localId, kind: 'screen', trackId}));
+            }
             activeStore.dispatch(setScreenShareEnabled(true));
         } catch (err) {
             // User cancelled the screen-picker dialog -> exception. Treat as no-op.
