@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strings"
 
 	"github.com/mattermost/mattermost/server/public/plugin"
 )
@@ -49,4 +50,36 @@ func (s *Store) Delete(key string) error {
 		return appErr
 	}
 	return nil
+}
+
+// PurgeKeysWithPrefix iterates all KV keys for the plugin and deletes those
+// that start with the given prefix. Used by Plugin.OnActivate to drop stale
+// runtime state (active meetings, dismissals) left over from a previous
+// deploy so a brand-new plugin process never inherits ringing-call state
+// it cannot reconcile. Returns the count of deleted keys.
+func (s *Store) PurgeKeysWithPrefix(prefix string) (int, error) {
+	deleted := 0
+	page := 0
+	const perPage = 200
+	for {
+		keys, appErr := s.api.KVList(page, perPage)
+		if appErr != nil {
+			return deleted, appErr
+		}
+		if len(keys) == 0 {
+			break
+		}
+		for _, k := range keys {
+			if strings.HasPrefix(k, prefix) {
+				if dErr := s.api.KVDelete(k); dErr == nil {
+					deleted++
+				}
+			}
+		}
+		if len(keys) < perPage {
+			break
+		}
+		page++
+	}
+	return deleted, nil
 }

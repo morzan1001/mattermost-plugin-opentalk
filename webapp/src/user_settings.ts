@@ -40,7 +40,7 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
                         // Returning the persisted value keeps the toggle
                         // in sync after a page reload.
                         currentValue: () => readRingtone(),
-                        onConfigChange: (value: string) => {
+                        onConfigChange: (value: unknown) => {
                             persistRingtone(value === 'true' || value === true);
                         },
                     },

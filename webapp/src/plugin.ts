@@ -160,11 +160,15 @@ export default class Plugin {
                     return;
                 }
 
-                // 3. Drop stale broadcasts. If the WS reconnects after the
-                //    ring window has already passed there's nothing useful
-                //    to do beyond making noise.
+                // 3. Drop stale broadcasts. Strict: any event arriving
+                //    without a server-stamped created_at_unix_ms is treated
+                //    as legacy/replayed and dropped — the marker has been
+                //    in every fresh broadcast since the Hotfix, so its
+                //    absence means the event is from before that or was
+                //    re-delivered out-of-band. Same drop if it's older
+                //    than the modal's own ring window (30s).
                 const createdAt = msg.data.created_at_unix_ms;
-                if (createdAt && Date.now() - createdAt > incomingCallFreshnessMs) {
+                if (typeof createdAt !== 'number' || Date.now() - createdAt > incomingCallFreshnessMs) {
                     return;
                 }
 

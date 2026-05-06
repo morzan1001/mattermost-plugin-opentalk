@@ -58,6 +58,18 @@ func (p *Plugin) OnActivate() error {
 
 	p.store = store.New(p.API)
 
+	// Purge runtime state from the previous plugin process. Active meetings
+	// from before the redeploy aren't reachable any more (the WS clients
+	// have been disconnected and reset their session-slice on bundle reload),
+	// so leaving them in KV would only feed stale incoming-call modals when
+	// any session reconciles state. Same logic for dismissal sets.
+	if n, err := p.store.PurgeKeysWithPrefix("meeting_"); err == nil && n > 0 {
+		p.API.LogInfo("[opentalk] purged stale active-meetings on activate", "count", n)
+	}
+	if n, err := p.store.PurgeKeysWithPrefix("dismiss_"); err == nil && n > 0 {
+		p.API.LogInfo("[opentalk] purged stale dismissals on activate", "count", n)
+	}
+
 	if err := p.API.RegisterCommand(&model.Command{
 		Trigger:          command.Trigger,
 		AutoComplete:     true,
