@@ -116,7 +116,7 @@ const MeetingMiniBar: React.FC = () => {
                         style={session.micEnabled ? activeButtonStyle : mutedDangerButtonStyle}
                         onClick={() => {
                             // eslint-disable-next-line no-console
-                            console.log('[opentalk] mini-bar mic onClick');
+                            console.warn('[opentalk] mini-bar mic onClick');
                             toggleMic();
                         }}
                         title={session.micEnabled ? 'Mikrofon stummschalten' : 'Mikrofon einschalten'}
@@ -130,7 +130,7 @@ const MeetingMiniBar: React.FC = () => {
                         style={session.camEnabled ? activeButtonStyle : mutedButtonStyle}
                         onClick={() => {
                             // eslint-disable-next-line no-console
-                            console.log('[opentalk] mini-bar cam onClick');
+                            console.warn('[opentalk] mini-bar cam onClick');
                             toggleCam();
                         }}
                         title={session.camEnabled ? 'Kamera ausschalten' : 'Kamera einschalten'}
@@ -144,7 +144,7 @@ const MeetingMiniBar: React.FC = () => {
                         style={session.screenShareEnabled ? activeButtonStyle : mutedButtonStyle}
                         onClick={() => {
                             // eslint-disable-next-line no-console
-                            console.log('[opentalk] mini-bar screen onClick');
+                            console.warn('[opentalk] mini-bar screen onClick');
                             toggleScreenShare();
                         }}
                         title={session.screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}

@@ -26,8 +26,9 @@ export default class Plugin {
     public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): Promise<void> {
         // Boot-marker so we can tell from the browser console whether the
         // latest bundle is actually running (vs. a cached older one).
+        // Uses warn() so it survives default console filters that hide log().
         // eslint-disable-next-line no-console
-        console.log('[opentalk] plugin initialize, build=2026-05-06-diag');
+        console.warn('[opentalk] plugin initialize, build=2026-05-06-diag2');
 
         // Pin the redux store on the controller so toggle handlers (mic/cam/
         // screen) can dispatch from RootComponents where useStore() returns
