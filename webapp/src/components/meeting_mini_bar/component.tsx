@@ -39,13 +39,14 @@ const MeetingMiniBar: React.FC = () => {
         return localId ? order.filter((id: string) => id !== localId).length : order.length;
     });
 
-    // Min-width grows when self-cam is active so buttons don't get crowded.
-    // Height is not controlled here — content drives it.
-    const baseMinWidth = 380;
+    // Min-width derived from content: counter+duration (~140), 7 buttons of
+    // 36px + 1 divider + 8px gaps (~316), plus 20px padding. Self-cam adds a
+    // 64px preview + 8px gap when on. Height is content-driven.
+    const baseMinWidth = 480;
     const minWidth = baseMinWidth + (session.camEnabled ? 72 : 0);
 
     const resize = useResizable({
-        storageKey: 'opentalk:widget-size:v6',
+        storageKey: 'opentalk:widget-size:v7',
         defaultSize: {width: minWidth, height: 0},
         minSize: {width: minWidth, height: 0},
     });
