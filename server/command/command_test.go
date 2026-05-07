@@ -38,14 +38,14 @@ func TestExecute_FallsBackToHelpForEmpty(t *testing.T) {
 	api := &plugintest.API{}
 	h := newHandler(api)
 	resp, _ := h.Execute(mkArgs("u1", "/opentalk"))
-	assert.Contains(t, resp.Text, "Kommandos")
+	assert.Contains(t, resp.Text, "commands")
 }
 
 func TestExecute_UnknownSubcommand(t *testing.T) {
 	api := &plugintest.API{}
 	h := newHandler(api)
 	resp, _ := h.Execute(mkArgs("u1", "/opentalk wiggle"))
-	assert.Contains(t, resp.Text, "Unbekannter Subcommand")
+	assert.Contains(t, resp.Text, "Unknown subcommand")
 }
 
 func TestConnect_ReturnsLinkWhenNotConnected(t *testing.T) {
@@ -68,7 +68,7 @@ func TestConnect_NoticesAlreadyConnected(t *testing.T) {
 	api.On("KVGet", mock.AnythingOfType("string")).Return(enc, nil)
 	h := newHandler(api)
 	resp, _ := h.Execute(mkArgs("u1", "/opentalk connect"))
-	assert.Contains(t, resp.Text, "bereits")
+	assert.Contains(t, resp.Text, "already connected")
 }
 
 func TestDisconnect_DeletesAndBroadcasts(t *testing.T) {
@@ -83,7 +83,7 @@ func TestDisconnect_DeletesAndBroadcasts(t *testing.T) {
 
 	h := newHandler(api)
 	resp, _ := h.Execute(mkArgs("u1", "/opentalk disconnect"))
-	assert.Contains(t, resp.Text, "entfernt")
+	assert.Contains(t, resp.Text, "removed")
 	api.AssertExpectations(t)
 }
 
@@ -92,7 +92,7 @@ func TestInfo_NotConnected(t *testing.T) {
 	api.On("KVGet", mock.AnythingOfType("string")).Return([]byte(nil), nil)
 	h := newHandler(api)
 	resp, _ := h.Execute(mkArgs("u1", "/opentalk info"))
-	assert.Contains(t, resp.Text, "nicht mit OpenTalk verbunden")
+	assert.Contains(t, resp.Text, "not connected to OpenTalk")
 }
 
 func TestInfo_Connected(t *testing.T) {
@@ -112,14 +112,14 @@ func TestInfo_Connected(t *testing.T) {
 	assert.Contains(t, resp.Text, "kc-sub")
 }
 
-func TestAutocomplete_HasEightSubcommands(t *testing.T) {
+func TestAutocomplete_HasAllSubcommands(t *testing.T) {
 	data := AutocompleteData()
 	require.NotNil(t, data)
-	require.Len(t, data.SubCommands, 8)
+	require.Len(t, data.SubCommands, 9)
 	names := []string{}
 	for _, sc := range data.SubCommands {
 		names = append(names, sc.Trigger)
 	}
 	sort.Strings(names)
-	assert.Equal(t, "connect,dial-in,disconnect,end,help,info,join,start", strings.Join(names, ","))
+	assert.Equal(t, "connect,dial-in,disconnect,end,help,info,join,ring,start", strings.Join(names, ","))
 }

@@ -18,7 +18,7 @@ func TestEnd_NoActiveMeeting(t *testing.T) {
 	api.On("KVGet", mock.AnythingOfType("string")).Return([]byte(nil), nil)
 	h := newHandler(api)
 	resp, _ := h.Execute(&model.CommandArgs{UserId: "u", ChannelId: "ch", Command: "/opentalk end"})
-	assert.Contains(t, resp.Text, "kein aktives Meeting")
+	assert.Contains(t, resp.Text, "no active meeting")
 }
 
 func TestEnd_NonHostRejected(t *testing.T) {
@@ -33,7 +33,7 @@ func TestEnd_NonHostRejected(t *testing.T) {
 	api.On("KVGet", mock.AnythingOfType("string")).Return(activeMeetingJSON(t, am), nil)
 	h := newHandler(api)
 	resp, _ := h.Execute(&model.CommandArgs{UserId: "not-host", ChannelId: "ch", Command: "/opentalk end"})
-	assert.Contains(t, resp.Text, "Nur der Host")
+	assert.Contains(t, resp.Text, "Only the host")
 }
 
 func TestEnd_HostUpdatesPostAndDeletesMeeting(t *testing.T) {
@@ -71,7 +71,7 @@ func TestEnd_HostUpdatesPostAndDeletesMeeting(t *testing.T) {
 	}
 
 	resp, _ := h.Execute(&model.CommandArgs{UserId: "host-u", ChannelId: "ch", Command: "/opentalk end"})
-	assert.Contains(t, resp.Text, "beendet")
+	assert.Contains(t, resp.Text, "ended")
 	assert.NotNil(t, updated, "post update expected")
 	assert.Equal(t, "ENDED", updated.GetProp("status"))
 	assert.Equal(t, "meeting_ended", brEvent)
@@ -100,5 +100,5 @@ func TestEnd_PostUpdateFailureStillDeletesMeeting(t *testing.T) {
 	h.PostUpdater = func(*model.Post) error { return errors.New("update failed") }
 
 	resp, _ := h.Execute(&model.CommandArgs{UserId: "host-u", ChannelId: "ch", Command: "/opentalk end"})
-	assert.Contains(t, resp.Text, "beendet")
+	assert.Contains(t, resp.Text, "ended")
 }

@@ -49,7 +49,7 @@ func (h *Handler) ring(args *model.CommandArgs) (*model.CommandResponse, *model.
 
 	case "status", "":
 		return ephemeral(i18n.T(locale, i18n.Translatable{
-			DE: "Klingelton-Status: prüfe in den Mattermost-Einstellungen unter „OpenTalk", oder rufe `/opentalk ring on|off` auf, um umzuschalten.",
+			DE: "Klingelton-Status: prüfe in den Mattermost-Einstellungen unter \"OpenTalk\", oder rufe `/opentalk ring on|off` auf, um umzuschalten.",
 			EN: "Ringtone status: check Mattermost settings under \"OpenTalk\", or use `/opentalk ring on|off` to toggle.",
 		})), nil
 

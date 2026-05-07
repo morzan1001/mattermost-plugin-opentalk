@@ -164,7 +164,7 @@ func TestOAuthCallback_ExchangesAndStoresUserInfo(t *testing.T) {
 	h.OAuthCallback(rr, req)
 
 	require.Equal(t, nethttp.StatusOK, rr.Code, rr.Body.String())
-	assert.Contains(t, rr.Body.String(), "Verbunden")
+	assert.Contains(t, rr.Body.String(), "Connected to OpenTalk")
 	assert.True(t, strings.HasPrefix(savedKey, "user_info_"))
 	assert.NotEmpty(t, savedValue)
 	assert.NotContains(t, string(savedValue), "refresh-jwt", "tokens must be encrypted at rest")

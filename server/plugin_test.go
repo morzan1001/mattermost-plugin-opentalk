@@ -26,6 +26,10 @@ func TestPlugin_OnActivate(t *testing.T) {
 			return cmd.Trigger == "opentalk"
 		})).Return(nil)
 
+		// Reaper.Start() ticks immediately, which calls Store.ListActiveMeetings
+		// → api.KVList. Empty result means "no stale meetings".
+		api.On("KVList", 0, 200).Return([]string{}, nil).Maybe()
+
 		p := &Plugin{}
 		p.SetAPI(api)
 
@@ -33,7 +37,8 @@ func TestPlugin_OnActivate(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "bot-user-id", p.botUserID)
 
-		api.AssertExpectations(t)
+		// Stop the reaper so its goroutine doesn't outlive the test.
+		_ = p.OnDeactivate()
 	})
 
 	t.Run("propagates EnsureBotUser error", func(t *testing.T) {

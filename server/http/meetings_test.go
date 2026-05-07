@@ -41,8 +41,11 @@ func TestMeetingsCreate_HappyPath(t *testing.T) {
 	defer otSrv.Close()
 
 	api := &plugintest.API{}
-	// May be called multiple times: once before bot-post creation, once after
-	// PostID is persisted. testify allows the same On() to match repeat calls.
+	// Multi-call guard: MeetingsCreate now LoadActiveMeeting()s up front.
+	// Return nil ([]byte, nil-AppError) to signal "no existing meeting".
+	api.On("KVGet", mock.MatchedBy(func(k string) bool { return strings.HasPrefix(k, "meeting_") })).
+		Return([]byte(nil), (*model.AppError)(nil))
+	// SaveActiveMeeting fires twice (before + after bot-post id is set).
 	api.On("KVSetWithExpiry", mock.MatchedBy(func(k string) bool { return strings.HasPrefix(k, "meeting_") }),
 		mock.Anything, int64(0)).Return(nil)
 

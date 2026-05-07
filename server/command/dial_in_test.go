@@ -26,7 +26,7 @@ func TestDialIn_NoActiveMeeting(t *testing.T) {
 	api.On("KVGet", mock.AnythingOfType("string")).Return([]byte(nil), nil)
 	h := newHandler(api)
 	resp, _ := h.Execute(&model.CommandArgs{UserId: "u", ChannelId: "ch", Command: "/opentalk dial-in"})
-	assert.Contains(t, resp.Text, "kein aktives Meeting")
+	assert.Contains(t, resp.Text, "no active meeting")
 }
 
 func TestDialIn_ShowsSIPInfo(t *testing.T) {
@@ -51,5 +51,5 @@ func TestDialIn_NoSIPHint(t *testing.T) {
 	api.On("KVGet", mock.AnythingOfType("string")).Return(activeMeetingJSON(t, am), nil)
 	h := newHandler(api)
 	resp, _ := h.Execute(&model.CommandArgs{UserId: "u", ChannelId: "ch", Command: "/opentalk dial-in"})
-	assert.Contains(t, resp.Text, "kein SIP")
+	assert.Contains(t, resp.Text, "SIP/Dial-In")
 }

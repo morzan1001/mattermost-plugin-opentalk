@@ -60,7 +60,7 @@ func TestConnect_AlreadyConnected(t *testing.T) {
 
 	h := newHandler(api)
 	resp, _ := h.Execute(mkArgs("u1", "/opentalk connect"))
-	assert.Contains(t, resp.Text, "bereits")
+	assert.Contains(t, resp.Text, "already connected")
 }
 
 // TestConnect_EmptySiteURL confirms the handler does not crash when SiteURL is

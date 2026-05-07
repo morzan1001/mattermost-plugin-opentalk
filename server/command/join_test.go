@@ -17,7 +17,7 @@ func TestJoin_NoActiveMeeting(t *testing.T) {
 	api.On("KVGet", mock.AnythingOfType("string")).Return([]byte(nil), nil)
 	h := newHandler(api)
 	resp, _ := h.Execute(&model.CommandArgs{UserId: "u", ChannelId: "ch", Command: "/opentalk join"})
-	assert.Contains(t, resp.Text, "kein aktives Meeting")
+	assert.Contains(t, resp.Text, "no active meeting")
 }
 
 func TestJoin_PrintsInviteURL(t *testing.T) {

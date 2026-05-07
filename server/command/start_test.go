@@ -54,7 +54,7 @@ func TestStart_CreatesMeeting(t *testing.T) {
 	}
 
 	resp, _ := h.Execute(&model.CommandArgs{UserId: "u1", ChannelId: "ch-7", Command: "/opentalk start"})
-	assert.Contains(t, resp.Text, "Meeting gestartet")
+	assert.Contains(t, resp.Text, "Meeting started")
 	assert.Contains(t, resp.Text, "room-1")
 	assert.Equal(t, "ch-7", capturedChannel)
 	assert.Equal(t, "u1", capturedHost)
@@ -69,5 +69,5 @@ func TestStart_PropagatesCreationError(t *testing.T) {
 		return nil, errors.New("create-room failed")
 	}
 	resp, _ := h.Execute(&model.CommandArgs{UserId: "u1", ChannelId: "ch", Command: "/opentalk start"})
-	assert.Contains(t, resp.Text, "konnte nicht erstellt werden")
+	assert.Contains(t, resp.Text, "Failed to create meeting")
 }
