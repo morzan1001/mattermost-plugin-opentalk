@@ -32,8 +32,8 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
                     {
                         name: 'ringtoneEnabled',
                         type: 'bool',
-                        helpText: 'Spielt einen Klingelton ab, wenn dich jemand in einer Direktnachricht anruft. Aus dieser Einstellung wird auch das eingehende Pop-up unterdrückt.',
-                        default: 'true',
+                        helpText: 'Spielt einen Klingelton ab und zeigt ein Pop-up, wenn dich jemand in einer Direktnachricht anruft. Aus Vorsicht standardmäßig deaktiviert; aktiviere hier, wenn du Anrufe empfangen möchtest.',
+                        default: 'false',
 
                         // Some MM versions read the current value via this
                         // callback; others through the modal's own state.
@@ -60,13 +60,13 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
 
 function readRingtone(): string {
     if (typeof window === 'undefined') {
-        return 'true';
+        return 'false';
     }
     try {
         const v = window.localStorage.getItem(ringtoneSettingKey);
-        return v === 'false' ? 'false' : 'true';
+        return v === 'true' ? 'true' : 'false';
     } catch {
-        return 'true';
+        return 'false';
     }
 }
 

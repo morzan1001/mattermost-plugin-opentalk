@@ -12,7 +12,7 @@ import ExpandedView from './components/expanded_view/component';
 import ChannelCallToast from './components/channel_call_toast/component';
 import IncomingCallModal from './components/incoming_call_modal/component';
 import SwitchCallModal from './components/switch_call_modal/component';
-import {incomingCallReceived, incomingCallCleared} from './store/slice_incoming_calls';
+import {incomingCallReceived, incomingCallCleared, incomingCallsReset} from './store/slice_incoming_calls';
 import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
 import {registerOpenTalkUserSettings} from './user_settings';
 import OpenTalkIcon from './components/channel_header_button/icon';
@@ -73,15 +73,20 @@ const ringtoneSettingKey = 'opentalk:ringtone-enabled';
 // now is also too old to ring for.
 const incomingCallFreshnessMs = 30000;
 
+// Default OFF until the user explicitly opts in via the Settings-modal toggle
+// or window.opentalk.ringtone(true). Background: in-vivo testing produced
+// repeating-ring loops we couldn't trace; keeping ringing opt-in until we
+// figure out the root cause is safer than torturing the user with it on by
+// default.
 function ringtoneEnabled(): boolean {
     if (typeof window === 'undefined') {
-        return true;
+        return false;
     }
     try {
         const v = window.localStorage.getItem(ringtoneSettingKey);
-        return v !== 'false';
+        return v === 'true';
     } catch {
-        return true;
+        return false;
     }
 }
 
@@ -127,6 +132,23 @@ export default class Plugin {
                 return enabled;
             },
             ringtoneStatus: (): boolean => ringtoneEnabled(),
+
+            // Emergency stop. If a ring loop occurs and the user can't
+            // dismiss it via UI, calling this from the devtools console
+            // (window.opentalk.killRing()) wipes the incoming-calls slice
+            // (which unmounts the modal) AND switches the ringtone setting
+            // to OFF so the next incoming_call event is dropped before it
+            // can re-trigger ringing.
+            killRing: (): void => {
+                store.dispatch(incomingCallsReset());
+                try {
+                    window.localStorage.setItem(ringtoneSettingKey, 'false');
+                } catch {
+                    /* swallow */
+                }
+                // eslint-disable-next-line no-console
+                console.warn('[opentalk] killRing: incoming-calls slice cleared, ringtone disabled');
+            },
         };
 
         registry.registerReducer?.(reducer);
@@ -175,33 +197,44 @@ export default class Plugin {
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_incoming_call`,
             (msg: IncomingCallMessage) => {
-                // Three layered guards against unwanted ringing:
-                // 1. User opted out of ringtone via window.opentalk.ringtone(false)
-                if (!ringtoneEnabled()) {
-                    return;
-                }
-
-                // 2. Don't ring the host (defense-in-depth — the server
-                //    OmitUsers's the host already, but a stale WS frame on
-                //    reconnect or a multi-tab session could still deliver).
+                const now = Date.now();
+                const createdAt = msg.data.created_at_unix_ms;
+                const ageMs = typeof createdAt === 'number' ? now - createdAt : -1;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const myId: string | undefined = (store.getState() as any)?.entities?.users?.currentUserId;
+
+                // Verbose-log every incoming_call event so we can
+                // diagnose the "rings on plugin activate" loop.
+                // eslint-disable-next-line no-console
+                console.warn('[opentalk] incoming_call received', {
+                    now,
+                    createdAt,
+                    ageMs,
+                    ringtoneEnabled: ringtoneEnabled(),
+                    isHost: myId === msg.data.host_user_id,
+                    channel_id: msg.data.channel_id,
+                    room_id: msg.data.room_id,
+                    host_user_id: msg.data.host_user_id,
+                });
+
+                if (!ringtoneEnabled()) {
+                    // eslint-disable-next-line no-console
+                    console.warn('[opentalk] incoming_call: dropped — ringtone disabled by user');
+                    return;
+                }
                 if (myId && msg.data.host_user_id === myId) {
+                    // eslint-disable-next-line no-console
+                    console.warn('[opentalk] incoming_call: dropped — i am the host');
+                    return;
+                }
+                if (typeof createdAt !== 'number' || ageMs > incomingCallFreshnessMs) {
+                    // eslint-disable-next-line no-console
+                    console.warn('[opentalk] incoming_call: dropped — stale or no timestamp', {ageMs, threshold: incomingCallFreshnessMs});
                     return;
                 }
 
-                // 3. Drop stale broadcasts. Strict: any event arriving
-                //    without a server-stamped created_at_unix_ms is treated
-                //    as legacy/replayed and dropped — the marker has been
-                //    in every fresh broadcast since the Hotfix, so its
-                //    absence means the event is from before that or was
-                //    re-delivered out-of-band. Same drop if it's older
-                //    than the modal's own ring window (30s).
-                const createdAt = msg.data.created_at_unix_ms;
-                if (typeof createdAt !== 'number' || Date.now() - createdAt > incomingCallFreshnessMs) {
-                    return;
-                }
-
+                // eslint-disable-next-line no-console
+                console.warn('[opentalk] incoming_call: ACCEPTED — dispatching to slice');
                 store.dispatch(incomingCallReceived({
                     channelID: msg.data.channel_id,
                     roomID: msg.data.room_id,

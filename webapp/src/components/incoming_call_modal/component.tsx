@@ -43,15 +43,24 @@ const IncomingCallModal: React.FC = () => {
     const [avatarError, setAvatarError] = useState(false);
     const [barWidth, setBarWidth] = useState(100);
 
-    // Start ringtone on mount, stop on unmount
+    // CRITICAL: this component is always mounted (RootComponent), so the
+    // useEffect dependencies MUST gate on whether we're actually showing
+    // the modal — otherwise the ringtone starts at app-init regardless of
+    // whether there's an incoming call.
+    const isShowingCall = call !== null && sessionStatus === 'idle';
+
+    // Start ringtone when the modal becomes visible, stop when it hides.
     useEffect(() => {
+        if (!isShowingCall) {
+            return undefined;
+        }
         ringtone.start();
         return () => {
             ringtone.stop();
         };
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [isShowingCall]);
 
     // Countdown bar: animate from 100% to 0% over 30s using CSS transition
     useEffect(() => {
@@ -111,15 +120,18 @@ const IncomingCallModal: React.FC = () => {
         }
     };
 
-    // Auto-decline after 30s
+    // Auto-decline after 30s — only while the modal is actually shown.
     useEffect(() => {
+        if (!isShowingCall) {
+            return undefined;
+        }
         const id = window.setTimeout(() => onDecline(), 30000);
         return () => window.clearTimeout(id);
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [isShowingCall, call?.channelID]);
 
-    if (sessionStatus !== 'idle' || call === null) {
+    if (!isShowingCall || call === null) {
         return null;
     }
 
