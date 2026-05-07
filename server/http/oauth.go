@@ -21,31 +21,26 @@ type Handlers struct {
 	EncryptionKey []byte
 	BroadcastFunc func(event string, payload map[string]any)
 
-	// Phase 3: meeting creation
 	OpenTalk       *opentalk.Client
 	RoomserverURL  string
 	Defaults       MeetingDefaults
 	AccessTokenFor func(mmUserID string) (string, error)
 
-	// Phase 4 additions: bot-post creation alongside meeting create.
 	BotUserID      string
 	FrontendURL    string
 	CreatePost     func(*model.Post) (*model.Post, error)
 	HostUsernameOf func(mmUserID string) string
 
-	// Phase 5 additions: join-meeting endpoint dispatches between
-	// StartRoom (registered) and StartInvited (guest) based on whether the
-	// user has a UserInfo record in the KV store.
+	// IsConnected / UsernameOf: join endpoint dispatches between StartRoom
+	// (registered user) and StartInvited (guest) based on KV store presence.
 	IsConnected func(mmUserID string) bool
 	UsernameOf  func(mmUserID string) string
 
-	// Phase 6 additions: end-meeting endpoint mutates the bot-post status to
-	// ENDED via the same Post-API the slash-command handler uses.
 	PostGetter  func(postID string) (*model.Post, error)
 	PostUpdater func(p *model.Post) error
 
-	// Phase 8a additions: dismiss endpoint uses ChannelMembersOf to detect
-	// when all DM recipients have declined so it can auto-MISSED the meeting.
+	// Dismiss endpoint uses ChannelMembersOf to detect when all DM recipients
+	// have declined and auto-transitions the meeting to MISSED.
 	ChannelMembersOf func(channelID string) []string
 }
 

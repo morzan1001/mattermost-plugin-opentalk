@@ -2,7 +2,7 @@ import React from 'react';
 import {useStore, useSelector} from 'react-redux';
 
 import {startConferenceConnection} from '../../conference/controller';
-import {selectCurrentDisplayName} from '../../util/display_name';
+import {selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
 import {OpenTalkLogoIcon, VideoIcon} from '../icons';
 
 interface PostProps {
@@ -32,11 +32,7 @@ const formatDuration = (seconds: number): string => {
     return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
-const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
-
-// OpenTalk brand-accent: deep teal used as a single 4-px accent stripe down
-// the card's left edge. The rest of the card stays neutral so it blends with
-// both the light and dark Mattermost themes.
+// OpenTalk brand teal — used for the accent stripe and live-badge.
 const opentalkTeal = '#00B59C';
 const opentalkTealDark = '#008F7A';
 
@@ -150,14 +146,8 @@ const livePulse: React.CSSProperties = {
 const PostTypeMeeting: React.FC<Props> = ({post}) => {
     const store = useStore();
 
-    // Display name with the same nickname > first+last > username priority
-    // the server uses (see displayNameOf in server/plugin.go). This is what
-    // OpenTalk shows on participant tiles, so keeping client and server
-    // attribution in sync matters.
     const currentDisplayName = useSelector(selectCurrentDisplayName);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sessionStatus: string = useSelector((s: any) => s?.[stateKey]?.session?.status ?? 'idle');
+    const sessionStatus = useSelector(selectSessionStatus);
 
     const p = post.props;
     const inMeetingAlready = sessionStatus !== 'idle';

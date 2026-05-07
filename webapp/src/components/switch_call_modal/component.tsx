@@ -8,7 +8,7 @@ import {
     incomingCallCleared,
     type IncomingCall,
 } from '../../store/slice_incoming_calls';
-import {selectCurrentDisplayName} from '../../util/display_name';
+import {selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
 
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
@@ -37,10 +37,8 @@ const SwitchCallModal: React.FC = () => {
     const dispatch = useDispatch();
     const store = useStore();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sessionStatus = useSelector((s: any) => s?.[stateKey]?.session?.status ?? 'idle') as string;
+    const sessionStatus = useSelector(selectSessionStatus);
 
-    // Pick the most recent non-dismissed incoming call
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const call = useSelector((s: any): IncomingCall | null => {
         const byChannelID = s?.[stateKey]?.incomingCalls?.byChannelID as Record<string, IncomingCall> | undefined;
@@ -56,7 +54,6 @@ const SwitchCallModal: React.FC = () => {
 
     const [busy, setBusy] = useState(false);
 
-    // Only render when user is already in a meeting AND there is an incoming call
     if (sessionStatus === 'idle' || call === null) {
         return null;
     }
@@ -80,7 +77,7 @@ const SwitchCallModal: React.FC = () => {
         try {
             await leaveActiveConference();
 
-            // Brief settle so leave's redux dispatches land before connect.
+            // Brief settle so the leave-dispatches land before connect starts.
             await new Promise((r) => setTimeout(r, 50));
 
             const displayName = selectCurrentDisplayName(store.getState());

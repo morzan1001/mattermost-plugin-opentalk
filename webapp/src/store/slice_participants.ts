@@ -20,7 +20,7 @@ export interface ParticipantInfo {
 
 export interface ParticipantsState {
     byId: Record<string, ParticipantInfo>;
-    order: string[]; // insertion order, for deterministic tile rendering
+    order: string[]; // insertion order — for deterministic tile rendering
 }
 
 const initial: ParticipantsState = {byId: {}, order: []};

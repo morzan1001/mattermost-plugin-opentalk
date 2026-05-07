@@ -3,6 +3,7 @@ import {useSelector, useDispatch} from 'react-redux';
 
 import {toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand} from '../../conference/controller';
 import {setExpanded} from '../../store/slice_session';
+import {selectIsHost, selectLocalParticipantId} from '../../util/selectors';
 import {
     MicIcon,
     MicOffIcon,
@@ -78,12 +79,14 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
     const camEnabled = useSelector((s: any) => s?.[stateKey]?.session?.camEnabled ?? false);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const screenShareEnabled = useSelector((s: any) => s?.[stateKey]?.session?.screenShareEnabled ?? false);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isHost = useSelector((s: any) => s?.[stateKey]?.session?.isHost ?? false);
+    const isHost = useSelector(selectIsHost);
+    const localId = useSelector(selectLocalParticipantId);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const isRaised = useSelector((s: any) => {
-        const localId = s?.[stateKey]?.session?.localParticipantId;
-        return localId ? Boolean(s?.[stateKey]?.participants?.byId?.[localId]?.handRaised) : false;
+        if (!localId) {
+            return false;
+        }
+        return Boolean(s?.[stateKey]?.participants?.byId?.[localId]?.handRaised);
     });
 
     return (

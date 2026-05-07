@@ -3,7 +3,7 @@ import {useDispatch, useSelector, useStore} from 'react-redux';
 
 import {startConferenceConnection} from '../../conference/controller';
 import {activeMeetingDismissed, type ActiveMeeting} from '../../store/slice_active_meetings';
-import {selectCurrentDisplayName} from '../../util/display_name';
+import {selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
 
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
@@ -53,15 +53,10 @@ const ChannelCallToast: React.FC = () => {
     const dispatch = useDispatch();
     const store = useStore();
 
-    // Current channel ID from Mattermost state
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const currentChannelID = useSelector((s: any) => s?.entities?.channels?.currentChannelId as string | undefined);
-
-    // Channel type — 'O' open, 'P' private, 'D' direct, 'G' group-message
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const channelType = useSelector((s: any) => s?.entities?.channels?.channels?.[currentChannelID ?? '']?.type as string | undefined);
-
-    // Active meeting in the current channel
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const meeting = useSelector((s: any): ActiveMeeting | null => {
         if (!currentChannelID) {
@@ -70,29 +65,19 @@ const ChannelCallToast: React.FC = () => {
         return s?.[stateKey]?.activeMeetings?.byChannelID?.[currentChannelID] ?? null;
     });
 
-    // Session status and channelID so we can detect "user is in this meeting"
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sessionStatus = useSelector((s: any) => s?.[stateKey]?.session?.status ?? 'idle') as string;
+    const sessionStatus = useSelector(selectSessionStatus);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sessionChannelID = useSelector((s: any) => s?.[stateKey]?.session?.channelID as string | undefined);
 
-    // Render conditions — all must be true
-    // 1. There is an active meeting in the current channel
-    if (!meeting) {
+    if (!meeting || meeting.dismissed) {
         return null;
     }
 
-    // 2. The meeting is not locally dismissed
-    if (meeting.dismissed) {
-        return null;
-    }
-
-    // 3. The channel is not a DM or Group-DM
+    // Don't show the toast for DMs/GMs — incoming_call modal handles those.
     if (channelType === 'D' || channelType === 'G') {
         return null;
     }
 
-    // 4. The user is not currently in that meeting
     const userIsInMeeting = sessionStatus !== 'idle' && sessionChannelID === currentChannelID;
     if (userIsInMeeting) {
         return null;

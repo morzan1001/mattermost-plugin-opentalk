@@ -71,9 +71,8 @@ function stopHeartbeat(): void {
     }
 }
 
-// Slack-inspired auto-status: while in a meeting, show "Im OpenTalk-Meeting"
-// as the user's MM custom-status so coworkers see the user is busy. Cleared
-// on any session end. Fire-and-forget — failures are non-blocking.
+// While in a meeting, set a custom MM status so the user appears busy.
+// Cleared on any session end. Fire-and-forget — failures are non-blocking.
 function setOpenTalkStatus(): void {
     fetch('/api/v4/users/me/status/custom', {
         method: 'PUT',
@@ -98,12 +97,8 @@ function clearOpenTalkStatus(): void {
     }).catch(() => { /* swallow */ });
 }
 
-// The Mattermost-Webapp's <Provider> tree does not always reach plugin-
-// rendered RootComponents (e.g. our MeetingMiniBar) reliably — useStore()
-// can return null in that context, which silently swallows onClick handlers
-// that try to dispatch through it. We therefore stash the store at plugin-
-// initialize time and let the toggle exports use it directly, no React-
-// context indirection.
+// useStore() returns null in MM RootComponents, so we stash the store at
+// plugin-initialize time and dispatch through it directly.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let activeStore: Store<any, Action> | null = null;
 
@@ -131,10 +126,8 @@ export async function startConferenceConnection(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const isHost = (data as any).isHost === true;
 
-        // Self is always the first entry in data.participants because
-        // ConferenceRoom.connect() prepends it from the joinSuccess top-
-        // level id. Capture it so the UI can filter self out of the
-        // participant strip and render the SelfPreview tile instead.
+        // Self is always the first entry: ConferenceRoom.connect() prepends it
+        // from the joinSuccess top-level id.
         const localParticipantId = data.participants[0]?.id;
 
         store.dispatch(connected({
@@ -143,14 +136,12 @@ export async function startConferenceConnection(
             localParticipantId,
         }));
 
-        // Seed the participants slice with the full list from joinSuccess.
         store.dispatch(participantsBulkSet({
             participants: data.participants.map(toParticipantInfo),
         }));
 
-        // Some upstream OpenTalk builds inline livekit-bootstrap into joinSuccess.
-        // Most current ones don't — they send a separate `livekit:credentials`
-        // frame which we handle below. Keeping this fallback is harmless.
+        // Some OpenTalk builds inline livekit credentials in joinSuccess;
+        // most send a separate livekit:credentials frame. Keep both paths.
         if (data.livekit?.url && data.livekit?.token) {
             bringUpLiveKit(data.livekit.url, data.livekit.token, store);
         }
@@ -160,8 +151,8 @@ export async function startConferenceConnection(
     });
     client.on('livekit_credentials', ({url, token}) => {
         if (activeLiveKit) {
-            // Already brought up (e.g. via the joinSuccess fallback above) —
-            // a re-credentialing roundtrip would tear down active publications.
+            // Already up via the joinSuccess fallback — re-credentialing would
+            // tear down active publications.
             return;
         }
         bringUpLiveKit(url, token, store);
@@ -219,11 +210,10 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         store.dispatch(setLivekitConnected(true));
 
         if (getMuteOnJoin()) {
-            // User opted in to start muted; skip enableMic.
             return;
         }
 
-        // Default-on: enable mic. User can toggle off via UI.
+        // Default-on mic; user can toggle off via UI.
         lk.enableMic().
             then(() => {
                 store.dispatch(setMicEnabled(true));
@@ -243,10 +233,9 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         trackRegistry.clear();
     });
 
-    // LiveKit publishes screen-share as kind:'video' with source:'screen_share'.
-    // If we lump both into kind:'video', the screen-track overwrites the
-    // cam-track in the slice and remote viewers stop seeing the publisher's
-    // camera as soon as they start sharing. Differentiate by source.
+    // Differentiate screen-share from camera: both have kind:'video' in LiveKit
+    // but different sources. Without this the screen-track would overwrite the
+    // cam-track in the slice, hiding the remote camera during screen-share.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const trackKindOf = (sub: any): TrackKind => {
         if (sub.track?.kind === 'audio') {
@@ -318,11 +307,9 @@ export async function leaveActiveConference(): Promise<void> {
     clearOpenTalkStatus();
 }
 
-// endActiveMeeting tells the plugin server to terminate the meeting for
-// every participant. Used by the host's "Meeting beenden"-Button. Same
-// teardown as leaveActiveConference plus a server-side POST so the
-// custom-post is marked ENDED and other participants get the meeting_ended
-// ws-event.
+// endActiveMeeting terminates the meeting for everyone. Sends a server-side
+// POST so the custom-post is marked ENDED and other participants receive the
+// meeting_ended WS event.
 export async function endActiveMeeting(): Promise<void> {
     if (!activeStore) {
         await leaveActiveConference();
@@ -363,10 +350,8 @@ export async function toggleMic(): Promise<void> {
     }
 }
 
-// localTrackId returns a stable id for a published local track so we can
-// register it in track_registry and key it into the tracks slice. LiveKit's
-// LocalTrack.sid is undefined until the publication round-trips; fall back
-// to a deterministic synthesized id keyed on participant + kind.
+// Stable synthetic id for a local track: LiveKit's LocalTrack.sid is
+// undefined until the publication round-trips.
 function localTrackId(lk: LiveKitRoom, kind: 'video' | 'screen'): string {
     return `local:${lk.getLocalIdentity()}:${kind}`;
 }
@@ -410,8 +395,6 @@ export async function toggleScreenShare(): Promise<void> {
     } else {
         try {
             if (isElectron()) {
-                // Desktop bridge: ask main process for sources, show picker,
-                // capture stream from chosen source, publish.
                 const sources = await getDesktopSources();
                 if (sources.length === 0) {
                     // eslint-disable-next-line no-alert
@@ -420,7 +403,7 @@ export async function toggleScreenShare(): Promise<void> {
                 }
                 const sourceId = await pickScreenSource(sources);
                 if (!sourceId) {
-                    return; // user cancelled
+                    return;
                 }
                 const stream = await captureDesktopStream(sourceId);
                 await lk.enableScreenShareFromStream(stream);
@@ -466,14 +449,7 @@ export function _reset(): void {
     stopHeartbeat();
 }
 
-// Browser-debug introspection: surfaces the truthiness of the controller's
-// module-level singletons plus a snapshot of the participants/tracks slices
-// so the user can inspect them from the devtools console
-// (window.opentalk.state()) without relying on console.log filters.
-//
-// Returns a **JSON string** rather than a live object so the devtools
-// console doesn't truncate large arrays/objects with "(3) […]".
-// Call window.opentalk.state() and copy-paste the entire returned string.
+// Returns a JSON string (not a live object) so devtools doesn't truncate arrays.
 export function debugState(): string {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stateSlice: any = activeStore?.getState()?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk'] ?? {};

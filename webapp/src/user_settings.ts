@@ -11,24 +11,16 @@ import {
 } from './conference/livekit/devices';
 import type {PluginRegistry} from './types/mattermost-webapp';
 
-// Same key used by plugin.ts's ringtoneEnabled() reader. Keep in sync.
 const ringtoneSettingKey = 'opentalk:ringtone-enabled';
 
 const pluginID = 'com.github.morzan1001.mattermost-plugin-opentalk';
 
 /**
- * Registers an "OpenTalk" section in the Mattermost User-Settings modal.
- *
- * Uses the registry.registerUserSettings API (Mattermost v9.5+, the same
- * API mattermost-plugin-calls uses). On older MM the registry method is
- * undefined and the optional-chaining call is a no-op — users still have
- * window.opentalk.ringtone(true|false) as a fallback.
- *
- * Currently exposes one toggle (ringtone). Add more entries to the
- * `settings` array as we add channel-toast / DND / volume preferences.
+ * Registers an "OpenTalk" section in the Mattermost User-Settings modal
+ * (MM v9.5+). On older MM the registry method is undefined — the call is a
+ * no-op and window.opentalk.ringtone() still works as a fallback.
  */
 export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
-    // Ensure device cache is warm so the options arrays below are populated.
     initDeviceCache();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reg: any = registry;
@@ -37,9 +29,6 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
     }
 
     reg.registerUserSettings({
-        // Use the full pluginID — mattermost-plugin-calls uses the same
-        // convention. Some MM versions namespace settings by the registered
-        // plugin id; an unknown short id may make the section invisible.
         id: pluginID,
         uiName: 'OpenTalk',
         icon: 'icon-phone-outline',
@@ -52,11 +41,6 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
                         type: 'bool',
                         helpText: 'Spielt einen Klingelton ab und zeigt ein Pop-up, wenn dich jemand in einer Direktnachricht anruft.',
                         default: 'true',
-
-                        // Some MM versions read the current value via this
-                        // callback; others through the modal's own state.
-                        // Returning the persisted value keeps the toggle
-                        // in sync after a page reload.
                         currentValue: () => readRingtone(),
                         onConfigChange: (value: unknown) => {
                             persistRingtone(value === 'true' || value === true);
@@ -102,7 +86,6 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
             },
         ],
 
-        // Fallback hook for MM versions that batch-submit on Save.
         onSubmit: (values: Record<string, unknown>) => {
             if (Object.prototype.hasOwnProperty.call(values, 'ringtoneEnabled')) {
                 const v = values.ringtoneEnabled;

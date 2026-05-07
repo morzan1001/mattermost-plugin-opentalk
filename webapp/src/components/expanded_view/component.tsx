@@ -12,16 +12,15 @@ import {useMeetingDuration} from '../../hooks/use_meeting_duration';
 import type {ParticipantInfo} from '../../store/slice_participants';
 import type {SessionStatus} from '../../store/slice_session';
 import {setExpanded} from '../../store/slice_session';
+import {selectIsExpanded, selectSessionStatus} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 import {HandIcon} from '../icons';
 
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 const ExpandedView: React.FC = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const expanded = useSelector((s: any) => s?.[stateKey]?.session?.expanded ?? false) as boolean;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const status = useSelector((s: any) => s?.[stateKey]?.session?.status ?? 'idle') as SessionStatus;
+    const expanded = useSelector(selectIsExpanded);
+    const status = useSelector(selectSessionStatus) as SessionStatus;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const joinedAt = useSelector((s: any) => s?.[stateKey]?.session?.joinedAt) as number | undefined;
 

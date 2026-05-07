@@ -27,10 +27,9 @@ type createMeetingResponse struct {
 	PostID        string `json:"post_id,omitempty"`
 }
 
-// MeetingsCreate handles POST /api/v1/meetings. The host (= request user) gets
-// a fully provisioned room: room created, invite generated, host start-ticket
-// retrieved. ActiveMeeting is persisted; custom-post creation is deferred to
-// Phase 4.
+// MeetingsCreate handles POST /api/v1/meetings. Provisions a room for the
+// requesting user: creates the room, invite, and host start-ticket, then
+// persists the ActiveMeeting and creates the bot post.
 func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) {
 	mmUserID := r.Header.Get("Mattermost-User-ID")
 	if mmUserID == "" {

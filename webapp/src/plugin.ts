@@ -75,13 +75,8 @@ const ringtoneSettingKey = 'opentalk:ringtone-enabled';
 // now is also too old to ring for.
 const incomingCallFreshnessMs = 30000;
 
-// Default ON (calls + slack convention). The earlier "perpetual ring on
-// activate" loop was traced to the IncomingCallModal mounting unconditionally
-// as a RootComponent and starting the ringtone in an empty-deps useEffect
-// before the call/idle gate ever ran. That's now fixed by gating the
-// effect on isShowingCall — see meeting_mini_bar/incoming_call_modal.
-// User can still opt out via Settings-modal, /opentalk ring off, or
-// window.opentalk.ringtone(false).
+// Default ON. User can opt out via the Settings modal, /opentalk ring off,
+// or window.opentalk.ringtone(false).
 function ringtoneEnabled(): boolean {
     if (typeof window === 'undefined') {
         return true;
@@ -111,20 +106,14 @@ interface RingSettingChangedMessage {
 
 export default class Plugin {
     public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): Promise<void> {
-        // Pin the redux store on the controller so toggle handlers (mic/cam/
-        // screen) can dispatch from RootComponents where useStore() returns
-        // null in some Mattermost-Webapp versions.
+        // Pin the redux store so toggle handlers can dispatch without React-
+        // context indirection (useStore() returns null in MM RootComponents).
         setActiveStore(store);
 
-        // Seed the device cache so Settings panel options and publishMic/
-        // publishCam deviceId fallbacks are ready before the first meeting.
         initDeviceCache();
 
-        // Browser-devtools handle for ad-hoc inspection of conference state:
-        //   window.opentalk.state()      → { hasClient, hasLiveKit, ... }
-        //   await window.opentalk.toggleMic()
-        // Kept in production builds — it's read-only-ish and the bundle
-        // already exposes the same APIs to the React tree.
+        // Browser-devtools handle: window.opentalk.state() / toggleMic() etc.
+        // Kept in production builds — read-only-ish, same APIs as the React tree.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).opentalk = {
             state: debugState,
@@ -134,10 +123,7 @@ export default class Plugin {
             leave: leaveActiveConference,
             end: endActiveMeeting,
 
-            // User-facing toggle for the incoming-call ringtone. Persists
-            // in localStorage. Call window.opentalk.ringtone(false) to
-            // suppress all incoming-call modals; window.opentalk.ringtone(true)
-            // to re-enable. Returns the new state.
+            // Persists to localStorage. Returns the new state.
             ringtone: (enabled: boolean): boolean => {
                 try {
                     window.localStorage.setItem(ringtoneSettingKey, enabled ? 'true' : 'false');
@@ -148,12 +134,8 @@ export default class Plugin {
             },
             ringtoneStatus: (): boolean => ringtoneEnabled(),
 
-            // Emergency stop. If a ring loop occurs and the user can't
-            // dismiss it via UI, calling this from the devtools console
-            // (window.opentalk.killRing()) wipes the incoming-calls slice
-            // (which unmounts the modal) AND switches the ringtone setting
-            // to OFF so the next incoming_call event is dropped before it
-            // can re-trigger ringing.
+            // Emergency stop: wipes the incoming-calls slice and disables
+            // the ringtone so any immediately-following event doesn't re-ring.
             killRing: (): void => {
                 store.dispatch(incomingCallsReset());
                 try {
@@ -174,12 +156,6 @@ export default class Plugin {
             },
         );
 
-        // When the host ends the meeting "for everyone", the server
-        // broadcasts custom_<plugin>_meeting_ended to all members of
-        // the channel. Each remote client that is currently in the
-        // affected meeting tears down its conference + LiveKit so the
-        // user is dropped out of the room. Without this handler the
-        // host would leave but other participants would stay connected.
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_meeting_ended`,
             (msg: MeetingEndedMessage) => {
@@ -188,11 +164,7 @@ export default class Plugin {
                 if (session?.status !== 'idle' && session?.channelID === msg.data.channel_id) {
                     leaveActiveConference();
                 }
-
-                // Always clear any pending incoming-call modal for this channel
                 store.dispatch(incomingCallCleared({channelID: msg.data.channel_id}));
-
-                // Clear the active-meetings slice entry for this channel
                 store.dispatch(activeMeetingEnded({channelID: msg.data.channel_id}));
             },
         );
@@ -218,38 +190,16 @@ export default class Plugin {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const myId: string | undefined = (store.getState() as any)?.entities?.users?.currentUserId;
 
-                // Verbose-log every incoming_call event so we can
-                // diagnose the "rings on plugin activate" loop.
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk] incoming_call received', {
-                    now,
-                    createdAt,
-                    ageMs,
-                    ringtoneEnabled: ringtoneEnabled(),
-                    isHost: myId === msg.data.host_user_id,
-                    channel_id: msg.data.channel_id,
-                    room_id: msg.data.room_id,
-                    host_user_id: msg.data.host_user_id,
-                });
-
                 if (!ringtoneEnabled()) {
-                    // eslint-disable-next-line no-console
-                    console.warn('[opentalk] incoming_call: dropped — ringtone disabled by user');
                     return;
                 }
                 if (myId && msg.data.host_user_id === myId) {
-                    // eslint-disable-next-line no-console
-                    console.warn('[opentalk] incoming_call: dropped — i am the host');
                     return;
                 }
                 if (typeof createdAt !== 'number' || ageMs > incomingCallFreshnessMs) {
-                    // eslint-disable-next-line no-console
-                    console.warn('[opentalk] incoming_call: dropped — stale or no timestamp', {ageMs, threshold: incomingCallFreshnessMs});
                     return;
                 }
 
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk] incoming_call: ACCEPTED — dispatching to slice');
                 store.dispatch(incomingCallReceived({
                     channelID: msg.data.channel_id,
                     roomID: msg.data.room_id,
@@ -259,10 +209,8 @@ export default class Plugin {
                 }));
             },
         );
-        // Slash-command fallback for users on MM versions where the
-        // OpenTalk Settings section isn't visible. /opentalk ring on|off
-        // server-side broadcasts ring_setting_changed targeted at the
-        // requesting user; webapp persists it to localStorage.
+
+        // Slash-command fallback (/opentalk ring on|off) — persists to localStorage.
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_ring_setting_changed`,
             (msg: RingSettingChangedMessage) => {
@@ -279,10 +227,10 @@ export default class Plugin {
             },
         );
 
+        // Sync dismissals across tabs of the same user.
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_incoming_call_dismissed`,
             (msg: IncomingCallDismissedMessage) => {
-                // Only act if the dismissal was for THIS user (other tabs of same user)
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const myId = (store.getState() as any)?.entities?.users?.currentUserId;
                 if (msg.data.mm_user_id === myId) {
@@ -301,11 +249,6 @@ export default class Plugin {
         registry.registerRootComponent?.(ChannelCallToast);
         registry.registerRootComponent?.(ScreenPickerModal);
 
-        // VideoGrid (the bottom-right floating tiles from Phase 6) is no
-        // longer registered: in Phase 7a the floating-widget's TileStrip
-        // already shows participant videos, and Phase 7b's Expanded-View
-        // will own the fullscreen grid surface.
-
         const headerIcon = React.createElement(OpenTalkIcon);
         registry.registerChannelHeaderButtonAction?.(
             headerIcon,
@@ -314,15 +257,13 @@ export default class Plugin {
             'OpenTalk-Meeting starten',
         );
 
-        // Seed the OAuth state from the server so the header button works
-        // immediately after a page refresh – the WS-broadcast pattern only
-        // delivers state changes, not the current snapshot.
+        // Seed OAuth state immediately — the WS broadcast only delivers
+        // state changes, not the current snapshot on page load.
         try {
             const me = await getConnectionStatus();
             store.dispatch(setConnected(me.connected, me.email));
         } catch {
-            // ignore: the channel header button will fall back to its
-            // "please connect first" alert.
+            // Non-fatal: the header button falls back to "please connect first".
         }
     }
 

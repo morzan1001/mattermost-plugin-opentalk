@@ -9,7 +9,7 @@ import {
     incomingCallCleared,
     type IncomingCall,
 } from '../../store/slice_incoming_calls';
-import {selectCurrentDisplayName} from '../../util/display_name';
+import {selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
 
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
@@ -18,14 +18,9 @@ const IncomingCallModal: React.FC = () => {
     const store = useStore();
     const ringtone = useRingtone();
 
-    // Session status — only show when idle
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sessionStatus = useSelector((s: any) => s?.[stateKey]?.session?.status ?? 'idle') as string;
-
-    // Current display name: nickname > first+last > username (same as post_type_meeting)
+    const sessionStatus = useSelector(selectSessionStatus);
     const currentDisplayName = useSelector(selectCurrentDisplayName);
 
-    // Pick the most recent non-dismissed incoming call
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const call = useSelector((s: any): IncomingCall | null => {
         const byChannelID = s?.[stateKey]?.incomingCalls?.byChannelID as Record<string, IncomingCall> | undefined;
@@ -43,13 +38,10 @@ const IncomingCallModal: React.FC = () => {
     const [avatarError, setAvatarError] = useState(false);
     const [barWidth, setBarWidth] = useState(100);
 
-    // CRITICAL: this component is always mounted (RootComponent), so the
-    // useEffect dependencies MUST gate on whether we're actually showing
-    // the modal — otherwise the ringtone starts at app-init regardless of
-    // whether there's an incoming call.
+    // CRITICAL: always mounted as RootComponent — gate effects on isShowingCall
+    // so the ringtone doesn't start at app-init when there's no incoming call.
     const isShowingCall = call !== null && sessionStatus === 'idle';
 
-    // Start ringtone when the modal becomes visible, stop when it hides.
     useEffect(() => {
         if (!isShowingCall) {
             return undefined;
@@ -62,7 +54,7 @@ const IncomingCallModal: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isShowingCall]);
 
-    // Countdown bar: animate from 100% to 0% over 30s using CSS transition
+    // Countdown bar: animate from 100→0% over 30s via CSS transition.
     useEffect(() => {
         if (call === null) {
             return undefined;
@@ -77,7 +69,6 @@ const IncomingCallModal: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [call?.channelID]);
 
-    // Reset avatar error when call changes
     useEffect(() => {
         setAvatarError(false);
     }, [call?.hostUserID]);
@@ -96,7 +87,6 @@ const IncomingCallModal: React.FC = () => {
             console.warn('[opentalk] dismiss failed:', (e as Error).message);
         }
 
-        // Brief fade window, then fully clear.
         setTimeout(() => {
             dispatch(incomingCallCleared({channelID: call.channelID}));
         }, 250);
@@ -115,12 +105,10 @@ const IncomingCallModal: React.FC = () => {
             // eslint-disable-next-line no-console
             console.warn('[opentalk] accept-call failed:', (e as Error).message);
 
-            // Re-enable so user can try again
             setBusy(false);
         }
     };
 
-    // Auto-decline after 30s — only while the modal is actually shown.
     useEffect(() => {
         if (!isShowingCall) {
             return undefined;

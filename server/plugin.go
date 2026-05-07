@@ -61,8 +61,8 @@ func (p *Plugin) OnActivate() error {
 
 	p.store = store.New(p.API)
 
-	// Replace the previous OnActivate-purge with a heartbeat-driven reaper.
-	// Stale meetings (no heartbeat for >5min) are ended within ~60s.
+	// Heartbeat-driven reaper: stale meetings (no heartbeat for >5min) are
+	// ended within ~60s.
 	p.reaper = reaper.New(p.API, p.store, p.endMeetingFromReaper,
 		60*time.Second, 5*time.Minute)
 	p.reaper.Start()
@@ -115,11 +115,9 @@ func (p *Plugin) OnDeactivate() error {
 	return nil
 }
 
-// endMeetingFromReaper is the callback the reaper invokes for each stale
-// meeting. Mirrors the post-update + broadcast + KV-cleanup that the
-// MeetingsEnd HTTP handler does, minus the host-permission check. The
-// post status flips to ENDED (NOT MISSED — MISSED is reserved for the
-// "DM recipients all declined before anyone joined" path).
+// endMeetingFromReaper mirrors the MeetingsEnd HTTP handler (minus the
+// host-permission check). Status is ENDED, not MISSED — MISSED is reserved
+// for the "all DM recipients declined before joining" path.
 func (p *Plugin) endMeetingFromReaper(am *store.ActiveMeeting) {
 	if am.PostID != "" {
 		if pp, appErr := p.API.GetPost(am.PostID); appErr == nil && pp != nil {
@@ -229,9 +227,8 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 
 		BotUserID:   p.botUserID,
 		FrontendURL: cfg.OpenTalkFrontendURL,
-		// pluginapi.PostService.CreatePost mutates the input post in-place
-		// (server-assigned Id, CreateAt, ...) and returns only error. We
-		// adapt to the (post, error) signature the handler expects.
+		// pluginapi.PostService.CreatePost mutates in-place and returns only
+		// error; adapt to the (post, error) signature the handler expects.
 		CreatePost: func(mp *model.Post) (*model.Post, error) {
 			if err := p.client.Post.CreatePost(mp); err != nil {
 				return nil, err
@@ -259,8 +256,6 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			return displayNameOf(u)
 		},
 
-		// Phase 6: end-meeting endpoint reuses the same Post API the slash-
-		// command handler uses (server/command/end.go).
 		PostGetter: func(postID string) (*model.Post, error) {
 			pp, appErr := p.API.GetPost(postID)
 			if appErr != nil {
@@ -272,8 +267,8 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			return p.client.Post.UpdatePost(mp)
 		},
 
-		// Phase 8a: dismiss endpoint needs the member list to detect when all
-		// DM recipients have declined (auto-MISSED transition).
+		// Dismiss endpoint needs the member list to detect when all DM
+		// recipients have declined (auto-MISSED transition).
 		ChannelMembersOf: func(channelID string) []string {
 			members, err := p.API.GetChannelMembers(channelID, 0, 100)
 			if err != nil || members == nil {
@@ -391,17 +386,13 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 			}
 			payload["dm_user_ids"] = recipients
 
-			// OmitUsers excludes the host from receiving their own ring —
-			// otherwise creating a DM-meeting makes the host ring themselves.
 			p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{
 				ChannelId: channelID,
 				OmitUsers: map[string]bool{mmUserID: true},
 			})
 
-			// Best-effort push notification per recipient.
+			// Best-effort push notification per recipient; skip DND users.
 			for _, uid := range recipients {
-				// Skip ringing users who set their MM status to Do Not Disturb.
-				// Slack mirrors this: "the call will not go through" if recipient is on DND.
 				status, _ := p.API.GetUserStatus(uid)
 				if status != nil && status.Status == model.StatusDnd {
 					continue
@@ -423,8 +414,8 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 				}
 			}
 		} else {
-			// Channel meeting (Phase 8b ChannelCallToast). Host doesn't need
-			// a toast for their own meeting.
+			// Channel meeting: broadcast so others see the ChannelCallToast.
+			// Host is omitted — no need to notify yourself.
 			p.API.PublishWebSocketEvent("meeting_started", payload, &model.WebsocketBroadcast{
 				ChannelId: channelID,
 				OmitUsers: map[string]bool{mmUserID: true},

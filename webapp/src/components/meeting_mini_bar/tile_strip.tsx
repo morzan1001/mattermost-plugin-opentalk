@@ -130,20 +130,15 @@ export const TileStrip: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const localId: string | undefined = useSelector((s: any) => s[stateKey]?.session?.localParticipantId);
 
-    // Self is rendered separately by SelfPreview, so the participant strip
-    // shows ONLY remote attendees.
     const order: string[] = localId ? allOrder.filter((id: string) => id !== localId) : allOrder;
     const total = order.length;
 
     if (total === 0) {
-        // No remote participants. The user is alone (or only-self in slice).
-        // Render nothing — SelfPreview handles the local-cam display.
         return null;
     }
 
     const overflow = total > MAX_VISIBLE;
 
-    // When overflowing: show MAX_VISIBLE-1 tiles + 1 badge; otherwise show all (up to MAX_VISIBLE)
     const visibleIds: string[] = overflow ? order.slice(0, MAX_VISIBLE - 1) : order.slice(0, MAX_VISIBLE);
     const overflowCount = overflow ? total - (MAX_VISIBLE - 1) : 0;
 

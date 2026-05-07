@@ -9,6 +9,7 @@ import {useDraggable} from '../../hooks/use_draggable';
 import {useMeetingDuration} from '../../hooks/use_meeting_duration';
 import {useResizable} from '../../hooks/use_resizable';
 import {setMinimized} from '../../store/slice_session';
+import {selectIsHost, selectIsMinimized, selectLocalParticipantId} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
@@ -17,17 +18,10 @@ const MeetingMiniBar: React.FC = () => {
     const dispatch = useDispatch();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = useSelector((s: any) => s?.[stateKey]?.session ?? {status: 'idle', participantCount: 0});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isHost = useSelector((s: any) => s?.[stateKey]?.session?.isHost ?? false);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isMinimized = useSelector((s: any) => s?.[stateKey]?.session?.minimized === true);
+    const isHost = useSelector(selectIsHost);
+    const isMinimized = useSelector(selectIsMinimized);
     const [showLeavePrompt, setShowLeavePrompt] = useState(false);
 
-    // Storage-key suffix bumped to v2 because the layout changed
-    // significantly (added drag-handle, tile-strip, mini/expand, resize),
-    // making any size persisted from earlier builds undersized — content
-    // would overflow and the rightmost buttons (hangup, expand) would get
-    // clipped under overflow:hidden.
     const drag = useDraggable({
         storageKey: 'opentalk:widget-position:v2',
         defaultPosition: {
@@ -36,18 +30,15 @@ const MeetingMiniBar: React.FC = () => {
         },
     });
 
+    const localId = useSelector(selectLocalParticipantId);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const remoteCount: number = useSelector((s: any) => {
         const order = s?.[stateKey]?.participants?.order ?? [];
-        const localId = s?.[stateKey]?.session?.localParticipantId;
         return localId ? order.filter((id: string) => id !== localId).length : order.length;
     });
 
-    // Width is user-resizable and persisted. Min-width grows when self-cam
-    // adds the preview tile so the buttons never get crowded. Height is
-    // intentionally NOT controlled here — see the comment near the widget
-    // root: content drives height so the widget collapses to a single
-    // controls row when alone and grows naturally when remote tiles arrive.
+    // Min-width grows when self-cam is active so buttons don't get crowded.
+    // Height is not controlled here — content drives it.
     const baseMinWidth = 380;
     const minWidth = baseMinWidth + (session.camEnabled ? 72 : 0);
 
@@ -126,11 +117,6 @@ const MeetingMiniBar: React.FC = () => {
                     overflow: 'hidden',
                     ...drag.style,
 
-                    // Width: user-resizable, clamped to a content-aware min.
-                    // Height: intentionally absent — content (controls row +
-                    // optional tile-strip row) drives height. Widget collapses
-                    // to a single row when alone, grows when remotes arrive,
-                    // and shrinks when they leave. No empty space below tiles.
                     width: widgetWidth,
                 }}
             >
@@ -208,10 +194,7 @@ const MeetingMiniBar: React.FC = () => {
 
                 </div>
 
-                {/* Tile-strip row — remote-participant videos / initials.
-                    Self gets a dedicated SelfPreview in the controls row
-                    above. Only rendered when there are remote attendees,
-                    so a solo widget collapses to just one row. */}
+                {/* Tile-strip row — remote participants only; self is in SelfPreview above. */}
                 {session.status === 'connected' && remoteCount > 0 && (
                     <div
                         style={{
@@ -245,9 +228,7 @@ const MeetingMiniBar: React.FC = () => {
                 )}
             </div>
 
-            {/* Leave-prompt popover — rendered outside the widget root so the
-            widget's overflow:hidden doesn't clip it. Centered above the
-            widget bottom-right corner. */}
+            {/* Leave-prompt popover — outside the widget root so overflow:hidden doesn't clip it. */}
             {showLeavePrompt && (
                 <div
                     style={{

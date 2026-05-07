@@ -1,6 +1,7 @@
 import React, {useEffect, useMemo, useRef} from 'react';
 import {useSelector} from 'react-redux';
 import * as trackRegistry from '../../conference/livekit/track_registry';
+import {selectSessionStatus} from '../../util/selectors';
 
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
@@ -39,9 +40,7 @@ const AudioElement: React.FC<{trackId: string}> = ({trackId}) => {
 const AudioRenderer: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tracksByParticipant = useSelector((s: any) => s[stateKey]?.tracks?.perParticipant ?? {});
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sessionStatus = useSelector((s: any) => s[stateKey]?.session?.status ?? 'idle');
+    const sessionStatus = useSelector(selectSessionStatus);
 
     const audioTracks = useMemo<RemoteAudio[]>(() => {
         const list: RemoteAudio[] = [];

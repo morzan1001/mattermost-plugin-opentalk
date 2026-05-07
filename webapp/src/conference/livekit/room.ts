@@ -27,9 +27,8 @@ export interface TrackSubscribedData {
 type Listener<T = unknown> = (data: T) => void;
 
 /**
- * Thin wrapper around livekit-client's Room class. Phase 6 uses only a small
- * subset of the API: connect, disconnect, track-subscribe events, active-
- * speakers events. Mic/cam/screen publishing live in tracks.ts (Tasks 2/3/7).
+ * Thin wrapper around livekit-client's Room: connect/disconnect,
+ * track-subscribe events, active-speakers, and mic/cam/screen publishing.
  */
 export class LiveKitRoom {
     private readonly room: Room;
@@ -41,7 +40,6 @@ export class LiveKitRoom {
         active_speakers_changed: [],
     };
 
-    // Phase 2/3 will populate these:
     public micTrack?: LocalAudioTrack;
     public camTrack?: LocalVideoTrack;
 
