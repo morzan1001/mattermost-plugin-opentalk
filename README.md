@@ -2,45 +2,25 @@
 
 A Mattermost server plugin that deeply integrates the OpenTalk video-conferencing platform into the Mattermost web app. Audio, video, and screen sharing from channels and DMs — similar to `mattermost-plugin-calls` — but backed by OpenTalk's stack (Roomserver + LiveKit) instead of a custom WebRTC server.
 
-> **Status:** In progress. Core features are complete through phase 9d; testing and documentation (phases 10–11) are pending.
+## Features
 
-## Overview
-
-The plugin bridges Mattermost and OpenTalk so that users never have to leave their messaging context to start or join a video call. A channel-header button, custom post renderer, floating widget, and incoming-call modal are all served from within Mattermost, while the actual media transport runs through OpenTalk's LiveKit backend.
+- **Channel-header button** to start a meeting in any channel.
+- **Floating widget** with mic, camera, screen-share, hand-raise, mini, and leave controls. Drag to reposition; resizes by content.
+- **Expanded view** with three layouts: speaker (active speaker + filmstrip), grid (auto-fit), and screen-focus (when someone is sharing). Choice persists per user.
+- **DM ringing** — incoming-call modal with ringtone, accept/decline, 30-second auto-decline. Switch-call prompt when already in another meeting.
+- **Channel toast** — passive banner above the thread when a meeting is live in a public/private channel.
+- **Mute-on-join** option, custom-status integration ("In OpenTalk-Meeting"), and respect for Do-Not-Disturb status (no rings, no pushes).
+- **Mic/camera picker** in the Mattermost user settings panel.
+- **Mobile push** notifications routed via `SubType=calls` so the Mattermost mobile app can render the call-flavoured ring UI.
+- **Native screen picker** in the Mattermost desktop (Electron) app via the `desktopCapturer` IPC bridge.
+- **German + English UI** — chosen automatically from the user's Mattermost locale.
 
 ## Architecture
 
-- **Server (Go):** OAuth bridge against Keycloak, calls the OpenTalk Controller REST API on behalf of the user, posts custom posts with a `[Join]` button, sends push notifications for DM ringing.
+- **Server (Go):** OAuth bridge against Keycloak, calls the OpenTalk Controller REST API on behalf of the user, posts custom posts with a `[Join]` button, sends push notifications for DM ringing, runs a heartbeat-driven reaper that ends orphaned meetings.
 - **Webapp (TS + React):** Channel-header button, custom post renderer, floating widget, expanded view, incoming-call modal, signaling client, and LiveKit client for the in-Mattermost conference UI.
 - **OpenTalk:** Room creation and auth via the Controller REST API, live signaling over Roomserver WebSocket, media over LiveKit.
 - **Auth:** Per-user OIDC authorization-code flow against Keycloak (the same realm that OpenTalk uses).
-
-For full architecture diagrams and sequence flows, see the [design spec](../docs/superpowers/specs/2026-05-05-mattermost-opentalk-plugin-design.md).
-
-## Spec & Plans
-
-- Design spec: [`../docs/superpowers/specs/2026-05-05-mattermost-opentalk-plugin-design.md`](../docs/superpowers/specs/2026-05-05-mattermost-opentalk-plugin-design.md)
-- Phase 0 – Spike plan: [`../docs/superpowers/plans/2026-05-05-mattermost-opentalk-phase0-spike.md`](../docs/superpowers/plans/2026-05-05-mattermost-opentalk-phase0-spike.md)
-
-## Roadmap
-
-| Phase | Content | Status |
-|---|---|---|
-| 0 | Spike: signaling extraction, EUPL license, lifecycle events, local test instance, smoke test | ✅ |
-| 1 | Repo bootstrap: `plugin.json`, Makefile, CI, bot user | ✅ |
-| 2 | Auth skeleton: OIDC authorization-code flow, token storage | ✅ |
-| 3 | OpenTalk REST client (Go) | ✅ |
-| 4 | Custom post + slash commands | ✅ |
-| 5 | Port signaling library | ✅ |
-| 6 | LiveKit integration | ✅ |
-| 7 | Floating widget + expanded view | ✅ |
-| 8 | DM ringing + push notifications + channel toast | ✅ |
-| 9a | Meeting lifecycle: heartbeat + TTL reaper + resumption token reuse | ✅ |
-| 9b | Hand raise (`raise_hands` signaling module + UI) | ✅ |
-| 9c | Device pickers (mic/cam) + auto-mute on join | ✅ |
-| 9d | Auto status (MM custom status during meeting) | ✅ |
-| 10 | Testing (unit + E2E) | pending |
-| 11 | Docs + release | pending |
 
 ## Build
 
@@ -90,10 +70,10 @@ Left nav: **Clients → Create client**.
 |---|---|
 | Client authentication | **on** (confidential client with client secret) |
 | Authorization | off |
-| Standard flow | **on** ✓ (authorization-code flow for user login) |
-| Direct access grants | **on** ✓ _(for smoke tests / curl scripts only — disable after phase 0)_ |
+| Standard flow | **on** (authorization-code flow for user login) |
+| Direct access grants | off |
 | Implicit flow | off |
-| Service accounts roles | **on** ✓ _(optional, for a future bot-model fallback)_ |
+| Service accounts roles | **on** _(optional, for bot-model fallback)_ |
 | OAuth 2.0 Device Authorization Grant | off |
 | OIDC CIBA Grant | off |
 
@@ -115,18 +95,7 @@ Save.
 
 Go to the **Credentials** tab and copy the **Client secret**. You will enter this value in the Mattermost System Console plugin settings (field: _OIDC Client Secret_).
 
-### 4. (Optional) Create a test user
-
-Only needed if you want to run smoke tests with direct-access grants. In production the plugin uses the browser-based OAuth flow, so no password-grant user is required.
-
-Left nav: **Users → Add user**.
-- Username: e.g. `testuser`
-- Email: any address, **Email verified: on**
-- First / Last name: fill in
-- Save.
-- Tab **Credentials → Set password** → set a value, **Temporary: off**, Save.
-
-### 5. (Optional) Refresh token lifetime
+### 4. (Optional) Refresh token lifetime
 
 If your realm enforces strict token lifetimes, check **Realm settings → Tokens** and ensure _SSO Session Idle_ and _Offline Session Idle_ are long enough that refresh tokens do not expire after 30 minutes. The default is usually fine.
 
@@ -150,18 +119,30 @@ Activate the plugin. An OpenTalk button should appear in the channel header; the
 | Symptom | Cause | Fix |
 |---|---|---|
 | `unauthorized_client` during smoke test | Direct access grants not enabled | Enable in Capability Config (step 2) |
-| `invalid_grant` + `Account is not fully set up` | Test user has pending required actions (e.g. Verify Email, Update Profile) | User details → clear _Required user actions_, set _Email verified_, fill in first/last/email. If required actions keep coming back: Realm Settings → Authentication → _Required actions_ → disable the unwanted ones as _Default action_ |
-| `invalid_grant` (no account message) | Wrong username or password | Check `online-instance.env` |
+| `invalid_grant` + `Account is not fully set up` | Test user has pending required actions (e.g. Verify Email, Update Profile) | User details → clear _Required user actions_, set _Email verified_, fill in first/last/email |
+| `invalid_grant` (no account message) | Wrong username or password | Check the user's credentials |
 | `invalid_client` | Client authentication is `off` (public client) | Enable in Capability Config (step 2) |
 | Browser redirect lands on Keycloak error page | Redirect URI mismatch | Check Login Settings exactly — no trailing slash |
-| Plugin settings save fails with "OIDCAuthority must not be empty" | Issuer URL not entered | See plugin settings table above |
+| Plugin settings save fails with `OIDCAuthority must not be empty` | Issuer URL not entered | See plugin settings table above |
 | Plugin cannot load OIDC discovery | Issuer URL has wrong subpath (`/auth/` missing or extra) | Use exactly the URL shown in Keycloak's Realm Settings as _Issuer_ |
 
-### Production hardening (after phase 0)
+### Production hardening
 
-- **Disable Direct access grants** once smoke tests are no longer needed. The plugin itself only uses the authorization-code flow.
-- **Disable Service accounts roles** if the hybrid bot model is not used.
 - **Restrict Web Origins** to the exact Mattermost URL — no wildcard `*`.
+
+## Slash commands
+
+| Command | What it does |
+|---|---|
+| `/opentalk connect` | Link the current Mattermost user to OpenTalk via OIDC. |
+| `/opentalk disconnect` | Remove the link. |
+| `/opentalk info` | Show the current connection status. |
+| `/opentalk start` | Start a meeting in the current channel. |
+| `/opentalk join` | Join the active meeting in the current channel. |
+| `/opentalk end` | End the meeting (host only). |
+| `/opentalk dial-in` | Show the SIP dial-in number and PIN for the active meeting. |
+| `/opentalk ring on\|off` | Toggle the ringtone for incoming DM calls. |
+| `/opentalk help` | Show the command list. |
 
 ## Development
 
@@ -179,4 +160,4 @@ make watch      # webapp in watch mode
 
 ## License
 
-Apache-2.0. If code extracted from the OpenTalk frontend (EUPL-1.2) is incorporated in phase 5, the affected files will be individually marked as EUPL-1.2 (REUSE-toml-compliant) — see section 8 of the design spec.
+Apache-2.0 for plugin code authored in this repository. Source files extracted from the OpenTalk web frontend retain their original EUPL-1.2 license; those files carry SPDX headers identifying them individually.
