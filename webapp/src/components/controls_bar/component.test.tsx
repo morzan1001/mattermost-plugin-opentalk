@@ -8,6 +8,8 @@ jest.mock('../../conference/controller', () => ({
     toggleCam: jest.fn().mockResolvedValue(undefined),
     toggleScreenShare: jest.fn().mockResolvedValue(undefined),
     leaveActiveConference: jest.fn().mockResolvedValue(undefined),
+    raiseLocalHand: jest.fn(),
+    lowerLocalHand: jest.fn(),
 }));
 
 import {ControlsBar} from './component';
@@ -36,7 +38,7 @@ beforeEach(() => {
 });
 
 describe('ControlsBar', () => {
-    it('renders 5 buttons and 1 divider when showExpand=false', () => {
+    it('renders 6 buttons and 1 divider when showExpand=false', () => {
         const store = makeStore();
         render(
             <Provider store={store}>
@@ -48,12 +50,12 @@ describe('ControlsBar', () => {
             </Provider>,
         );
 
-        // Mic, Cam, Screen, Minimize, Leave = 5 buttons
+        // Mic, Cam, Screen, Hand, Minimize, Leave = 6 buttons
         const buttons = screen.getAllByRole('button');
-        expect(buttons).toHaveLength(5);
+        expect(buttons).toHaveLength(6);
     });
 
-    it('renders 6 buttons and 1 divider when showExpand=true', () => {
+    it('renders 7 buttons and 1 divider when showExpand=true', () => {
         const store = makeStore();
         render(
             <Provider store={store}>
@@ -65,9 +67,9 @@ describe('ControlsBar', () => {
             </Provider>,
         );
 
-        // Mic, Cam, Screen, Minimize, Expand, Leave = 6 buttons
+        // Mic, Cam, Screen, Hand, Minimize, Expand, Leave = 7 buttons
         const buttons = screen.getAllByRole('button');
-        expect(buttons).toHaveLength(6);
+        expect(buttons).toHaveLength(7);
     });
 
     it('clicking Mic calls toggleMic', () => {

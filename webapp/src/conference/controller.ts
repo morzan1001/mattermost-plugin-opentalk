@@ -14,6 +14,8 @@ import {
     participantsBulkSet,
     speakingChanged,
     participantsReset,
+    handRaised,
+    handLowered,
     type ParticipantInfo,
 } from '../store/slice_participants';
 import {
@@ -26,6 +28,7 @@ import {
     setCamEnabled,
     setScreenShareEnabled,
     setLivekitConnected,
+    setRaiseHandsEnabled,
 } from '../store/slice_session';
 import {
     trackSubscribed,
@@ -137,6 +140,15 @@ export async function startConferenceConnection(
     client.on('participant_joined', (p) => {
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
         store.dispatch(participantAdded({participant: toParticipantInfo(p)}));
+    });
+    client.on('hand_raised', ({participantId}) => {
+        store.dispatch(handRaised({participantID: participantId}));
+    });
+    client.on('hand_lowered', ({participantId}) => {
+        store.dispatch(handLowered({participantID: participantId}));
+    });
+    client.on('raise_hands_toggled', ({enabled}) => {
+        store.dispatch(setRaiseHandsEnabled(enabled));
     });
     client.on('participant_left', ({id}) => {
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
@@ -392,6 +404,20 @@ export async function toggleScreenShare(): Promise<void> {
             console.warn('[opentalk] enableScreenShare failed:', (err as Error).message);
         }
     }
+}
+
+export function raiseLocalHand(): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.raiseHand();
+}
+
+export function lowerLocalHand(): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.lowerHand();
 }
 
 // Test-only helper: reset module state.

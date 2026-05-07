@@ -18,6 +18,9 @@ export type ConferenceEvent =
     | 'participant_joined'
     | 'participant_left'
     | 'livekit_credentials'
+    | 'hand_raised'
+    | 'hand_lowered'
+    | 'raise_hands_toggled'
     | 'closed'
     | 'error';
 
@@ -51,6 +54,9 @@ export class OpenTalkConferenceClient {
     public on(event: 'participant_joined', cb: (p: Participant) => void): () => void;
     public on(event: 'participant_left', cb: (data: {id: string}) => void): () => void;
     public on(event: 'livekit_credentials', cb: (data: LiveKitCredentialsEvent) => void): () => void;
+    public on(event: 'hand_raised', cb: (data: {participantId: string}) => void): () => void;
+    public on(event: 'hand_lowered', cb: (data: {participantId: string}) => void): () => void;
+    public on(event: 'raise_hands_toggled', cb: (data: {enabled: boolean}) => void): () => void;
     public on(event: 'closed', cb: (data: {code: number}) => void): () => void;
     public on(event: 'error', cb: (err: Error) => void): () => void;
 
@@ -58,6 +64,14 @@ export class OpenTalkConferenceClient {
     public on(event: ConferenceEvent, cb: (data: any) => void): () => void {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return this.room.on(event as any, cb);
+    }
+
+    public raiseHand(): void {
+        this.room.raiseHand();
+    }
+
+    public lowerHand(): void {
+        this.room.lowerHand();
     }
 
     public getState(): RoomState {

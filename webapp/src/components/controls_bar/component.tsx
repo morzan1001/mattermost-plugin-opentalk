@@ -1,7 +1,7 @@
 import React from 'react';
 import {useSelector, useDispatch} from 'react-redux';
 
-import {toggleMic, toggleCam, toggleScreenShare} from '../../conference/controller';
+import {toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand} from '../../conference/controller';
 import {setExpanded} from '../../store/slice_session';
 import {
     MicIcon,
@@ -10,6 +10,7 @@ import {
     CameraOffIcon,
     ScreenShareIcon,
     ScreenShareOffIcon,
+    HandIcon,
     HangupIcon,
     MinimizeIcon,
     ExpandIcon,
@@ -79,6 +80,11 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
     const screenShareEnabled = useSelector((s: any) => s?.[stateKey]?.session?.screenShareEnabled ?? false);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const isHost = useSelector((s: any) => s?.[stateKey]?.session?.isHost ?? false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isRaised = useSelector((s: any) => {
+        const localId = s?.[stateKey]?.session?.localParticipantId;
+        return localId ? Boolean(s?.[stateKey]?.participants?.byId?.[localId]?.handRaised) : false;
+    });
 
     return (
         <>
@@ -110,6 +116,16 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                 aria-label={screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}
             >
                 {screenShareEnabled ? <ScreenShareOffIcon/> : <ScreenShareIcon/>}
+            </button>
+
+            <button
+                type='button'
+                style={isRaised ? {...activeButtonStyle, background: '#00B59C'} : mutedButtonStyle}
+                onClick={() => (isRaised ? lowerLocalHand() : raiseLocalHand())}
+                title={isRaised ? 'Hand senken' : 'Hand heben'}
+                aria-label={isRaised ? 'Hand senken' : 'Hand heben'}
+            >
+                <HandIcon/>
             </button>
 
             <div style={{width: 1, height: 24, background: 'rgba(255,255,255,0.1)', margin: '0 4px'}}/>

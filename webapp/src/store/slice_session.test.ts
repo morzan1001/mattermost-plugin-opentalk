@@ -11,6 +11,7 @@ import {
     setLivekitConnected,
     setExpanded,
     setMinimized,
+    setRaiseHandsEnabled,
 } from './slice_session';
 
 describe('sessionReducer', () => {
@@ -25,6 +26,7 @@ describe('sessionReducer', () => {
             livekitConnected: false,
             expanded: false,
             minimized: false,
+            raiseHandsEnabled: true,
         });
     });
 
@@ -42,6 +44,7 @@ describe('sessionReducer', () => {
             livekitConnected: false,
             expanded: false,
             minimized: false,
+            raiseHandsEnabled: true,
         });
     });
 
@@ -61,6 +64,7 @@ describe('sessionReducer', () => {
                 livekitConnected: false,
                 expanded: false,
                 minimized: false,
+                raiseHandsEnabled: true,
             },
             connected({participantCount: 3}),
         );
@@ -86,6 +90,7 @@ describe('sessionReducer', () => {
                 livekitConnected: false,
                 expanded: false,
                 minimized: false,
+                raiseHandsEnabled: true,
             },
             participantsChanged({participantCount: 4}),
         );
@@ -107,6 +112,7 @@ describe('sessionReducer', () => {
                 expanded: true,
                 minimized: true,
                 joinedAt: 12345,
+                raiseHandsEnabled: true,
             },
             disconnected(),
         );
@@ -120,6 +126,7 @@ describe('sessionReducer', () => {
             livekitConnected: false,
             expanded: false,
             minimized: false,
+            raiseHandsEnabled: true,
         });
     });
 
@@ -138,6 +145,7 @@ describe('sessionReducer', () => {
                 expanded: true,
                 minimized: false,
                 joinedAt: 99999,
+                raiseHandsEnabled: true,
             },
             connectError({error: 'boom'}),
         );
@@ -188,5 +196,12 @@ describe('sessionReducer', () => {
         expect(s.minimized).toBe(true);
         s = sessionReducer(s, setMinimized(false));
         expect(s.minimized).toBe(false);
+    });
+
+    it('setRaiseHandsEnabled toggles raiseHandsEnabled', () => {
+        let s = sessionReducer(undefined, setRaiseHandsEnabled(false));
+        expect(s.raiseHandsEnabled).toBe(false);
+        s = sessionReducer(s, setRaiseHandsEnabled(true));
+        expect(s.raiseHandsEnabled).toBe(true);
     });
 });

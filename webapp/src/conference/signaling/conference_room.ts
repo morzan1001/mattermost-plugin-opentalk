@@ -16,6 +16,7 @@ import {EventListener} from './event_listener';
 import {buildFrame} from './frame';
 import {CoreNamespace, type Participant} from './modules/core';
 import {LivekitNamespace} from './modules/livekit';
+import {RaiseHandsNamespace} from './modules/raise_hands';
 import {SignalingSocket} from './socket';
 
 const RESUMPTION_KEY_PREFIX = 'opentalk:resumption:';
@@ -69,6 +70,9 @@ type EventName =
     | 'participant_joined'
     | 'participant_left'
     | 'livekit_credentials'
+    | 'hand_raised'
+    | 'hand_lowered'
+    | 'raise_hands_toggled'
     | 'closed'
     | 'error';
 
@@ -89,6 +93,9 @@ export class ConferenceRoom {
         participant_joined: [],
         participant_left: [],
         livekit_credentials: [],
+        hand_raised: [],
+        hand_lowered: [],
+        raise_hands_toggled: [],
         closed: [],
         error: [],
     };
@@ -233,6 +240,27 @@ export class ConferenceRoom {
                     this.emit('livekit_credentials', {url, token});
                 });
 
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(RaiseHandsNamespace, 'handRaised', (payload: any) => {
+                    const participant = payload.participant ?? payload.id;
+                    if (participant) {
+                        this.emit('hand_raised', {participantId: participant as string});
+                    }
+                });
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(RaiseHandsNamespace, 'handLowered', (payload: any) => {
+                    const participant = payload.participant ?? payload.id;
+                    if (participant) {
+                        this.emit('hand_lowered', {participantId: participant as string});
+                    }
+                });
+                this.listener.on(RaiseHandsNamespace, 'raiseHandsEnabled', () => {
+                    this.emit('raise_hands_toggled', {enabled: true});
+                });
+                this.listener.on(RaiseHandsNamespace, 'raiseHandsDisabled', () => {
+                    this.emit('raise_hands_toggled', {enabled: false});
+                });
+
                 this.socket.on('open', () => {
                     const resumption = readResumption(roomID);
                     this.socket?.send(buildFrame(CoreNamespace, 'join', {
@@ -282,6 +310,20 @@ export class ConferenceRoom {
                 throw err;
             },
         );
+    }
+
+    public raiseHand(): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(RaiseHandsNamespace, 'raiseHand', {}));
+    }
+
+    public lowerHand(): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(RaiseHandsNamespace, 'lowerHand', {}));
     }
 
     public async leave(): Promise<void> {

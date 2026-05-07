@@ -9,9 +9,11 @@ import {SpeakerLayout} from './speaker_layout';
 import {leaveActiveConference} from '../../conference/controller';
 import {useLayoutMode} from '../../hooks/use_layout_mode';
 import {useMeetingDuration} from '../../hooks/use_meeting_duration';
+import type {ParticipantInfo} from '../../store/slice_participants';
 import type {SessionStatus} from '../../store/slice_session';
 import {setExpanded} from '../../store/slice_session';
 import {ControlsBar} from '../controls_bar/component';
+import {HandIcon} from '../icons';
 
 const stateKey = 'plugins-de.opentalk.mattermost-plugin';
 
@@ -22,6 +24,13 @@ const ExpandedView: React.FC = () => {
     const status = useSelector((s: any) => s?.[stateKey]?.session?.status ?? 'idle') as SessionStatus;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const joinedAt = useSelector((s: any) => s?.[stateKey]?.session?.joinedAt) as number | undefined;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raisedParticipants = useSelector((s: any): ParticipantInfo[] => {
+        const order = s?.[stateKey]?.participants?.order ?? [];
+        const byId = s?.[stateKey]?.participants?.byId ?? {};
+        return order.map((id: string) => byId[id]).filter((p: ParticipantInfo) => p && p.handRaised);
+    });
 
     const [mode, setMode] = useLayoutMode();
     const duration = useMeetingDuration(joinedAt);
@@ -66,6 +75,26 @@ const ExpandedView: React.FC = () => {
                     onChange={setMode}
                 />
             </div>
+
+            {/* raised-hand queue strip */}
+            {raisedParticipants.length > 0 && (
+                <div
+                    style={{
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '8px 16px',
+                        background: 'rgba(0, 181, 156, 0.12)',
+                        borderBottom: '1px solid rgba(0, 181, 156, 0.3)',
+                        fontSize: 13,
+                    }}
+                >
+                    <HandIcon/>
+                    <span style={{color: '#00B59C', fontWeight: 600, marginRight: 6}}>{'Wartereihe:'}</span>
+                    <span>{raisedParticipants.map((p) => p.displayName || p.id.slice(0, 8)).join(' · ')}</span>
+                </div>
+            )}
 
             {/* layout body */}
             <div style={{flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden'}}>

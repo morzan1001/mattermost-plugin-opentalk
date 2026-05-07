@@ -10,6 +10,7 @@ const ACTION_TYPES = {
     SET_LIVEKIT_CONNECTED: 'opentalk/session/set_livekit_connected',
     SET_EXPANDED: 'opentalk/session/set_expanded',
     SET_MINIMIZED: 'opentalk/session/set_minimized',
+    SET_RAISE_HANDS_ENABLED: 'opentalk/session/set_raise_hands_enabled',
 } as const;
 
 export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'leaving';
@@ -28,6 +29,7 @@ export interface SessionState {
     expanded: boolean;
     minimized: boolean;
     joinedAt?: number;
+    raiseHandsEnabled: boolean;
 
     /** OpenTalk-Roomserver participant id of the local user. Set on CONNECTED,
      * cleared on DISCONNECTED. Used by the tile-strip to filter self out
@@ -47,6 +49,7 @@ const initial: SessionState = {
     minimized: false,
     joinedAt: undefined,
     localParticipantId: undefined,
+    raiseHandsEnabled: true,
 };
 
 export function connectStarted(payload: {channelID: string; roomID: string}) {
@@ -81,6 +84,9 @@ export function setExpanded(value: boolean) {
 }
 export function setMinimized(value: boolean) {
     return {type: ACTION_TYPES.SET_MINIMIZED, payload: {value}};
+}
+export function setRaiseHandsEnabled(value: boolean) {
+    return {type: ACTION_TYPES.SET_RAISE_HANDS_ENABLED, payload: {value}};
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -123,6 +129,8 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
         return {...state, expanded: action.payload.value};
     case ACTION_TYPES.SET_MINIMIZED:
         return {...state, minimized: action.payload.value};
+    case ACTION_TYPES.SET_RAISE_HANDS_ENABLED:
+        return {...state, raiseHandsEnabled: action.payload.value};
     default:
         return state;
     }
