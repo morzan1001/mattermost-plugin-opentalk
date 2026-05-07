@@ -12,6 +12,7 @@ import ExpandedView from './components/expanded_view/component';
 import ChannelCallToast from './components/channel_call_toast/component';
 import IncomingCallModal from './components/incoming_call_modal/component';
 import SwitchCallModal from './components/switch_call_modal/component';
+import ScreenPickerModal from './components/screen_picker_modal/component';
 import {incomingCallReceived, incomingCallCleared, incomingCallsReset} from './store/slice_incoming_calls';
 import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
 import {registerOpenTalkUserSettings} from './user_settings';
@@ -293,6 +294,7 @@ export default class Plugin {
         registry.registerRootComponent?.(IncomingCallModal);
         registry.registerRootComponent?.(SwitchCallModal);
         registry.registerRootComponent?.(ChannelCallToast);
+        registry.registerRootComponent?.(ScreenPickerModal);
 
         // VideoGrid (the bottom-right floating tiles from Phase 6) is no
         // longer registered: in Phase 7a the floating-widget's TileStrip

@@ -2,11 +2,11 @@ import {
     Room,
     RoomEvent,
     Track,
+    LocalVideoTrack,
     type RemoteTrack,
     type RemoteTrackPublication,
     type RemoteParticipant,
     type LocalAudioTrack,
-    type LocalVideoTrack,
 } from 'livekit-client';
 
 import {publishMic, publishCam, unpublishMic, unpublishCam, type MicOptions, type CamOptions} from './tracks';
@@ -117,6 +117,29 @@ export class LiveKitRoom {
 
     public async disableScreenShare(): Promise<void> {
         await this.room.localParticipant.setScreenShareEnabled(false);
+    }
+
+    /**
+     * Publishes a pre-captured MediaStream's video track as a screen-share
+     * publication. Used by the Electron desktop-bridge flow where
+     * setScreenShareEnabled(true) doesn't surface a native picker.
+     */
+    public async enableScreenShareFromStream(stream: MediaStream): Promise<void> {
+        const videoTrack = stream.getVideoTracks()[0];
+        if (!videoTrack) {
+            throw new Error('Stream hat keinen Video-Track');
+        }
+        const localTrack = new LocalVideoTrack(videoTrack);
+        await this.room.localParticipant.publishTrack(localTrack, {
+            source: Track.Source.ScreenShare,
+        });
+
+        // When user stops via OS share-controls, the track ends. Tear down our
+        // publication so isScreenShareEnabled() flips back to false.
+        videoTrack.addEventListener('ended', () => {
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
+            this.disableScreenShare();
+        });
     }
 
     public isScreenShareEnabled(): boolean {

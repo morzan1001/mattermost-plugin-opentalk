@@ -1,7 +1,9 @@
 import type {Store, Action} from 'redux';
 
 import {OpenTalkConferenceClient} from './client';
+import {isElectron, getDesktopSources, captureDesktopStream} from './livekit/desktop_capturer';
 import {LiveKitRoom} from './livekit/room';
+import {pickScreenSource} from './livekit/screen_picker';
 import * as trackRegistry from './livekit/track_registry';
 import type {Participant} from './signaling/modules/core';
 
@@ -318,32 +320,12 @@ export async function toggleCam(): Promise<void> {
     }
 }
 
-// inElectron returns true when the webapp is running inside Mattermost's
-// Electron desktop client. Electron strips standard navigator.mediaDevices.
-// getDisplayMedia for security; native screen-picker integration requires
-// the host's IPC bridge (see mattermost-plugin-calls' desktop integration).
-// We don't have that wiring yet, so detect and refuse with a friendly message.
-function inElectron(): boolean {
-    if (typeof navigator === 'undefined') {
-        return false;
-    }
-    const ua = navigator.userAgent || '';
-    return ua.indexOf('Electron') !== -1 || ua.indexOf('Mattermost') !== -1;
-}
-
 export async function toggleScreenShare(): Promise<void> {
     if (!activeLiveKit || !activeStore) {
         return;
     }
     const lk = activeLiveKit;
     const localId = lk.getLocalIdentity();
-    if (!lk.isScreenShareEnabled() && inElectron()) {
-        // Phase 9 will add the desktop-bridge integration; until then,
-        // tell the user to share via the browser instead of failing silently.
-        // eslint-disable-next-line no-alert
-        window.alert('Bildschirmfreigabe ist in der Mattermost-Desktop-App noch nicht unterstützt. Bitte verwende dafür Mattermost im Browser.');
-        return;
-    }
     if (lk.isScreenShareEnabled()) {
         const trackId = localTrackId(lk, 'screen');
         trackRegistry.unregister(trackId);
@@ -352,7 +334,25 @@ export async function toggleScreenShare(): Promise<void> {
         activeStore.dispatch(setScreenShareEnabled(false));
     } else {
         try {
-            await lk.enableScreenShare();
+            if (isElectron()) {
+                // Desktop bridge: ask main process for sources, show picker,
+                // capture stream from chosen source, publish.
+                const sources = await getDesktopSources();
+                if (sources.length === 0) {
+                    // eslint-disable-next-line no-alert
+                    window.alert('Keine Bildschirme/Fenster verfügbar zum Teilen.');
+                    return;
+                }
+                const sourceId = await pickScreenSource(sources);
+                if (!sourceId) {
+                    return; // user cancelled
+                }
+                const stream = await captureDesktopStream(sourceId);
+                await lk.enableScreenShareFromStream(stream);
+            } else {
+                await lk.enableScreenShare();
+            }
+
             const screenTrack = lk.getLocalScreenTrack();
             if (screenTrack) {
                 const trackId = localTrackId(lk, 'screen');
@@ -362,7 +362,6 @@ export async function toggleScreenShare(): Promise<void> {
             }
             activeStore.dispatch(setScreenShareEnabled(true));
         } catch (err) {
-            // User cancelled the screen-picker dialog -> exception. Treat as no-op.
             // eslint-disable-next-line no-console
             console.warn('[opentalk] enableScreenShare failed:', (err as Error).message);
         }
