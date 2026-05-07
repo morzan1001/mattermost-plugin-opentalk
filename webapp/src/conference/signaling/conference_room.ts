@@ -143,6 +143,13 @@ export class ConferenceRoom {
                 this.socket = new SignalingSocket(roomserverURL, ticket);
                 this.listener = new EventListener(this.socket);
 
+                // TODO: drop after raise-hands + screen-share Electron paths
+                // are confirmed working. Logs every incoming signaling frame.
+                this.listener.onAny((msg) => {
+                    // eslint-disable-next-line no-console
+                    console.warn('[opentalk] WS frame:', msg.namespace + ':' + msg.payload.action, msg.payload);
+                });
+
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'joinSuccess', (payload: any) => {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -324,6 +331,16 @@ export class ConferenceRoom {
             return;
         }
         this.socket.send(buildFrame(RaiseHandsNamespace, 'lowerHand', {}));
+    }
+
+    /** Host-only: turn the raise-hands feature on for the room. OpenTalk
+     * disables it by default, so participants' raiseHand calls no-op until
+     * a moderator enables it. */
+    public enableRaiseHands(): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(RaiseHandsNamespace, 'enableRaiseHands', {}));
     }
 
     public async leave(): Promise<void> {

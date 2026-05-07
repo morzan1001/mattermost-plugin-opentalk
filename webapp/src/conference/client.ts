@@ -75,6 +75,10 @@ export class OpenTalkConferenceClient {
         this.room.lowerHand();
     }
 
+    public enableRaiseHands(): void {
+        this.room.enableRaiseHands();
+    }
+
     public getState(): RoomState {
         return this.room.getState();
     }

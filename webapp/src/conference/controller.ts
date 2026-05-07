@@ -149,6 +149,12 @@ export async function startConferenceConnection(
 
         startHeartbeat(channelID);
         setOpenTalkStatus();
+
+        // OpenTalk's raise-hands feature is OFF by default per room. Hosts
+        // turn it on so participants' raiseHand calls aren't silently dropped.
+        if (isHost) {
+            client.enableRaiseHands();
+        }
     });
     client.on('livekit_credentials', ({url, token}) => {
         if (activeLiveKit) {
@@ -396,18 +402,32 @@ export async function toggleScreenShare(): Promise<void> {
         activeStore.dispatch(setScreenShareEnabled(false));
     } else {
         try {
+            // eslint-disable-next-line no-console
+            console.warn('[opentalk] toggleScreenShare: isElectron=', isElectron(), 'ua=', navigator.userAgent);
             if (isElectron()) {
-                const sources = await getDesktopSources();
+                // eslint-disable-next-line no-console
+                console.warn('[opentalk] electron path: requesting desktop sources via postMessage');
+                const sources = await getDesktopSources().catch((e: Error) => {
+                    // eslint-disable-next-line no-console
+                    console.warn('[opentalk] getDesktopSources failed:', e.message);
+                    throw e;
+                });
+                // eslint-disable-next-line no-console
+                console.warn('[opentalk] got', sources.length, 'desktop sources');
                 if (sources.length === 0) {
                     // eslint-disable-next-line no-alert
                     window.alert(t({de: 'Keine Bildschirme/Fenster verfügbar zum Teilen.', en: 'No screens or windows available to share.'}));
                     return;
                 }
                 const sourceId = await pickScreenSource(sources);
+                // eslint-disable-next-line no-console
+                console.warn('[opentalk] picked sourceId=', sourceId);
                 if (!sourceId) {
                     return;
                 }
                 const stream = await captureDesktopStream(sourceId);
+                // eslint-disable-next-line no-console
+                console.warn('[opentalk] captured stream, video-tracks=', stream.getVideoTracks().length);
                 await lk.enableScreenShareFromStream(stream);
             } else {
                 await lk.enableScreenShare();
