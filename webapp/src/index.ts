@@ -6,4 +6,4 @@ declare global {
     }
 }
 
-window.registerPlugin('de.opentalk.mattermost-plugin', new Plugin());
+window.registerPlugin('com.github.morzan1001.mattermost-plugin-opentalk', new Plugin());

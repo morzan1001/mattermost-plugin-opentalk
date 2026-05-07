@@ -32,7 +32,7 @@ const formatDuration = (seconds: number): string => {
     return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 // OpenTalk brand-accent: deep teal used as a single 4-px accent stripe down
 // the card's left edge. The rest of the card stays neutral so it blends with

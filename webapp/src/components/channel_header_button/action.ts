@@ -11,7 +11,7 @@ interface PluginState {
 export function startMeetingAction(store: Store<GlobalState, Action>) {
     return async (channel: {id: string}) => {
         const state = store.getState() as any;
-        const ps: PluginState = state['plugins-de.opentalk.mattermost-plugin'] || {};
+        const ps: PluginState = state['plugins-com.github.morzan1001.mattermost-plugin-opentalk'] || {};
         if (!ps.oauth?.connected) {
             // eslint-disable-next-line no-alert
             alert('Bitte zuerst /opentalk connect ausführen.');

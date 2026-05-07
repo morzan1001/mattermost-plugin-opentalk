@@ -3,7 +3,7 @@ import {useSelector} from 'react-redux';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 function initialsOf(name: string): string {
     const parts = name.trim().split(/\s+/);

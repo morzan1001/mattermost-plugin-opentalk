@@ -14,7 +14,7 @@ import type {PluginRegistry} from './types/mattermost-webapp';
 // Same key used by plugin.ts's ringtoneEnabled() reader. Keep in sync.
 const ringtoneSettingKey = 'opentalk:ringtone-enabled';
 
-const pluginID = 'de.opentalk.mattermost-plugin';
+const pluginID = 'com.github.morzan1001.mattermost-plugin-opentalk';
 
 /**
  * Registers an "OpenTalk" section in the Mattermost User-Settings modal.

@@ -1,4 +1,4 @@
-module github.com/opentalk/mattermost-plugin-opentalk
+module github.com/morzan1001/mattermost-plugin-opentalk
 
 go 1.25.8
 

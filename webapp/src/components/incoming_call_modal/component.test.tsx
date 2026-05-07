@@ -15,7 +15,7 @@ import {dismissIncomingCall} from '../../client/rest';
 import {startConferenceConnection} from '../../conference/controller';
 import {incomingCallDismissed, incomingCallCleared} from '../../store/slice_incoming_calls';
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 const mockCall = {
     channelID: 'ch-1',

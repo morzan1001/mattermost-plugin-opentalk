@@ -33,7 +33,7 @@ function makeStore() {
                 profiles: {u1: {username: 'tester'}},
             },
         },
-        'plugins-de.opentalk.mattermost-plugin': {
+        'plugins-com.github.morzan1001.mattermost-plugin-opentalk': {
             oauth: {connected: true},
             session: {status: 'idle', participantCount: 0},
         },

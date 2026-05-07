@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/oidc"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/oidc"
 )
 
 type Configuration struct {

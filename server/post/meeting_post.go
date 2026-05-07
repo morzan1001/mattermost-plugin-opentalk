@@ -9,7 +9,7 @@ import (
 
 	"github.com/mattermost/mattermost/server/public/model"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 // MeetingPostType is the Post.Type value the webapp registers a renderer for.

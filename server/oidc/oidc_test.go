@@ -57,7 +57,7 @@ func newTestClient(t *testing.T, srv *httptest.Server) *Client {
 		Issuer:       srv.URL,
 		ClientID:     "test-client",
 		ClientSecret: "test-secret",
-		RedirectURL:  "http://localhost:8065/plugins/de.opentalk.mattermost-plugin/oauth/callback",
+		RedirectURL:  "http://localhost:8065/plugins/com.github.morzan1001.mattermost-plugin-opentalk/oauth/callback",
 		Scopes:       []string{"openid", "email", "profile", "offline_access"},
 	})
 	require.NoError(t, err)

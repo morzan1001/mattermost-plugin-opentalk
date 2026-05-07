@@ -4,7 +4,7 @@ import {useSelector} from 'react-redux';
 import * as trackRegistry from '../../conference/livekit/track_registry';
 import type {ParticipantInfo} from '../../store/slice_participants';
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 const MAX_VISIBLE = 4;
 

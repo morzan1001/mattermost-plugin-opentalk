@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/crypto"
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/crypto"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 var encKey = []byte("0123456789abcdef0123456789abcdef")
@@ -25,7 +25,7 @@ func newHandler(api *plugintest.API) *Handler {
 		Store:         store.New(api),
 		EncryptionKey: encKey,
 		SiteURL:       "http://localhost:8065",
-		PluginID:      "de.opentalk.mattermost-plugin",
+		PluginID:      "com.github.morzan1001.mattermost-plugin-opentalk",
 		FrontendURL:   "https://opentalk.example",
 	}
 }
@@ -53,7 +53,7 @@ func TestConnect_ReturnsLinkWhenNotConnected(t *testing.T) {
 	api.On("KVGet", mock.AnythingOfType("string")).Return([]byte(nil), nil)
 	h := newHandler(api)
 	resp, _ := h.Execute(mkArgs("u1", "/opentalk connect"))
-	assert.Contains(t, resp.Text, "/plugins/de.opentalk.mattermost-plugin/oauth/start")
+	assert.Contains(t, resp.Text, "/plugins/com.github.morzan1001.mattermost-plugin-opentalk/oauth/start")
 }
 
 func TestConnect_NoticesAlreadyConnected(t *testing.T) {

@@ -11,7 +11,7 @@ import ChannelCallToast from './component';
 import {startConferenceConnection} from '../../conference/controller';
 import {activeMeetingDismissed} from '../../store/slice_active_meetings';
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 const mockMeeting = {
     channelID: 'ch-1',

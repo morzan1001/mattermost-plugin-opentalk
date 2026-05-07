@@ -4,7 +4,7 @@ import {useSelector} from 'react-redux';
 import {GridLayout} from './grid_layout';
 import {ParticipantTile} from './participant_tile';
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 export const ScreenFocusLayout: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

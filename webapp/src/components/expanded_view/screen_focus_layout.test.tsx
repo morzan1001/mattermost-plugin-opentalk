@@ -7,7 +7,7 @@ import {ScreenFocusLayout} from './screen_focus_layout';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 const mockAttach = jest.fn();
 const mockDetach = jest.fn();

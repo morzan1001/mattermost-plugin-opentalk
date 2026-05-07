@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 func TestBuildMeetingPost_Initial(t *testing.T) {

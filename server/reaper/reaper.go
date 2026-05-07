@@ -10,7 +10,7 @@ import (
 
 	"github.com/mattermost/mattermost/server/public/plugin"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 // EndMeetingFunc is called for each stale meeting the reaper detects.

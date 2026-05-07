@@ -8,8 +8,8 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/oidc"
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/oidc"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 const Trigger = "opentalk"

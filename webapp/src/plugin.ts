@@ -184,7 +184,7 @@ export default class Plugin {
             `custom_${pluginId}_meeting_ended`,
             (msg: MeetingEndedMessage) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const session: any = (store.getState() as any)?.['plugins-de.opentalk.mattermost-plugin']?.session;
+                const session: any = (store.getState() as any)?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk']?.session;
                 if (session?.status !== 'idle' && session?.channelID === msg.data.channel_id) {
                     leaveActiveConference();
                 }

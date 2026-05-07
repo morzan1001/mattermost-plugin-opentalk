@@ -8,9 +8,9 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/opentalk"
-	"github.com/opentalk/mattermost-plugin-opentalk/server/post"
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/opentalk"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/post"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 type createMeetingRequest struct {

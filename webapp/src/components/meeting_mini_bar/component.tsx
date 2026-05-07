@@ -11,7 +11,7 @@ import {useResizable} from '../../hooks/use_resizable';
 import {setMinimized} from '../../store/slice_session';
 import {ControlsBar} from '../controls_bar/component';
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 const MeetingMiniBar: React.FC = () => {
     const dispatch = useDispatch();

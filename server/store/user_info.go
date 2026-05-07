@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/crypto"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/crypto"
 )
 
 type UserInfo struct {

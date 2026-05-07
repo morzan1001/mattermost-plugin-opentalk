@@ -16,7 +16,7 @@ import {
     ExpandIcon,
 } from '../icons';
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 export const baseButtonStyle: React.CSSProperties = {
     display: 'inline-flex',

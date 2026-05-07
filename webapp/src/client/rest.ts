@@ -33,7 +33,7 @@ function pluginURL(path: string): string {
 }
 
 export async function createMeeting(channelID: string, deviceSecret: string): Promise<CreateMeetingResponse> {
-    const r = await fetch('/plugins/de.opentalk.mattermost-plugin/api/v1/meetings', {
+    const r = await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -91,7 +91,7 @@ export async function joinMeeting(
 }
 
 export async function heartbeat(channelID: string): Promise<void> {
-    await fetch('/plugins/de.opentalk.mattermost-plugin/api/v1/meetings/heartbeat', {
+    await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/heartbeat', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -103,7 +103,7 @@ export async function heartbeat(channelID: string): Promise<void> {
 }
 
 export async function dismissIncomingCall(channelID: string, roomID: string): Promise<void> {
-    const r = await fetch('/plugins/de.opentalk.mattermost-plugin/api/v1/meetings/dismiss', {
+    const r = await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/dismiss', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

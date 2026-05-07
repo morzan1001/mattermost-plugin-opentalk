@@ -4,7 +4,7 @@ import {Provider} from 'react-redux';
 import {createStore} from 'redux';
 import AudioRenderer from './component';
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 const mockAttach = jest.fn();
 const mockDetach = jest.fn();

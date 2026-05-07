@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	nethttp "net/http"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 type meResponse struct {

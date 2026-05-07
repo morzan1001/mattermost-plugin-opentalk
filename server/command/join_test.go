@@ -9,7 +9,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest/mock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 func TestJoin_NoActiveMeeting(t *testing.T) {

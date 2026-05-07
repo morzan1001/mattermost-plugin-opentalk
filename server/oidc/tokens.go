@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 // refreshLeeway is how early we proactively refresh before expiry to avoid

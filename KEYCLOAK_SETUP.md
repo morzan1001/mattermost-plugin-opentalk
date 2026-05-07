@@ -48,7 +48,7 @@ Setze die folgenden vier Felder. Ersetze `MM_URL` durch die URL deines Mattermos
 |---|---|
 | Root URL | `MM_URL` |
 | Home URL | `MM_URL` |
-| Valid redirect URIs | `MM_URL/plugins/de.opentalk.mattermost-plugin/oauth/callback` |
+| Valid redirect URIs | `MM_URL/plugins/com.github.morzan1001.mattermost-plugin-opentalk/oauth/callback` |
 | Valid post logout redirect URIs | `MM_URL/*` |
 | Web origins | `MM_URL` |
 

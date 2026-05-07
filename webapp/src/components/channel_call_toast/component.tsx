@@ -5,7 +5,7 @@ import {startConferenceConnection} from '../../conference/controller';
 import {activeMeetingDismissed, type ActiveMeeting} from '../../store/slice_active_meetings';
 import {selectCurrentDisplayName} from '../../util/display_name';
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 const toastStyle: React.CSSProperties = {
     position: 'fixed',

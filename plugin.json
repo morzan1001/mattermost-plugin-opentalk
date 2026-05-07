@@ -1,6 +1,6 @@
 {
-    "id": "de.opentalk.mattermost-plugin",
-    "name": "OpenTalk Video",
+    "id": "com.github.morzan1001.mattermost-plugin-opentalk",
+    "name": "OpenTalk",
     "description": "Audio/Video conferencing in Mattermost via OpenTalk.",
     "homepage_url": "https://gitlab.opencode.de/opentalk",
     "support_url": "https://gitlab.opencode.de/opentalk",

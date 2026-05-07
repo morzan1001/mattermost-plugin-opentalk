@@ -6,8 +6,8 @@ import (
 
 	"github.com/mattermost/mattermost/server/public/model"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/post"
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/post"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 func (h *Handler) end(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {

@@ -17,7 +17,7 @@ import {leaveActiveConference, toggleMic, toggleCam, toggleScreenShare} from '..
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeStore(session: any) {
     return createStore(() => ({
-        'plugins-de.opentalk.mattermost-plugin': {session},
+        'plugins-com.github.morzan1001.mattermost-plugin-opentalk': {session},
     }));
 }
 

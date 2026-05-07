@@ -14,16 +14,16 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/command"
-	pluginhttp "github.com/opentalk/mattermost-plugin-opentalk/server/http"
-	"github.com/opentalk/mattermost-plugin-opentalk/server/oidc"
-	"github.com/opentalk/mattermost-plugin-opentalk/server/opentalk"
-	"github.com/opentalk/mattermost-plugin-opentalk/server/post"
-	"github.com/opentalk/mattermost-plugin-opentalk/server/reaper"
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/command"
+	pluginhttp "github.com/morzan1001/mattermost-plugin-opentalk/server/http"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/oidc"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/opentalk"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/post"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/reaper"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
-const pluginID = "de.opentalk.mattermost-plugin"
+const pluginID = "com.github.morzan1001.mattermost-plugin-opentalk"
 
 const botUsername = "opentalk-bot"
 const botDisplayName = "OpenTalk Bot"

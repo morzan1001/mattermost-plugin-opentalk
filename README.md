@@ -56,7 +56,7 @@ Vorbedingungen:
 ```bash
 make dist
 ```
-produziert `dist/de.opentalk.mattermost-plugin-<version>.tar.gz`. Hochladen in der Mattermost-System-Console unter "Plugin Management" → "Upload Plugin".
+produziert `dist/com.github.morzan1001.mattermost-plugin-opentalk-<version>.tar.gz`. Hochladen in der Mattermost-System-Console unter "Plugin Management" → "Upload Plugin".
 
 ## Entwicklung
 

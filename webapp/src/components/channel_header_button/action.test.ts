@@ -29,7 +29,7 @@ beforeEach(() => {
 function makeStore(connected: boolean) {
     return {
         getState: () => ({
-            'plugins-de.opentalk.mattermost-plugin': {oauth: {connected}},
+            'plugins-com.github.morzan1001.mattermost-plugin-opentalk': {oauth: {connected}},
         }),
         dispatch: jest.fn(),
         subscribe: jest.fn(),
@@ -53,7 +53,7 @@ describe('startMeetingAction', () => {
         await action({id: 'ch-1'});
         expect(mockFetch).toHaveBeenCalledTimes(1);
         const [url, init] = mockFetch.mock.calls[0];
-        expect(url).toContain('/plugins/de.opentalk.mattermost-plugin/api/v1/meetings');
+        expect(url).toContain('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings');
         expect(init.method).toBe('POST');
         const body = JSON.parse(init.body);
         expect(body.channel_id).toBe('ch-1');

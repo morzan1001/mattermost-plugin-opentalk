@@ -11,7 +11,7 @@ import {
 } from '../../store/slice_incoming_calls';
 import {selectCurrentDisplayName} from '../../util/display_name';
 
-const stateKey = 'plugins-de.opentalk.mattermost-plugin';
+const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 const IncomingCallModal: React.FC = () => {
     const dispatch = useDispatch();

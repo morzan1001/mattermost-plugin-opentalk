@@ -18,7 +18,7 @@ describe('joinMeeting', () => {
         expect(out.roomserver_url).toBe('wss://x');
         expect(mockFetch).toHaveBeenCalledTimes(1);
         const [url, init] = mockFetch.mock.calls[0];
-        expect(url).toContain('/plugins/de.opentalk.mattermost-plugin/api/v1/meetings/room-1/join');
+        expect(url).toContain('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/room-1/join');
         expect(init.method).toBe('POST');
         expect(init.headers['X-Requested-With']).toBe('XMLHttpRequest');
         expect(init.headers['Content-Type']).toBe('application/json');

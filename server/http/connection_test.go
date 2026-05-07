@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/opentalk/mattermost-plugin-opentalk/server/crypto"
-	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/crypto"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 var meEncKey = []byte("0123456789abcdef0123456789abcdef")

@@ -329,13 +329,13 @@ export async function endActiveMeeting(): Promise<void> {
         return;
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const channelID: string | undefined = activeStore.getState()?.['plugins-de.opentalk.mattermost-plugin']?.session?.channelID;
+    const channelID: string | undefined = activeStore.getState()?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk']?.session?.channelID;
     await leaveActiveConference();
     if (!channelID) {
         return;
     }
     try {
-        await fetch('/plugins/de.opentalk.mattermost-plugin/api/v1/meetings/end', {
+        await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/end', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -476,7 +476,7 @@ export function _reset(): void {
 // Call window.opentalk.state() and copy-paste the entire returned string.
 export function debugState(): string {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stateSlice: any = activeStore?.getState()?.['plugins-de.opentalk.mattermost-plugin'] ?? {};
+    const stateSlice: any = activeStore?.getState()?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk'] ?? {};
     const snapshot = {
         hasClient: activeClient !== null,
         hasLiveKit: activeLiveKit !== null,
