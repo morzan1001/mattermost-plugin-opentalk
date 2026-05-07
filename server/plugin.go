@@ -412,8 +412,8 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 					SenderId:    p.botUserID,
 					ChannelType: ch.Type,
 					Message: i18n.T(p.localeOf(uid), i18n.Translatable{
-						DE: "📞 Anruf von " + hostName,
-						EN: "📞 Incoming call from " + hostName,
+						DE: "Anruf von " + hostName,
+						EN: "Incoming call from " + hostName,
 					}),
 					IsIdLoaded: true,
 				}

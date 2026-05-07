@@ -125,7 +125,7 @@ describe('ChannelCallToast', () => {
         const store = makeStore({channelType: 'O'});
         renderToast(store);
         expect(screen.getByTestId('channel-call-toast')).toBeInTheDocument();
-        expect(screen.getByText('📞 Meeting running · started by Alice')).toBeInTheDocument();
+        expect(screen.getByText('Meeting running · started by Alice')).toBeInTheDocument();
         expect(screen.getByText('Join')).toBeInTheDocument();
         expect(screen.getByLabelText('Dismiss notification')).toBeInTheDocument();
     });

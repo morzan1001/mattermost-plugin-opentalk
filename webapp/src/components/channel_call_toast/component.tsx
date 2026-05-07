@@ -5,6 +5,7 @@ import {startConferenceConnection} from '../../conference/controller';
 import {activeMeetingDismissed, type ActiveMeeting} from '../../store/slice_active_meetings';
 import {useT} from '../../util/i18n';
 import {selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
+import {PhoneIcon} from '../icons';
 
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
@@ -104,7 +105,8 @@ const ChannelCallToast: React.FC = () => {
             data-testid='channel-call-toast'
             style={toastStyle}
         >
-            <span>{`📞 ${t({de: 'Meeting läuft · gestartet von', en: 'Meeting running · started by'})} ${meeting.hostName}`}</span>
+            <PhoneIcon/>
+            <span>{`${t({de: 'Meeting läuft · gestartet von', en: 'Meeting running · started by'})} ${meeting.hostName}`}</span>
             <button
                 type='button'
                 onClick={onJoin}

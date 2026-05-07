@@ -31,5 +31,8 @@ func (h *Handler) dialIn(args *model.CommandArgs) (*model.CommandResponse, *mode
 			EN: "This meeting does not have SIP/Dial-In enabled.",
 		})), nil
 	}
-	return ephemeral(fmt.Sprintf("📞 Dial-in: %s · PIN %s", am.DialInNumber, am.DialInPIN)), nil
+	return ephemeral(fmt.Sprintf(i18n.T(locale, i18n.Translatable{
+		DE: "Einwahl: %s · PIN %s",
+		EN: "Dial-in: %s · PIN %s",
+	}), am.DialInNumber, am.DialInPIN)), nil
 }

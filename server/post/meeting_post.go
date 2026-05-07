@@ -26,8 +26,8 @@ const MeetingPostType = "custom_opentalk_meeting"
 func BuildMeetingPost(am *store.ActiveMeeting, frontendURL, hostUsername, locale string) *model.Post {
 	inviteURL := fmt.Sprintf("%s/invite/%s", frontendURL, am.InviteCode)
 	msg := fmt.Sprintf(i18n.T(locale, i18n.Translatable{
-		DE: "📞 OpenTalk-Meeting gestartet — beitreten: %s",
-		EN: "📞 OpenTalk meeting started — join: %s",
+		DE: "OpenTalk-Meeting gestartet — beitreten: %s",
+		EN: "OpenTalk meeting started — join: %s",
 	}), inviteURL)
 
 	props := model.StringInterface{
