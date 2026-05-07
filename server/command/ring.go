@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/mattermost/mattermost/server/public/model"
+
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/i18n"
 )
 
 // ring handles `/opentalk ring on|off|status` — a slash-command fallback for
@@ -18,6 +20,8 @@ func (h *Handler) ring(args *model.CommandArgs) (*model.CommandResponse, *model.
 		sub = strings.ToLower(fields[2])
 	}
 
+	locale := h.localeOf(args.UserId)
+
 	switch sub {
 	case "on", "an", "true", "1":
 		if h.Broadcaster != nil {
@@ -26,7 +30,10 @@ func (h *Handler) ring(args *model.CommandArgs) (*model.CommandResponse, *model.
 				"enabled":    true,
 			})
 		}
-		return ephemeral("Klingelton eingeschaltet."), nil
+		return ephemeral(i18n.T(locale, i18n.Translatable{
+			DE: "Klingelton eingeschaltet.",
+			EN: "Ringtone enabled.",
+		})), nil
 
 	case "off", "aus", "false", "0":
 		if h.Broadcaster != nil {
@@ -35,12 +42,21 @@ func (h *Handler) ring(args *model.CommandArgs) (*model.CommandResponse, *model.
 				"enabled":    false,
 			})
 		}
-		return ephemeral("Klingelton ausgeschaltet."), nil
+		return ephemeral(i18n.T(locale, i18n.Translatable{
+			DE: "Klingelton ausgeschaltet.",
+			EN: "Ringtone disabled.",
+		})), nil
 
 	case "status", "":
-		return ephemeral("Klingelton-Status: prüfe in den Mattermost-Einstellungen unter „OpenTalk", oder rufe `/opentalk ring on|off` auf, um umzuschalten."), nil
+		return ephemeral(i18n.T(locale, i18n.Translatable{
+			DE: "Klingelton-Status: prüfe in den Mattermost-Einstellungen unter „OpenTalk", oder rufe `/opentalk ring on|off` auf, um umzuschalten.",
+			EN: "Ringtone status: check Mattermost settings under \"OpenTalk\", or use `/opentalk ring on|off` to toggle.",
+		})), nil
 
 	default:
-		return ephemeral("`/opentalk ring on|off|status` — schaltet den Klingelton bei eingehenden Anrufen ein/aus."), nil
+		return ephemeral(i18n.T(locale, i18n.Translatable{
+			DE: "`/opentalk ring on|off|status` — schaltet den Klingelton bei eingehenden Anrufen ein/aus.",
+			EN: "`/opentalk ring on|off|status` — toggle the ringtone for incoming calls.",
+		})), nil
 	}
 }

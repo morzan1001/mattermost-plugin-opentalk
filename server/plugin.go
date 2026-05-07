@@ -16,6 +16,7 @@ import (
 
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/command"
 	pluginhttp "github.com/morzan1001/mattermost-plugin-opentalk/server/http"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/i18n"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/oidc"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/opentalk"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/post"
@@ -104,6 +105,7 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		Broadcaster: func(event string, payload map[string]any) {
 			p.API.PublishWebSocketEvent(event, payload, &model.WebsocketBroadcast{})
 		},
+		LocaleOf: p.localeOf,
 	}
 	return h.Execute(args)
 }
@@ -242,6 +244,7 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			}
 			return displayNameOf(u)
 		},
+		LocaleOf: p.localeOf,
 
 		IsConnected: func(mmUserID string) bool {
 			cfg := p.getConfiguration()
@@ -344,10 +347,12 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 	}
 
 	hostName := mmUserID
+	hostLocale := ""
 	if u, err := p.API.GetUser(mmUserID); err == nil && u != nil {
 		hostName = displayNameOf(u)
+		hostLocale = u.Locale
 	}
-	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostName)
+	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostName, hostLocale)
 	botPost.UserId = p.botUserID
 	if err := p.client.Post.CreatePost(botPost); err != nil {
 		return nil, fmt.Errorf("post meeting card: %w", err)
@@ -406,8 +411,11 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 					PostId:      botPost.Id,
 					SenderId:    p.botUserID,
 					ChannelType: ch.Type,
-					Message:     "📞 " + hostName + " ruft an",
-					IsIdLoaded:  true,
+					Message: i18n.T(p.localeOf(uid), i18n.Translatable{
+						DE: "📞 Anruf von " + hostName,
+						EN: "📞 Incoming call from " + hostName,
+					}),
+					IsIdLoaded: true,
 				}
 				if pErr := p.API.SendPushNotification(push, uid); pErr != nil {
 					p.API.LogWarn("[opentalk] push failed", "user", uid, "err", pErr.Error())
@@ -432,6 +440,19 @@ func generateDeviceSecret() (string, error) {
 		return "", fmt.Errorf("generate device secret: %w", err)
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// localeOf returns the user's MM locale for i18n lookups. Empty string
+// (the default) yields English in i18n.T.
+func (p *Plugin) localeOf(mmUserID string) string {
+	if mmUserID == "" {
+		return ""
+	}
+	u, err := p.API.GetUser(mmUserID)
+	if err != nil || u == nil {
+		return ""
+	}
+	return u.Locale
 }
 
 // accessTokenFor returns a fresh OIDC access token for the given Mattermost

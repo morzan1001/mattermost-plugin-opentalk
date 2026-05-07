@@ -30,6 +30,10 @@ type Handlers struct {
 	FrontendURL    string
 	CreatePost     func(*model.Post) (*model.Post, error)
 	HostUsernameOf func(mmUserID string) string
+	// LocaleOf returns the MM locale string for a given user ID. Used to
+	// select the language of the bot-post fallback message in BuildMeetingPost.
+	// Returns "" on any error, which i18n.T treats as English.
+	LocaleOf func(mmUserID string) string
 
 	// IsConnected / UsernameOf: join endpoint dispatches between StartRoom
 	// (registered user) and StartInvited (guest) based on KV store presence.

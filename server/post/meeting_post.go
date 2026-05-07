@@ -9,6 +9,7 @@ import (
 
 	"github.com/mattermost/mattermost/server/public/model"
 
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/i18n"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
@@ -19,9 +20,15 @@ const MeetingPostType = "custom_opentalk_meeting"
 // created meeting. The Message is plain text including the join URL so MM
 // clients that don't render custom post types (e.g. MM-Mobile in phase 4)
 // still see a usable link.
-func BuildMeetingPost(am *store.ActiveMeeting, frontendURL, hostUsername string) *model.Post {
+//
+// locale is the host's MM locale (e.g. "de", "en-US") and controls which
+// language the fallback message is rendered in. Pass "" to get English.
+func BuildMeetingPost(am *store.ActiveMeeting, frontendURL, hostUsername, locale string) *model.Post {
 	inviteURL := fmt.Sprintf("%s/invite/%s", frontendURL, am.InviteCode)
-	msg := fmt.Sprintf("📞 OpenTalk-Meeting gestartet — beitreten: %s", inviteURL)
+	msg := fmt.Sprintf(i18n.T(locale, i18n.Translatable{
+		DE: "📞 OpenTalk-Meeting gestartet — beitreten: %s",
+		EN: "📞 OpenTalk meeting started — join: %s",
+	}), inviteURL)
 
 	props := model.StringInterface{
 		"room_id":       am.RoomID,

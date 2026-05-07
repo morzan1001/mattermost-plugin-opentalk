@@ -21,7 +21,7 @@ func TestBuildMeetingPost_Initial(t *testing.T) {
 		DialInPIN:    "4242",
 	}
 
-	post := BuildMeetingPost(am, "https://opentalk.example", "alice")
+	post := BuildMeetingPost(am, "https://opentalk.example", "alice", "")
 	assert.Equal(t, MeetingPostType, post.Type)
 	assert.Equal(t, "ch-1", post.ChannelId)
 	assert.Contains(t, post.Message, "https://opentalk.example/invite/inv-1")
@@ -35,12 +35,25 @@ func TestBuildMeetingPost_Initial(t *testing.T) {
 	assert.Equal(t, "STARTED", post.GetProp("status"))
 }
 
+func TestBuildMeetingPost_LocaleDE(t *testing.T) {
+	am := &store.ActiveMeeting{
+		ChannelID:  "ch-1",
+		RoomID:     "r",
+		InviteCode: "i",
+	}
+	postDE := BuildMeetingPost(am, "https://o.example", "u", "de")
+	assert.Contains(t, postDE.Message, "gestartet")
+
+	postEN := BuildMeetingPost(am, "https://o.example", "u", "en")
+	assert.Contains(t, postEN.Message, "started")
+}
+
 func TestBuildMeetingPost_NoSIPLeavesDialInProps(t *testing.T) {
 	am := &store.ActiveMeeting{
 		ChannelID: "ch-1", RoomID: "r", InviteCode: "i",
 		EnableSIP: false,
 	}
-	post := BuildMeetingPost(am, "https://o.example", "u")
+	post := BuildMeetingPost(am, "https://o.example", "u", "")
 	assert.Nil(t, post.GetProp("dial_in_number"))
 	assert.Nil(t, post.GetProp("dial_in_pin"))
 }
@@ -51,7 +64,7 @@ func TestApplyEndedStatus_UpdatesProps(t *testing.T) {
 		RoomID:     "r",
 		InviteCode: "i",
 		CreatedAt:  time.Now().Add(-15 * time.Minute),
-	}, "https://o.example", "u")
+	}, "https://o.example", "u", "")
 
 	ApplyEndedStatus(p, time.Now())
 	assert.Equal(t, "ENDED", p.GetProp("status"))
@@ -64,7 +77,7 @@ func TestApplyMissedStatus_SetsStatus(t *testing.T) {
 		ChannelID:  "ch-1",
 		RoomID:     "r",
 		InviteCode: "i",
-	}, "https://o.example", "u")
+	}, "https://o.example", "u", "")
 	now := time.Now()
 	ApplyMissedStatus(p, now)
 	assert.Equal(t, "MISSED", p.GetProp("status"))

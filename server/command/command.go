@@ -8,6 +8,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/i18n"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/oidc"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
@@ -41,6 +42,11 @@ type Handler struct {
 	// Broadcaster publishes a plugin WebSocket event to all clients. Used by
 	// /opentalk end to notify webapps that a meeting has ended.
 	Broadcaster func(event string, payload map[string]any)
+
+	// LocaleOf returns the MM locale string for a given user ID (e.g. "de",
+	// "en-US"). Used by subcommands to select the correct i18n variant.
+	// Returns "" on any error, which i18n.T treats as English.
+	LocaleOf func(mmUserID string) string
 }
 
 // Execute dispatches the slash-command to the right subcommand.
@@ -70,8 +76,21 @@ func (h *Handler) Execute(args *model.CommandArgs) (*model.CommandResponse, *mod
 	case "help":
 		return h.help(args)
 	default:
-		return ephemeral(fmt.Sprintf("Unbekannter Subcommand: %s. /opentalk help für Hilfe.", sub)), nil
+		locale := h.localeOf(args.UserId)
+		return ephemeral(fmt.Sprintf(i18n.T(locale, i18n.Translatable{
+			DE: "Unbekannter Subcommand: %s. /opentalk help für Hilfe.",
+			EN: "Unknown subcommand: %s. Use /opentalk help for help.",
+		}), sub)), nil
 	}
+}
+
+// localeOf is a nil-safe wrapper around h.LocaleOf. Returns "" (→ English)
+// when LocaleOf is not wired or the user ID is empty.
+func (h *Handler) localeOf(mmUserID string) string {
+	if h.LocaleOf == nil || mmUserID == "" {
+		return ""
+	}
+	return h.LocaleOf(mmUserID)
 }
 
 func ephemeral(msg string) *model.CommandResponse {
