@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/oidc"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/opentalk"
 )
 
 type Configuration struct {
@@ -55,6 +56,9 @@ func (c *Configuration) IsValid() error {
 	if c.InviteExpirationHours < 1 {
 		return fmt.Errorf("InviteExpirationHours must be >= 1, got %d", c.InviteExpirationHours)
 	}
+	if len(c.TokenEncryptionKey) < 32 {
+		return errors.New("TokenEncryptionKey must be at least 32 characters (used to derive a 32-byte AES key)")
+	}
 	return nil
 }
 
@@ -91,6 +95,13 @@ func (p *Plugin) OnConfigurationChange() error {
 	}
 
 	p.setConfiguration(configuration)
+
+	// Hoist the OpenTalk client so both ServeHTTP and CreateMeeting share one
+	// instance. The client is stateless so a hot swap on config change is safe;
+	// guard the write behind the existing configurationLock.
+	p.configurationLock.Lock()
+	p.otClient = opentalk.NewClient(configuration.OpenTalkControllerURL)
+	p.configurationLock.Unlock()
 
 	redirectURL := fmt.Sprintf("%s/plugins/%s/oauth/callback", p.getSiteURL(), pluginID)
 	client, err := oidc.NewClient(context.Background(), oidc.Config{

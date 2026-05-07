@@ -408,6 +408,14 @@ func (h *Handlers) MeetingsHeartbeat(w nethttp.ResponseWriter, r *nethttp.Reques
 		return
 	}
 
+	if am.HostUserID != mmUserID {
+		// Only the host may advance the heartbeat timestamp. Non-host
+		// members get a quiet 204 so the webapp's fire-and-forget
+		// pattern needs no error path.
+		w.WriteHeader(nethttp.StatusNoContent)
+		return
+	}
+
 	am.LastHeartbeat = time.Now().UTC()
 	if sErr := h.Store.SaveActiveMeeting(am); sErr != nil {
 		nethttp.Error(w, "save heartbeat: "+sErr.Error(), nethttp.StatusInternalServerError)

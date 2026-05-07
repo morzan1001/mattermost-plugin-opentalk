@@ -67,6 +67,22 @@ func TestConfiguration_IsValid(t *testing.T) {
 		assert.Contains(t, err.Error(), "InviteExpirationHours")
 	})
 
+	t.Run("rejects token encryption key shorter than 32 chars", func(t *testing.T) {
+		c := &Configuration{
+			OpenTalkControllerURL: "https://controller.example",
+			OpenTalkFrontendURL:   "https://opentalk.example",
+			OpenTalkRoomserverURL: "wss://controller.example",
+			OIDCAuthority:         "https://keycloak.example/realms/opentalk",
+			OIDCClientID:          "mattermost-plugin-opentalk",
+			OIDCClientSecret:      "secret",
+			InviteExpirationHours: 24,
+			TokenEncryptionKey:    "tooshort",
+		}
+		err := c.IsValid()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "TokenEncryptionKey")
+	})
+
 	t.Run("accepts complete config", func(t *testing.T) {
 		c := &Configuration{
 			OpenTalkControllerURL: "https://controller.example",
@@ -76,6 +92,7 @@ func TestConfiguration_IsValid(t *testing.T) {
 			OIDCClientID:          "mattermost-plugin-opentalk",
 			OIDCClientSecret:      "secret",
 			InviteExpirationHours: 24,
+			TokenEncryptionKey:    "a-32-byte-encryption-key-padded!",
 		}
 		err := c.IsValid()
 		assert.NoError(t, err)
@@ -133,6 +150,7 @@ func TestPlugin_OnConfigurationChange(t *testing.T) {
 				cfg.OIDCClientSecret = "secret"
 				cfg.OIDCScopes = "openid email profile offline_access"
 				cfg.InviteExpirationHours = 24
+				cfg.TokenEncryptionKey = "a-32-byte-encryption-key-padded!"
 				return nil
 			})
 		api.On("GetConfig").Return(mmConfig)
