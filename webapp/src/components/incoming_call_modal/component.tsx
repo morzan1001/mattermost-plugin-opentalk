@@ -10,9 +10,9 @@ import {
     type IncomingCall,
 } from '../../store/slice_incoming_calls';
 import {useT} from '../../util/i18n';
-import {selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
+import {PLUGIN_STATE_KEY, selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
 
-const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
+const stateKey = PLUGIN_STATE_KEY;
 
 const IncomingCallModal: React.FC = () => {
     const dispatch = useDispatch();

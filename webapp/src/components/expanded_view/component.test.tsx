@@ -25,7 +25,9 @@ jest.mock('../../conference/livekit/track_registry', () => ({
     clear: jest.fn(),
 }));
 
-const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
+import {PLUGIN_STATE_KEY} from '../../util/selectors';
+
+const stateKey = PLUGIN_STATE_KEY;
 
 const STORAGE_KEY = 'opentalk:layout-mode:v1';
 

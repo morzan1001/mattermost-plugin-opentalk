@@ -1,9 +1,9 @@
 import React, {useEffect, useMemo, useRef} from 'react';
 import {useSelector} from 'react-redux';
 import * as trackRegistry from '../../conference/livekit/track_registry';
-import {selectSessionStatus} from '../../util/selectors';
+import {PLUGIN_STATE_KEY, selectSessionStatus} from '../../util/selectors';
 
-const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
+const stateKey = PLUGIN_STATE_KEY;
 
 interface RemoteAudio {
     participantId: string;

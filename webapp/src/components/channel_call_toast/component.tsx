@@ -4,10 +4,10 @@ import {useDispatch, useSelector, useStore} from 'react-redux';
 import {startConferenceConnection} from '../../conference/controller';
 import {activeMeetingDismissed, type ActiveMeeting} from '../../store/slice_active_meetings';
 import {useT} from '../../util/i18n';
-import {selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
+import {PLUGIN_STATE_KEY, selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
 import {PhoneIcon} from '../icons';
 
-const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
+const stateKey = PLUGIN_STATE_KEY;
 
 const toastStyle: React.CSSProperties = {
     position: 'fixed',

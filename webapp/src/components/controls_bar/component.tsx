@@ -4,7 +4,7 @@ import {useSelector, useDispatch} from 'react-redux';
 import {toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand} from '../../conference/controller';
 import {setExpanded} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {selectIsHost, selectLocalParticipantId} from '../../util/selectors';
+import {PLUGIN_STATE_KEY, selectIsHost, selectLocalParticipantId} from '../../util/selectors';
 import {
     MicIcon,
     MicOffIcon,
@@ -18,7 +18,7 @@ import {
     ExpandIcon,
 } from '../icons';
 
-const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
+const stateKey = PLUGIN_STATE_KEY;
 
 export const baseButtonStyle: React.CSSProperties = {
     display: 'inline-flex',

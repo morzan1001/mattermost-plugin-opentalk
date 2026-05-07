@@ -16,7 +16,9 @@ import {ControlsBar} from './component';
 
 import {toggleMic} from '../../conference/controller';
 
-const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
+import {PLUGIN_STATE_KEY} from '../../util/selectors';
+
+const stateKey = PLUGIN_STATE_KEY;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeStore(session: any = {}) {

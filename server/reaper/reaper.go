@@ -6,6 +6,7 @@ package reaper
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/mattermost/mattermost/server/public/plugin"
@@ -26,6 +27,7 @@ type Reaper struct {
 	endMeeting EndMeetingFunc
 	interval   time.Duration
 	staleness  time.Duration
+	mu         sync.Mutex
 	cancel     context.CancelFunc
 }
 
@@ -44,6 +46,8 @@ func New(api plugin.API, s *store.Store, end EndMeetingFunc, interval, staleness
 
 // Start begins the periodic loop. Idempotent.
 func (r *Reaper) Start() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.cancel != nil {
 		return
 	}
@@ -54,6 +58,8 @@ func (r *Reaper) Start() {
 
 // Stop terminates the loop. Idempotent.
 func (r *Reaper) Stop() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.cancel != nil {
 		r.cancel()
 		r.cancel = nil

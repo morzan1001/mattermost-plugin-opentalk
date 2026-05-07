@@ -1,8 +1,10 @@
 import React, {useEffect, useMemo, useRef} from 'react';
 import {useSelector} from 'react-redux';
-import * as trackRegistry from '../../conference/livekit/track_registry';
 
-const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
+import * as trackRegistry from '../../conference/livekit/track_registry';
+import {PLUGIN_STATE_KEY} from '../../util/selectors';
+
+const stateKey = PLUGIN_STATE_KEY;
 
 interface VideoTile {
     participantId: string;

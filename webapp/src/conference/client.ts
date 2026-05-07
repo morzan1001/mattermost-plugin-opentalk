@@ -6,6 +6,7 @@ import type {Participant} from './signaling/modules/core';
 export interface ConnectedEvent {
     participants: Participant[];
     livekit?: {url: string; token: string};
+    isHost: boolean;
 }
 
 export interface LiveKitCredentialsEvent {

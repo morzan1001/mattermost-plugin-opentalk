@@ -13,7 +13,16 @@ func TestHashKey_StableHash(t *testing.T) {
 	h2 := hashKey("user_info_", "abc123")
 	assert.Equal(t, h1, h2, "same inputs must hash to same key")
 	assert.NotEqual(t, h1, hashKey("user_info_", "abc124"))
-	assert.True(t, len(h1) <= 50, "key must fit Mattermost KV-key limit")
+	assert.True(t, len(h1) <= 150, "key must fit Mattermost KV-key limit (150 runes)")
+}
+
+func TestDismissalKey_FitsKVLimit(t *testing.T) {
+	// Realistic worst-case: 26-char channel ID + 36-char UUID room ID + separators.
+	channelID := "abcdefghijklmnopqrstuvwxyz" // 26 chars
+	roomID := "12345678-1234-1234-1234-123456789012" // 36-char UUID
+	key := dismissalKey(channelID, roomID)
+	assert.True(t, len(key) <= 150,
+		"dismissal key length %d must fit Mattermost 150-rune KV-key limit", len(key))
 }
 
 func TestStore_GetSetDelete(t *testing.T) {

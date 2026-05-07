@@ -44,6 +44,8 @@ type Plugin struct {
 	oidcClient *oidc.Client
 	oidcMu     sync.RWMutex
 
+	otClient *opentalk.Client
+
 	reaper *reaper.Reaper
 }
 
@@ -163,6 +165,12 @@ func (p *Plugin) getOIDCClient() *oidc.Client {
 	return p.oidcClient
 }
 
+func (p *Plugin) getOTClient() *opentalk.Client {
+	p.configurationLock.RLock()
+	defer p.configurationLock.RUnlock()
+	return p.otClient
+}
+
 func (p *Plugin) setOIDCClient(c *oidc.Client) {
 	p.oidcMu.Lock()
 	defer p.oidcMu.Unlock()
@@ -218,7 +226,7 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			p.API.PublishWebSocketEvent(event, payload, &model.WebsocketBroadcast{})
 		},
 
-		OpenTalk:      opentalk.NewClient(cfg.OpenTalkControllerURL),
+		OpenTalk:      p.getOTClient(),
 		RoomserverURL: cfg.OpenTalkRoomserverURL,
 		Defaults: pluginhttp.MeetingDefaults{
 			EnableSIP:             cfg.DefaultEnableSIP,
@@ -313,7 +321,7 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		return nil, err
 	}
 
-	ot := opentalk.NewClient(cfg.OpenTalkControllerURL)
+	ot := p.getOTClient()
 
 	room, err := ot.CreateRoom(token, opentalk.CreateRoomRequest{
 		EnableSIP:   cfg.DefaultEnableSIP,

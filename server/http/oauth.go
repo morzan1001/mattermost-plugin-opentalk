@@ -72,9 +72,11 @@ func (h *Handlers) OAuthStart(w nethttp.ResponseWriter, r *nethttp.Request) {
 }
 
 const successPage = `<!DOCTYPE html>
-<html lang="de"><head><meta charset="utf-8"><title>OpenTalk verbunden</title></head>
-<body><h1>Verbunden mit OpenTalk</h1>
-<p>Du kannst dieses Fenster jetzt schließen.</p>
+<html><head><meta charset="utf-8"><title>OpenTalk</title></head>
+<body style="font-family:system-ui;text-align:center;padding:48px;">
+<h1>Connected to OpenTalk</h1>
+<p lang="en">You can close this window now.</p>
+<p lang="de">Du kannst dieses Fenster jetzt schließen.</p>
 <script>setTimeout(function(){window.close();},1500);</script>
 </body></html>`
 

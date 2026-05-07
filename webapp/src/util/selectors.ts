@@ -3,7 +3,9 @@ type AnyState = any;
 
 export {selectCurrentDisplayName} from './display_name';
 
-const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
+export const PLUGIN_STATE_KEY = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
+
+const stateKey = PLUGIN_STATE_KEY;
 
 // Session selectors
 

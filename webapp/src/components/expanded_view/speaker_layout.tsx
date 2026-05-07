@@ -2,9 +2,11 @@ import React from 'react';
 import {useSelector} from 'react-redux';
 
 import {ParticipantTile} from './participant_tile';
-import {useT} from '../../util/i18n';
 
-const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
+import {useT} from '../../util/i18n';
+import {PLUGIN_STATE_KEY} from '../../util/selectors';
+
+const stateKey = PLUGIN_STATE_KEY;
 
 export const SpeakerLayout: React.FC = () => {
     const t = useT();

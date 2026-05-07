@@ -10,10 +10,10 @@ import {useMeetingDuration} from '../../hooks/use_meeting_duration';
 import {useResizable} from '../../hooks/use_resizable';
 import {setMinimized} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {selectIsHost, selectIsMinimized, selectLocalParticipantId} from '../../util/selectors';
+import {PLUGIN_STATE_KEY, selectIsHost, selectIsMinimized, selectLocalParticipantId} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 
-const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
+const stateKey = PLUGIN_STATE_KEY;
 
 const MeetingMiniBar: React.FC = () => {
     const dispatch = useDispatch();

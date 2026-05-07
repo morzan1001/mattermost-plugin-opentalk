@@ -13,7 +13,7 @@ var ErrNotFound = errors.New("key not found in store")
 
 // hashKey derives a fixed-length, prefix-stable KV key from a free-form
 // identifier. 16 hex chars of SHA-256 keep the key well below Mattermost's
-// 50-byte KV-key limit.
+// 150-rune KV-key limit (model.KeyValueKeyMaxRunes = 150).
 func hashKey(prefix, id string) string {
 	sum := sha256.Sum256([]byte(id))
 	return prefix + hex.EncodeToString(sum[:8])
@@ -52,11 +52,10 @@ func (s *Store) Delete(key string) error {
 	return nil
 }
 
-// PurgeKeysWithPrefix iterates all KV keys for the plugin and deletes those
-// that start with the given prefix. Used by Plugin.OnActivate to drop stale
-// runtime state (active meetings, dismissals) left over from a previous
-// deploy so a brand-new plugin process never inherits ringing-call state
-// it cannot reconcile. Returns the count of deleted keys.
+// PurgeKeysWithPrefix iterates the plugin's KV-store and deletes every key
+// starting with prefix. Returns the count deleted. Callers handle their own
+// error policy; transient KV failures are logged via the plugin API and
+// the loop continues.
 func (s *Store) PurgeKeysWithPrefix(prefix string) (int, error) {
 	deleted := 0
 	page := 0

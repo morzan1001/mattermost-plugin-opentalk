@@ -39,6 +39,7 @@ import {
     type TrackKind,
 } from '../store/slice_tracks';
 import {t} from '../util/i18n';
+import {PLUGIN_STATE_KEY} from '../util/selectors';
 
 const ALLOWED_ROLES = new Set<string>(['moderator', 'user', 'guest']);
 
@@ -84,7 +85,7 @@ function setOpenTalkStatus(): void {
         credentials: 'include',
         body: JSON.stringify({
             emoji: 'phone',
-            text: 'Im OpenTalk-Meeting',
+            text: t({de: 'Im OpenTalk-Meeting', en: 'In an OpenTalk meeting'}),
             duration: 'four_hours',
         }),
     }).catch(() => { /* swallow */ });
@@ -124,8 +125,7 @@ export async function startConferenceConnection(
     activeClient = client;
 
     client.on('connected', (data) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const isHost = (data as any).isHost === true;
+        const isHost = data.isHost === true;
 
         // Self is always the first entry: ConferenceRoom.connect() prepends it
         // from the joinSuccess top-level id.
@@ -232,6 +232,7 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         store.dispatch(setCamEnabled(false));
         store.dispatch(tracksReset());
         trackRegistry.clear();
+        activeLiveKit = null;
     });
 
     // Differentiate screen-share from camera: both have kind:'video' in LiveKit
@@ -317,7 +318,7 @@ export async function endActiveMeeting(): Promise<void> {
         return;
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const channelID: string | undefined = activeStore.getState()?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk']?.session?.channelID;
+    const channelID: string | undefined = activeStore.getState()?.[PLUGIN_STATE_KEY]?.session?.channelID;
     await leaveActiveConference();
     if (!channelID) {
         return;
@@ -453,7 +454,7 @@ export function _reset(): void {
 // Returns a JSON string (not a live object) so devtools doesn't truncate arrays.
 export function debugState(): string {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stateSlice: any = activeStore?.getState()?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk'] ?? {};
+    const stateSlice: any = activeStore?.getState()?.[PLUGIN_STATE_KEY] ?? {};
     const snapshot = {
         hasClient: activeClient !== null,
         hasLiveKit: activeLiveKit !== null,
