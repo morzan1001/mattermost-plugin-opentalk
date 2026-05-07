@@ -112,11 +112,11 @@ describe('IncomingCallModal', () => {
         );
         renderModal(store);
         expect(screen.getByTestId('incoming-call-modal')).toBeInTheDocument();
-        expect(screen.getByText('Alice Tester ruft an')).toBeInTheDocument();
-        expect(screen.getByText('klingelt …')).toBeInTheDocument();
+        expect(screen.getByText('Alice Tester is calling')).toBeInTheDocument();
+        expect(screen.getByText('ringing …')).toBeInTheDocument();
     });
 
-    it('Annehmen calls startConferenceConnection with correct args and dispatches incomingCallCleared', async () => {
+    it('Accept calls startConferenceConnection with correct args and dispatches incomingCallCleared', async () => {
         const store = makeStore(
             {status: 'idle'},
             {byChannelID: {'ch-1': mockCall}},
@@ -124,7 +124,7 @@ describe('IncomingCallModal', () => {
         renderModal(store);
 
         await act(async () => {
-            fireEvent.click(screen.getByText('Annehmen'));
+            fireEvent.click(screen.getByText('Accept'));
         });
 
         expect(startConferenceConnection).toHaveBeenCalledWith(
@@ -144,7 +144,7 @@ describe('IncomingCallModal', () => {
         );
     });
 
-    it('Ablehnen calls dismissIncomingCall with (channelID, roomID), dispatches incomingCallDismissed then incomingCallCleared', async () => {
+    it('Decline calls dismissIncomingCall with (channelID, roomID), dispatches incomingCallDismissed then incomingCallCleared', async () => {
         jest.useFakeTimers();
         const store = makeStore(
             {status: 'idle'},
@@ -153,7 +153,7 @@ describe('IncomingCallModal', () => {
         renderModal(store);
 
         await act(async () => {
-            fireEvent.click(screen.getByText('Ablehnen'));
+            fireEvent.click(screen.getByText('Decline'));
         });
 
         expect(dismissIncomingCall).toHaveBeenCalledWith('ch-1', 'room-1');

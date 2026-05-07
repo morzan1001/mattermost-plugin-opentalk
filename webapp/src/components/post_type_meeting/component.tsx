@@ -2,6 +2,7 @@ import React from 'react';
 import {useStore, useSelector} from 'react-redux';
 
 import {startConferenceConnection} from '../../conference/controller';
+import {useT} from '../../util/i18n';
 import {selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
 import {OpenTalkLogoIcon, VideoIcon} from '../icons';
 
@@ -145,6 +146,7 @@ const livePulse: React.CSSProperties = {
 
 const PostTypeMeeting: React.FC<Props> = ({post}) => {
     const store = useStore();
+    const t = useT();
 
     const currentDisplayName = useSelector(selectCurrentDisplayName);
     const sessionStatus = useSelector(selectSessionStatus);
@@ -166,19 +168,19 @@ const PostTypeMeeting: React.FC<Props> = ({post}) => {
         statusBadge = (
             <span style={{...statusBadgeBase, background: 'rgba(0, 181, 156, 0.14)', color: opentalkTealDark}}>
                 <span style={livePulse}/>
-                {'Live'}
+                {t({de: 'Live', en: 'Live'})}
             </span>
         );
     } else if (p.status === 'ENDED') {
         statusBadge = (
             <span style={{...statusBadgeBase, background: 'rgba(63, 67, 80, 0.08)', color: 'rgba(63, 67, 80, 0.7)'}}>
-                {'Beendet'}
+                {t({de: 'Beendet', en: 'Ended'})}
             </span>
         );
     } else if (p.status === 'MISSED') {
         statusBadge = (
             <span style={{...statusBadgeBase, background: 'rgba(227, 53, 76, 0.12)', color: '#b32a3e'}}>
-                {'Verpasst'}
+                {t({de: 'Verpasst', en: 'Missed'})}
             </span>
         );
     }
@@ -192,10 +194,10 @@ const PostTypeMeeting: React.FC<Props> = ({post}) => {
                         <OpenTalkLogoIcon size={20}/>
                     </span>
                     <div style={{display: 'flex', flexDirection: 'column', lineHeight: 1.25, minWidth: 0}}>
-                        <span style={{fontSize: 14, fontWeight: 600}}>{'OpenTalk-Meeting'}</span>
+                        <span style={{fontSize: 14, fontWeight: 600}}>{t({de: 'OpenTalk-Meeting', en: 'OpenTalk meeting'})}</span>
                         <span style={{fontSize: 12, opacity: 0.6}}>
                             <strong style={{fontWeight: 600}}>{`@${p.host_username}`}</strong>
-                            {' lädt ein'}
+                            {t({de: ' lädt ein', en: ' is inviting'})}
                         </span>
                     </div>
                     {statusBadge && <div style={{marginLeft: 'auto'}}>{statusBadge}</div>}
@@ -203,7 +205,7 @@ const PostTypeMeeting: React.FC<Props> = ({post}) => {
                 <div style={bodyStyle}>
                     {p.dial_in_number && p.dial_in_pin && (
                         <div style={dialinStyle}>
-                            {`Telefon ${p.dial_in_number} · PIN ${p.dial_in_pin}`}
+                            {`${t({de: 'Telefon', en: 'Phone'})} ${p.dial_in_number} · PIN ${p.dial_in_pin}`}
                         </div>
                     )}
 
@@ -213,22 +215,22 @@ const PostTypeMeeting: React.FC<Props> = ({post}) => {
                             onClick={onJoin}
                             style={inMeetingAlready ? joinButtonDisabledStyle : joinButtonStyle}
                             disabled={inMeetingAlready}
-                            title={inMeetingAlready ? 'Du bist bereits in einem Meeting' : 'Meeting beitreten'}
+                            title={inMeetingAlready ? t({de: 'Du bist bereits in einem Meeting', en: 'You are already in a meeting'}) : t({de: 'Meeting beitreten', en: 'Join meeting'})}
                         >
                             <VideoIcon/>
-                            <span>{inMeetingAlready ? 'Bereits im Meeting' : 'Meeting beitreten'}</span>
+                            <span>{inMeetingAlready ? t({de: 'Bereits im Meeting', en: 'Already in meeting'}) : t({de: 'Meeting beitreten', en: 'Join meeting'})}</span>
                         </button>
                     )}
 
                     {p.status === 'ENDED' && p.duration_seconds && (
                         <div style={{fontSize: 13, color: 'rgba(63, 67, 80, 0.7)'}}>
-                            {`Meeting beendet · Dauer ${formatDuration(p.duration_seconds)}`}
+                            {`${t({de: 'Meeting beendet · Dauer', en: 'Meeting ended · Duration'})} ${formatDuration(p.duration_seconds)}`}
                         </div>
                     )}
 
                     {p.status === 'MISSED' && (
                         <div style={{fontSize: 13, color: 'rgba(63, 67, 80, 0.7)'}}>
-                            {'Meeting verpasst · niemand ist beigetreten'}
+                            {t({de: 'Meeting verpasst · niemand ist beigetreten', en: 'Meeting missed · nobody joined'})}
                         </div>
                     )}
                 </div>

@@ -60,7 +60,7 @@ describe('SpeakerLayout', () => {
             </Provider>,
         );
         expect(getByTestId('speaker-layout-empty')).toBeTruthy();
-        expect(screen.getByText('Niemand im Meeting')).toBeInTheDocument();
+        expect(screen.getByText('Nobody in the meeting')).toBeInTheDocument();
         expect(screen.queryByTestId('speaker-layout')).not.toBeInTheDocument();
     });
 

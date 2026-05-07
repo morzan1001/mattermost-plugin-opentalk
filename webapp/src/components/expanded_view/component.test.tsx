@@ -101,14 +101,14 @@ describe('ExpandedView', () => {
         expect(screen.getByTestId('expanded-view')).toBeInTheDocument();
     });
 
-    it('renders the OpenTalk-Meeting label in the header', () => {
+    it('renders the OpenTalk meeting label in the header', () => {
         const store = makeStore({expanded: true, status: 'connected'});
         render(
             <Provider store={store}>
                 <ExpandedView/>
             </Provider>,
         );
-        expect(screen.getByText('OpenTalk-Meeting')).toBeInTheDocument();
+        expect(screen.getByText('OpenTalk meeting')).toBeInTheDocument();
     });
 
     it('default layout mode (speaker) renders SpeakerLayout', () => {

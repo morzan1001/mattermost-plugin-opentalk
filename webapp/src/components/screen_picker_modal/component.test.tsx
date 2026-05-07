@@ -1,5 +1,7 @@
 import React from 'react';
 import {render, screen, fireEvent, act} from '@testing-library/react';
+import {Provider} from 'react-redux';
+import {createStore} from 'redux';
 
 // The screen_picker module uses module-level singletons. Reset between tests.
 jest.mock('../../conference/livekit/screen_picker', () => {
@@ -29,18 +31,38 @@ import ScreenPickerModal from './component';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPicker: any = jest.requireMock('../../conference/livekit/screen_picker');
 
+function makeStore() {
+    return createStore(() => ({
+        entities: {
+            users: {
+                currentUserId: 'u1',
+                profiles: {u1: {}},
+            },
+        },
+    }));
+}
+
+function renderModal() {
+    const store = makeStore();
+    return render(
+        <Provider store={store}>
+            <ScreenPickerModal/>
+        </Provider>,
+    );
+}
+
 describe('ScreenPickerModal', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
     it('renders nothing when the picker is closed', () => {
-        render(<ScreenPickerModal />);
+        renderModal();
         expect(screen.queryByTestId('screen-picker-modal')).toBeNull();
     });
 
     it('renders tiles when subscriber state opens with sources', () => {
-        render(<ScreenPickerModal />);
+        renderModal();
         act(() => {
             mockPicker.__fireState({
                 open: true,
@@ -57,7 +79,7 @@ describe('ScreenPickerModal', () => {
     });
 
     it('clicking a tile calls resolveScreenPicker with the source id', () => {
-        render(<ScreenPickerModal />);
+        renderModal();
         act(() => {
             mockPicker.__fireState({
                 open: true,
@@ -70,7 +92,7 @@ describe('ScreenPickerModal', () => {
     });
 
     it('pressing ESC calls resolveScreenPicker(null)', () => {
-        render(<ScreenPickerModal />);
+        renderModal();
         act(() => {
             mockPicker.__fireState({
                 open: true,

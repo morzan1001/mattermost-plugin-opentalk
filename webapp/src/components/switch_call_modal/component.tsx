@@ -8,6 +8,7 @@ import {
     incomingCallCleared,
     type IncomingCall,
 } from '../../store/slice_incoming_calls';
+import {useT} from '../../util/i18n';
 import {selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
 
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
@@ -36,6 +37,7 @@ const switchStyle: React.CSSProperties = {
 const SwitchCallModal: React.FC = () => {
     const dispatch = useDispatch();
     const store = useStore();
+    const t = useT();
 
     const sessionStatus = useSelector(selectSessionStatus);
 
@@ -115,10 +117,10 @@ const SwitchCallModal: React.FC = () => {
                     boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
                 }}
             >
-                <div style={{fontSize: 16, fontWeight: 600, marginBottom: 6}}>{'Du bist bereits in einem Meeting'}</div>
+                <div style={{fontSize: 16, fontWeight: 600, marginBottom: 6}}>{t({de: 'Du bist bereits in einem Meeting', en: 'You are already in a meeting'})}</div>
                 <div style={{fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.4, marginBottom: 16}}>
                     <strong style={{color: 'white'}}>{call.hostName}</strong>
-                    {' ruft dich an. Möchtest du das aktuelle Meeting verlassen und wechseln?'}
+                    {t({de: ' ruft dich an. Möchtest du das aktuelle Meeting verlassen und wechseln?', en: ' is calling you. Do you want to leave the current meeting and switch?'})}
                 </div>
                 <div style={{display: 'flex', gap: 8, justifyContent: 'flex-end'}}>
                     <button
@@ -126,13 +128,13 @@ const SwitchCallModal: React.FC = () => {
                         onClick={onCancel}
                         style={cancelStyle}
                         disabled={busy}
-                    >{'Abbrechen'}</button>
+                    >{t({de: 'Abbrechen', en: 'Cancel'})}</button>
                     <button
                         type='button'
                         onClick={onSwitch}
                         style={switchStyle}
                         disabled={busy}
-                    >{busy ? '...' : 'Wechseln'}</button>
+                    >{busy ? '...' : t({de: 'Wechseln', en: 'Switch'})}</button>
                 </div>
             </div>
         </div>

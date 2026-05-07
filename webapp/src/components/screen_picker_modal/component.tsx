@@ -2,10 +2,12 @@ import React, {useEffect, useState} from 'react';
 
 import type {DesktopSource} from '../../conference/livekit/desktop_capturer';
 import {subscribeScreenPicker, resolveScreenPicker} from '../../conference/livekit/screen_picker';
+import {useT} from '../../util/i18n';
 
 const ScreenPickerModal: React.FC = () => {
     const [open, setOpen] = useState(false);
     const [sources, setSources] = useState<DesktopSource[]>([]);
+    const t = useT();
 
     useEffect(() => {
         return subscribeScreenPicker((s) => {
@@ -58,10 +60,10 @@ const ScreenPickerModal: React.FC = () => {
                     boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
                 }}
                 role='dialog'
-                aria-label='Bildschirm oder Fenster auswählen'
+                aria-label={t({de: 'Bildschirm oder Fenster auswählen', en: 'Select screen or window'})}
             >
                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14}}>
-                    <div style={{fontSize: 16, fontWeight: 600}}>{'Bildschirm oder Fenster auswählen'}</div>
+                    <div style={{fontSize: 16, fontWeight: 600}}>{t({de: 'Bildschirm oder Fenster auswählen', en: 'Select screen or window'})}</div>
                     <button
                         type='button'
                         onClick={() => resolveScreenPicker(null)}
@@ -73,14 +75,14 @@ const ScreenPickerModal: React.FC = () => {
                             cursor: 'pointer',
                             padding: 4,
                         }}
-                        aria-label='Schließen'
+                        aria-label={t({de: 'Schließen', en: 'Close'})}
                     >
                         {'×'}
                     </button>
                 </div>
                 {sources.length === 0 ? (
                     <div style={{padding: 24, textAlign: 'center', color: 'rgba(255,255,255,0.6)'}}>
-                        {'Keine Bildschirme oder Fenster verfügbar.'}
+                        {t({de: 'Keine Bildschirme oder Fenster verfügbar.', en: 'No screens or windows available.'})}
                     </div>
                 ) : (
                     <div

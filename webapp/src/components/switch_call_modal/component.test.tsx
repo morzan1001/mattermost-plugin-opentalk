@@ -99,13 +99,13 @@ describe('SwitchCallModal', () => {
         );
         renderModal(store);
         expect(screen.getByTestId('switch-call-modal')).toBeInTheDocument();
-        expect(screen.getByText('Du bist bereits in einem Meeting')).toBeInTheDocument();
+        expect(screen.getByText('You are already in a meeting')).toBeInTheDocument();
         expect(screen.getByText('Bob Caller')).toBeInTheDocument();
-        expect(screen.getByText('Wechseln')).toBeInTheDocument();
-        expect(screen.getByText('Abbrechen')).toBeInTheDocument();
+        expect(screen.getByText('Switch')).toBeInTheDocument();
+        expect(screen.getByText('Cancel')).toBeInTheDocument();
     });
 
-    it('click Abbrechen calls dismissIncomingCall and dispatches incomingCallDismissed', async () => {
+    it('click Cancel calls dismissIncomingCall and dispatches incomingCallDismissed', async () => {
         jest.useFakeTimers();
         const store = makeStore(
             {status: 'connected'},
@@ -114,7 +114,7 @@ describe('SwitchCallModal', () => {
         renderModal(store);
 
         await act(async () => {
-            fireEvent.click(screen.getByText('Abbrechen'));
+            fireEvent.click(screen.getByText('Cancel'));
         });
 
         expect(dismissIncomingCall).toHaveBeenCalledWith('ch-1', 'room-1');
@@ -143,7 +143,7 @@ describe('SwitchCallModal', () => {
         jest.useRealTimers();
     });
 
-    it('click Wechseln calls leaveActiveConference then startConferenceConnection and dispatches incomingCallCleared', async () => {
+    it('click Switch calls leaveActiveConference then startConferenceConnection and dispatches incomingCallCleared', async () => {
         jest.useFakeTimers();
         const store = makeStore(
             {status: 'connected'},
@@ -151,9 +151,9 @@ describe('SwitchCallModal', () => {
         );
         renderModal(store);
 
-        // Click Wechseln; leaveActiveConference resolves, then there's a
+        // Click Switch; leaveActiveConference resolves, then there's a
         // 50 ms settle timeout before startConferenceConnection is called.
-        fireEvent.click(screen.getByText('Wechseln'));
+        fireEvent.click(screen.getByText('Switch'));
 
         // Let leaveActiveConference's promise microtask queue flush.
         await act(async () => {

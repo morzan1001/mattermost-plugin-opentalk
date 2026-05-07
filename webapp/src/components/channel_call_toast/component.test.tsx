@@ -125,9 +125,9 @@ describe('ChannelCallToast', () => {
         const store = makeStore({channelType: 'O'});
         renderToast(store);
         expect(screen.getByTestId('channel-call-toast')).toBeInTheDocument();
-        expect(screen.getByText('📞 Meeting läuft · gestartet von Alice')).toBeInTheDocument();
-        expect(screen.getByText('Beitreten')).toBeInTheDocument();
-        expect(screen.getByLabelText('Hinweis ausblenden')).toBeInTheDocument();
+        expect(screen.getByText('📞 Meeting running · started by Alice')).toBeInTheDocument();
+        expect(screen.getByText('Join')).toBeInTheDocument();
+        expect(screen.getByLabelText('Dismiss notification')).toBeInTheDocument();
     });
 
     it('renders banner when active meeting exists in a private channel', () => {
@@ -145,12 +145,12 @@ describe('ChannelCallToast', () => {
         expect(container.firstChild).toBeNull();
     });
 
-    it('click Beitreten calls startConferenceConnection with (roomID, channelID, displayName, store)', async () => {
+    it('click Join calls startConferenceConnection with (roomID, channelID, displayName, store)', async () => {
         const store = makeStore({channelType: 'O'});
         renderToast(store);
 
         await act(async () => {
-            fireEvent.click(screen.getByText('Beitreten'));
+            fireEvent.click(screen.getByText('Join'));
         });
 
         expect(startConferenceConnection).toHaveBeenCalledWith(
@@ -165,7 +165,7 @@ describe('ChannelCallToast', () => {
         const store = makeStore({channelType: 'O'});
         renderToast(store);
 
-        fireEvent.click(screen.getByLabelText('Hinweis ausblenden'));
+        fireEvent.click(screen.getByLabelText('Dismiss notification'));
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const dispatched = (store as any).dispatchedActions as unknown[];

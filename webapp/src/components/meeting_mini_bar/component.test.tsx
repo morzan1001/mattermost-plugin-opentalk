@@ -44,7 +44,7 @@ describe('MeetingMiniBar', () => {
                 <MeetingMiniBar/>
             </Provider>,
         );
-        expect(screen.getByText(/Verbinde/)).toBeInTheDocument();
+        expect(screen.getByText(/Connecting/)).toBeInTheDocument();
     });
 
     it('renders connected with mic/cam/screen/leave buttons', () => {
@@ -54,10 +54,10 @@ describe('MeetingMiniBar', () => {
             </Provider>,
         );
         expect(screen.getByText(/3/)).toBeInTheDocument();
-        expect(screen.getByTitle('Mikrofon stummschalten')).toBeInTheDocument();
-        expect(screen.getByTitle('Kamera einschalten')).toBeInTheDocument();
-        expect(screen.getByTitle('Bildschirm teilen')).toBeInTheDocument();
-        expect(screen.getByRole("button", {name: /Meeting verlassen/})).toBeInTheDocument();
+        expect(screen.getByTitle('Mute microphone')).toBeInTheDocument();
+        expect(screen.getByTitle('Turn on camera')).toBeInTheDocument();
+        expect(screen.getByTitle('Share screen')).toBeInTheDocument();
+        expect(screen.getByRole("button", {name: /Leave meeting/})).toBeInTheDocument();
     });
 
     it('clicking mic button calls toggleMic', () => {
@@ -66,7 +66,7 @@ describe('MeetingMiniBar', () => {
                 <MeetingMiniBar/>
             </Provider>,
         );
-        fireEvent.click(screen.getByTitle('Mikrofon einschalten'));
+        fireEvent.click(screen.getByTitle('Unmute microphone'));
         expect(toggleMic).toHaveBeenCalled();
     });
 
@@ -76,7 +76,7 @@ describe('MeetingMiniBar', () => {
                 <MeetingMiniBar/>
             </Provider>,
         );
-        fireEvent.click(screen.getByTitle('Kamera einschalten'));
+        fireEvent.click(screen.getByTitle('Turn on camera'));
         expect(toggleCam).toHaveBeenCalled();
     });
 
@@ -86,7 +86,7 @@ describe('MeetingMiniBar', () => {
                 <MeetingMiniBar/>
             </Provider>,
         );
-        fireEvent.click(screen.getByTitle('Bildschirm teilen'));
+        fireEvent.click(screen.getByTitle('Share screen'));
         expect(toggleScreenShare).toHaveBeenCalled();
     });
 
@@ -96,7 +96,7 @@ describe('MeetingMiniBar', () => {
                 <MeetingMiniBar/>
             </Provider>,
         );
-        fireEvent.click(screen.getByRole("button", {name: /Meeting verlassen/}));
+        fireEvent.click(screen.getByRole("button", {name: /Leave meeting/}));
         expect(leaveActiveConference).toHaveBeenCalled();
     });
 });

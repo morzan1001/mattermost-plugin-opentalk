@@ -9,6 +9,7 @@ import {useDraggable} from '../../hooks/use_draggable';
 import {useMeetingDuration} from '../../hooks/use_meeting_duration';
 import {useResizable} from '../../hooks/use_resizable';
 import {setMinimized} from '../../store/slice_session';
+import {useT} from '../../util/i18n';
 import {selectIsHost, selectIsMinimized, selectLocalParticipantId} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 
@@ -16,6 +17,7 @@ const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 const MeetingMiniBar: React.FC = () => {
     const dispatch = useDispatch();
+    const t = useT();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = useSelector((s: any) => s?.[stateKey]?.session ?? {status: 'idle', participantCount: 0});
     const isHost = useSelector(selectIsHost);
@@ -73,8 +75,8 @@ const MeetingMiniBar: React.FC = () => {
             <button
                 type='button'
                 onClick={() => dispatch(setMinimized(false))}
-                title='Wiederherstellen'
-                aria-label='Wiederherstellen'
+                title={t({de: 'Wiederherstellen', en: 'Restore'})}
+                aria-label={t({de: 'Wiederherstellen', en: 'Restore'})}
                 style={{
                     position: 'fixed',
                     bottom: 16,
@@ -155,10 +157,10 @@ const MeetingMiniBar: React.FC = () => {
                     }}
                 >
                     {session.status === 'connecting' && (
-                        <span style={{padding: '0 12px', fontSize: 13}}>{'Verbinde mit OpenTalk-Meeting …'}</span>
+                        <span style={{padding: '0 12px', fontSize: 13}}>{t({de: 'Verbinde mit OpenTalk-Meeting …', en: 'Connecting to OpenTalk meeting …'})}</span>
                     )}
                     {session.status === 'leaving' && (
-                        <span style={{padding: '0 12px', fontSize: 13}}>{'Trenne …'}</span>
+                        <span style={{padding: '0 12px', fontSize: 13}}>{t({de: 'Trenne …', en: 'Disconnecting …'})}</span>
                     )}
                     {session.status === 'connected' && (
                         <>
@@ -173,7 +175,7 @@ const MeetingMiniBar: React.FC = () => {
                                 }}
                             >
                                 <span style={{fontSize: 13, fontWeight: 500}}>
-                                    {`${session.participantCount} Teilnehmer`}
+                                    {`${session.participantCount} ${t({de: 'Teilnehmer', en: 'participants'})}`}
                                 </span>
                                 {duration && (
                                     <span style={{fontSize: 11, opacity: 0.65}}>{duration}</span>
@@ -214,7 +216,7 @@ const MeetingMiniBar: React.FC = () => {
                 {!isMinimized && (
                     <div
                         {...resize.handleProps}
-                        title='Breite ziehen'
+                        title={t({de: 'Breite ziehen', en: 'Drag to resize'})}
                         style={{
                             position: 'absolute',
                             right: 0,
@@ -245,11 +247,11 @@ const MeetingMiniBar: React.FC = () => {
                         zIndex: 10000,
                     }}
                     role='dialog'
-                    aria-label='Meeting verlassen oder beenden?'
+                    aria-label={t({de: 'Meeting verlassen oder beenden?', en: 'Leave or end meeting?'})}
                 >
-                    <div style={{fontSize: 14, fontWeight: 600, marginBottom: 4}}>{'Meeting verlassen?'}</div>
+                    <div style={{fontSize: 14, fontWeight: 600, marginBottom: 4}}>{t({de: 'Meeting verlassen?', en: 'Leave meeting?'})}</div>
                     <div style={{fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 14}}>
-                        {'Du bist Host. Möchtest du nur dich selbst entfernen oder das Meeting für alle beenden?'}
+                        {t({de: 'Du bist Host. Möchtest du nur dich selbst entfernen oder das Meeting für alle beenden?', en: 'You are the host. Do you want to remove only yourself or end the meeting for everyone?'})}
                     </div>
                     <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
                         <button
@@ -268,7 +270,7 @@ const MeetingMiniBar: React.FC = () => {
                                 leaveActiveConference();
                             }}
                         >
-                            {'Nur mich verlassen'}
+                            {t({de: 'Nur mich verlassen', en: 'Leave just for me'})}
                         </button>
                         <button
                             type='button'
@@ -287,7 +289,7 @@ const MeetingMiniBar: React.FC = () => {
                                 endActiveMeeting();
                             }}
                         >
-                            {'Meeting für alle beenden'}
+                            {t({de: 'Meeting für alle beenden', en: 'End meeting for everyone'})}
                         </button>
                         <button
                             type='button'
@@ -302,7 +304,7 @@ const MeetingMiniBar: React.FC = () => {
                             }}
                             onClick={() => setShowLeavePrompt(false)}
                         >
-                            {'Abbrechen'}
+                            {t({de: 'Abbrechen', en: 'Cancel'})}
                         </button>
                     </div>
                 </div>

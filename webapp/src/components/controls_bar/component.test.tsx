@@ -83,7 +83,7 @@ describe('ControlsBar', () => {
                 />
             </Provider>,
         );
-        fireEvent.click(screen.getByTitle('Mikrofon einschalten'));
+        fireEvent.click(screen.getByTitle('Unmute microphone'));
         expect(toggleMic).toHaveBeenCalled();
     });
 
@@ -99,7 +99,7 @@ describe('ControlsBar', () => {
                 />
             </Provider>,
         );
-        fireEvent.click(screen.getByTitle('Meeting verlassen'));
+        fireEvent.click(screen.getByTitle('Leave meeting'));
         expect(onLeave).toHaveBeenCalled();
     });
 
@@ -115,7 +115,7 @@ describe('ControlsBar', () => {
                 />
             </Provider>,
         );
-        fireEvent.click(screen.getByTitle('Minimieren'));
+        fireEvent.click(screen.getByTitle('Minimize'));
         expect(onMinimize).toHaveBeenCalled();
     });
 });

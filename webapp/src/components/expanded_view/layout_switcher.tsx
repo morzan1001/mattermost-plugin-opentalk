@@ -1,6 +1,7 @@
 import React from 'react';
 
 import type {LayoutMode} from '../../hooks/use_layout_mode';
+import {useT} from '../../util/i18n';
 
 export interface LayoutSwitcherProps {
     mode: LayoutMode;
@@ -17,11 +18,7 @@ const containerStyle: React.CSSProperties = {
     gap: 2,
 };
 
-const BUTTONS: Array<{mode: LayoutMode; label: string}> = [
-    {mode: 'speaker', label: 'Sprecher'},
-    {mode: 'grid', label: 'Raster'},
-    {mode: 'screen-focus', label: 'Bildschirm'},
-];
+const MODES: LayoutMode[] = ['speaker', 'grid', 'screen-focus'];
 
 function buttonStyle(active: boolean): React.CSSProperties {
     return {
@@ -37,9 +34,17 @@ function buttonStyle(active: boolean): React.CSSProperties {
 }
 
 export const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({mode, onChange}) => {
+    const t = useT();
+
+    const labels: Record<LayoutMode, string> = {
+        speaker: t({de: 'Sprecher', en: 'Speaker'}),
+        grid: t({de: 'Raster', en: 'Grid'}),
+        'screen-focus': t({de: 'Bildschirm', en: 'Screen'}),
+    };
+
     return (
         <div style={containerStyle}>
-            {BUTTONS.map(({mode: btnMode, label}) => {
+            {MODES.map((btnMode) => {
                 const active = btnMode === mode;
                 return (
                     <button
@@ -50,7 +55,7 @@ export const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({mode, onChange}) 
                         style={buttonStyle(active)}
                         onClick={() => onChange(btnMode)}
                     >
-                        {label}
+                        {labels[btnMode]}
                     </button>
                 );
             })}

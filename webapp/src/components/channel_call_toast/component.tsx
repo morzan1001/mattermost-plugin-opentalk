@@ -3,6 +3,7 @@ import {useDispatch, useSelector, useStore} from 'react-redux';
 
 import {startConferenceConnection} from '../../conference/controller';
 import {activeMeetingDismissed, type ActiveMeeting} from '../../store/slice_active_meetings';
+import {useT} from '../../util/i18n';
 import {selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
 
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
@@ -52,6 +53,7 @@ const dismissButtonStyle: React.CSSProperties = {
 const ChannelCallToast: React.FC = () => {
     const dispatch = useDispatch();
     const store = useStore();
+    const t = useT();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const currentChannelID = useSelector((s: any) => s?.entities?.channels?.currentChannelId as string | undefined);
@@ -102,19 +104,19 @@ const ChannelCallToast: React.FC = () => {
             data-testid='channel-call-toast'
             style={toastStyle}
         >
-            <span>{`📞 Meeting läuft · gestartet von ${meeting.hostName}`}</span>
+            <span>{`📞 ${t({de: 'Meeting läuft · gestartet von', en: 'Meeting running · started by'})} ${meeting.hostName}`}</span>
             <button
                 type='button'
                 onClick={onJoin}
                 style={joinButtonStyle}
             >
-                {'Beitreten'}
+                {t({de: 'Beitreten', en: 'Join'})}
             </button>
             <button
                 type='button'
                 onClick={onDismiss}
                 style={dismissButtonStyle}
-                aria-label='Hinweis ausblenden'
+                aria-label={t({de: 'Hinweis ausblenden', en: 'Dismiss notification'})}
             >
                 {'×'}
             </button>

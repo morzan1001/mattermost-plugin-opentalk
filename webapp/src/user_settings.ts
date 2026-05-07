@@ -10,6 +10,7 @@ import {
     setMuteOnJoin,
 } from './conference/livekit/devices';
 import type {PluginRegistry} from './types/mattermost-webapp';
+import {t} from './util/i18n';
 
 const ringtoneSettingKey = 'opentalk:ringtone-enabled';
 
@@ -34,12 +35,12 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
         icon: 'icon-phone-outline',
         sections: [
             {
-                title: 'Anrufe',
+                title: t({de: 'Anrufe', en: 'Calls'}),
                 settings: [
                     {
                         name: 'ringtoneEnabled',
                         type: 'bool',
-                        helpText: 'Spielt einen Klingelton ab und zeigt ein Pop-up, wenn dich jemand in einer Direktnachricht anruft.',
+                        helpText: t({de: 'Spielt einen Klingelton ab und zeigt ein Pop-up, wenn dich jemand in einer Direktnachricht anruft.', en: 'Plays a ringtone and shows a pop-up when someone calls you in a direct message.'}),
                         default: 'true',
                         currentValue: () => readRingtone(),
                         onConfigChange: (value: unknown) => {
@@ -49,7 +50,7 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
                     {
                         name: 'preferredMicId',
                         type: 'radio',
-                        helpText: 'Wähle das Mikrofon, das in OpenTalk-Meetings verwendet wird.',
+                        helpText: t({de: 'Wähle das Mikrofon, das in OpenTalk-Meetings verwendet wird.', en: 'Choose the microphone to use in OpenTalk meetings.'}),
                         default: '',
                         options: getAudioDevices().map((d) => ({value: d.deviceId, text: d.label})),
                         currentValue: () => getPreferredMicId() ?? '',
@@ -62,7 +63,7 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
                     {
                         name: 'preferredCamId',
                         type: 'radio',
-                        helpText: 'Wähle die Kamera, die in OpenTalk-Meetings verwendet wird.',
+                        helpText: t({de: 'Wähle die Kamera, die in OpenTalk-Meetings verwendet wird.', en: 'Choose the camera to use in OpenTalk meetings.'}),
                         default: '',
                         options: getVideoDevices().map((d) => ({value: d.deviceId, text: d.label})),
                         currentValue: () => getPreferredCamId() ?? '',
@@ -75,7 +76,7 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
                     {
                         name: 'muteOnJoin',
                         type: 'bool',
-                        helpText: 'Tritt Meetings standardmäßig stummgeschaltet bei. Du kannst das Mikrofon dann manuell aktivieren.',
+                        helpText: t({de: 'Tritt Meetings standardmäßig stummgeschaltet bei. Du kannst das Mikrofon dann manuell aktivieren.', en: 'Join meetings muted by default. You can enable the microphone manually afterwards.'}),
                         default: 'false',
                         currentValue: () => (getMuteOnJoin() ? 'true' : 'false'),
                         onConfigChange: (value: unknown) => {

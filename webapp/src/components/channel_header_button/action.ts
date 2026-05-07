@@ -3,6 +3,7 @@ import {GlobalState} from '@mattermost/types/store';
 import {createMeeting, getOrCreateDeviceSecret} from '../../client/rest';
 import {startConferenceConnection} from '../../conference/controller';
 import {selectCurrentDisplayName} from '../../util/display_name';
+import {t} from '../../util/i18n';
 
 interface PluginState {
     oauth?: {connected: boolean};
@@ -14,7 +15,7 @@ export function startMeetingAction(store: Store<GlobalState, Action>) {
         const ps: PluginState = state['plugins-com.github.morzan1001.mattermost-plugin-opentalk'] || {};
         if (!ps.oauth?.connected) {
             // eslint-disable-next-line no-alert
-            alert('Bitte zuerst /opentalk connect ausführen.');
+            alert(t({de: 'Bitte zuerst /opentalk connect ausführen.', en: 'Please run /opentalk connect first.'}));
             return;
         }
         try {
@@ -32,7 +33,7 @@ export function startMeetingAction(store: Store<GlobalState, Action>) {
                 return;
             }
             // eslint-disable-next-line no-alert
-            alert(`Meeting konnte nicht erstellt werden: ${e.message}`);
+            alert(`${t({de: 'Meeting konnte nicht erstellt werden', en: 'Failed to create meeting'})}: ${e.message}`);
         }
     };
 }

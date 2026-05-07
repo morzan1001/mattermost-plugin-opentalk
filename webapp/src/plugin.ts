@@ -29,6 +29,7 @@ import {
     endActiveMeeting,
     debugState,
 } from './conference/controller';
+import {setModuleLocale} from './util/i18n';
 
 interface ConnectedStateMessage {
     data: {
@@ -109,6 +110,11 @@ export default class Plugin {
         // Pin the redux store so toggle handlers can dispatch without React-
         // context indirection (useStore() returns null in MM RootComponents).
         setActiveStore(store);
+
+        // Initial seed; the hook-based useT() picks up live changes.
+        const state = store.getState() as any;
+        const myId = state?.entities?.users?.currentUserId;
+        setModuleLocale(state?.entities?.users?.profiles?.[myId]?.locale);
 
         initDeviceCache();
 

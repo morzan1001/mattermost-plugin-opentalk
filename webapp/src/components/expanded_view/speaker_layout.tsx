@@ -2,10 +2,12 @@ import React from 'react';
 import {useSelector} from 'react-redux';
 
 import {ParticipantTile} from './participant_tile';
+import {useT} from '../../util/i18n';
 
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 export const SpeakerLayout: React.FC = () => {
+    const t = useT();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const order = useSelector((s: any) => s?.[stateKey]?.participants?.order ?? [] as string[]);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -28,7 +30,7 @@ export const SpeakerLayout: React.FC = () => {
                     fontStyle: 'italic',
                 }}
             >
-                {'Niemand im Meeting'}
+                {t({de: 'Niemand im Meeting', en: 'Nobody in the meeting'})}
             </div>
         );
     }

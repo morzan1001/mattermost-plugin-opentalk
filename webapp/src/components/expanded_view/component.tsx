@@ -12,6 +12,7 @@ import {useMeetingDuration} from '../../hooks/use_meeting_duration';
 import type {ParticipantInfo} from '../../store/slice_participants';
 import type {SessionStatus} from '../../store/slice_session';
 import {setExpanded} from '../../store/slice_session';
+import {useT} from '../../util/i18n';
 import {selectIsExpanded, selectSessionStatus} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 import {HandIcon} from '../icons';
@@ -19,6 +20,7 @@ import {HandIcon} from '../icons';
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
 
 const ExpandedView: React.FC = () => {
+    const t = useT();
     const expanded = useSelector(selectIsExpanded);
     const status = useSelector(selectSessionStatus) as SessionStatus;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,7 +68,7 @@ const ExpandedView: React.FC = () => {
                     borderBottom: '1px solid rgba(255,255,255,0.08)',
                 }}
             >
-                <span style={{fontSize: 14, fontWeight: 600}}>{'OpenTalk-Meeting'}</span>
+                <span style={{fontSize: 14, fontWeight: 600}}>{t({de: 'OpenTalk-Meeting', en: 'OpenTalk meeting'})}</span>
                 {duration && <span style={{fontSize: 13, opacity: 0.7}}>{duration}</span>}
                 <div style={{flex: 1}}/>
                 <LayoutSwitcher
@@ -90,7 +92,7 @@ const ExpandedView: React.FC = () => {
                     }}
                 >
                     <HandIcon/>
-                    <span style={{color: '#00B59C', fontWeight: 600, marginRight: 6}}>{'Wartereihe:'}</span>
+                    <span style={{color: '#00B59C', fontWeight: 600, marginRight: 6}}>{t({de: 'Wartereihe:', en: 'Queue:'})}</span>
                     <span>{raisedParticipants.map((p) => p.displayName || p.id.slice(0, 8)).join(' · ')}</span>
                 </div>
             )}

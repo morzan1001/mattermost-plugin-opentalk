@@ -3,6 +3,7 @@ import {useSelector, useDispatch} from 'react-redux';
 
 import {toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand} from '../../conference/controller';
 import {setExpanded} from '../../store/slice_session';
+import {useT} from '../../util/i18n';
 import {selectIsHost, selectLocalParticipantId} from '../../util/selectors';
 import {
     MicIcon,
@@ -72,6 +73,7 @@ export interface ControlsBarProps {
 
 export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, onMinimize}) => {
     const dispatch = useDispatch();
+    const t = useT();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const micEnabled = useSelector((s: any) => s?.[stateKey]?.session?.micEnabled ?? false);
@@ -95,8 +97,8 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                 type='button'
                 style={micEnabled ? activeButtonStyle : mutedDangerButtonStyle}
                 onClick={() => toggleMic()}
-                title={micEnabled ? 'Mikrofon stummschalten' : 'Mikrofon einschalten'}
-                aria-label={micEnabled ? 'Mikrofon stummschalten' : 'Mikrofon einschalten'}
+                title={micEnabled ? t({de: 'Mikrofon stummschalten', en: 'Mute microphone'}) : t({de: 'Mikrofon einschalten', en: 'Unmute microphone'})}
+                aria-label={micEnabled ? t({de: 'Mikrofon stummschalten', en: 'Mute microphone'}) : t({de: 'Mikrofon einschalten', en: 'Unmute microphone'})}
             >
                 {micEnabled ? <MicIcon/> : <MicOffIcon/>}
             </button>
@@ -105,8 +107,8 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                 type='button'
                 style={camEnabled ? activeButtonStyle : mutedButtonStyle}
                 onClick={() => toggleCam()}
-                title={camEnabled ? 'Kamera ausschalten' : 'Kamera einschalten'}
-                aria-label={camEnabled ? 'Kamera ausschalten' : 'Kamera einschalten'}
+                title={camEnabled ? t({de: 'Kamera ausschalten', en: 'Turn off camera'}) : t({de: 'Kamera einschalten', en: 'Turn on camera'})}
+                aria-label={camEnabled ? t({de: 'Kamera ausschalten', en: 'Turn off camera'}) : t({de: 'Kamera einschalten', en: 'Turn on camera'})}
             >
                 {camEnabled ? <VideoIcon/> : <CameraOffIcon/>}
             </button>
@@ -115,8 +117,8 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                 type='button'
                 style={screenShareEnabled ? activeButtonStyle : mutedButtonStyle}
                 onClick={() => toggleScreenShare()}
-                title={screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}
-                aria-label={screenShareEnabled ? 'Bildschirmfreigabe beenden' : 'Bildschirm teilen'}
+                title={screenShareEnabled ? t({de: 'Bildschirmfreigabe beenden', en: 'Stop screen share'}) : t({de: 'Bildschirm teilen', en: 'Share screen'})}
+                aria-label={screenShareEnabled ? t({de: 'Bildschirmfreigabe beenden', en: 'Stop screen share'}) : t({de: 'Bildschirm teilen', en: 'Share screen'})}
             >
                 {screenShareEnabled ? <ScreenShareOffIcon/> : <ScreenShareIcon/>}
             </button>
@@ -125,8 +127,8 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                 type='button'
                 style={isRaised ? {...activeButtonStyle, background: '#00B59C'} : mutedButtonStyle}
                 onClick={() => (isRaised ? lowerLocalHand() : raiseLocalHand())}
-                title={isRaised ? 'Hand senken' : 'Hand heben'}
-                aria-label={isRaised ? 'Hand senken' : 'Hand heben'}
+                title={isRaised ? t({de: 'Hand senken', en: 'Lower hand'}) : t({de: 'Hand heben', en: 'Raise hand'})}
+                aria-label={isRaised ? t({de: 'Hand senken', en: 'Lower hand'}) : t({de: 'Hand heben', en: 'Raise hand'})}
             >
                 <HandIcon/>
             </button>
@@ -137,8 +139,8 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                 type='button'
                 style={mutedButtonStyle}
                 onClick={onMinimize}
-                title='Minimieren'
-                aria-label='Minimieren'
+                title={t({de: 'Minimieren', en: 'Minimize'})}
+                aria-label={t({de: 'Minimieren', en: 'Minimize'})}
             >
                 <MinimizeIcon/>
             </button>
@@ -148,8 +150,8 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                     type='button'
                     style={mutedButtonStyle}
                     onClick={() => dispatch(setExpanded(true))}
-                    title='Vollbild'
-                    aria-label='Vollbild'
+                    title={t({de: 'Vollbild', en: 'Full screen'})}
+                    aria-label={t({de: 'Vollbild', en: 'Full screen'})}
                 >
                     <ExpandIcon/>
                 </button>
@@ -159,8 +161,8 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                 type='button'
                 style={dangerButtonStyle}
                 onClick={onLeave}
-                title={isHost ? 'Verlassen / Meeting beenden' : 'Meeting verlassen'}
-                aria-label={isHost ? 'Verlassen oder Meeting beenden' : 'Meeting verlassen'}
+                title={isHost ? t({de: 'Verlassen / Meeting beenden', en: 'Leave / End meeting'}) : t({de: 'Meeting verlassen', en: 'Leave meeting'})}
+                aria-label={isHost ? t({de: 'Verlassen oder Meeting beenden', en: 'Leave or end meeting'}) : t({de: 'Meeting verlassen', en: 'Leave meeting'})}
             >
                 <HangupIcon/>
             </button>

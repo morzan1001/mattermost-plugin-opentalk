@@ -38,6 +38,7 @@ import {
     tracksReset,
     type TrackKind,
 } from '../store/slice_tracks';
+import {t} from '../util/i18n';
 
 const ALLOWED_ROLES = new Set<string>(['moderator', 'user', 'guest']);
 
@@ -398,7 +399,7 @@ export async function toggleScreenShare(): Promise<void> {
                 const sources = await getDesktopSources();
                 if (sources.length === 0) {
                     // eslint-disable-next-line no-alert
-                    window.alert('Keine Bildschirme/Fenster verfügbar zum Teilen.');
+                    window.alert(t({de: 'Keine Bildschirme/Fenster verfügbar zum Teilen.', en: 'No screens or windows available to share.'}));
                     return;
                 }
                 const sourceId = await pickScreenSource(sources);

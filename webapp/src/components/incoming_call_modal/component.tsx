@@ -9,6 +9,7 @@ import {
     incomingCallCleared,
     type IncomingCall,
 } from '../../store/slice_incoming_calls';
+import {useT} from '../../util/i18n';
 import {selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
 
 const stateKey = 'plugins-com.github.morzan1001.mattermost-plugin-opentalk';
@@ -17,6 +18,7 @@ const IncomingCallModal: React.FC = () => {
     const dispatch = useDispatch();
     const store = useStore();
     const ringtone = useRingtone();
+    const t = useT();
 
     const sessionStatus = useSelector(selectSessionStatus);
     const currentDisplayName = useSelector(selectCurrentDisplayName);
@@ -206,12 +208,12 @@ const IncomingCallModal: React.FC = () => {
 
                 {/* Host name */}
                 <div style={{fontSize: 18, fontWeight: 700, marginBottom: 4}}>
-                    {`${call.hostName} ruft an`}
+                    {`${call.hostName} ${t({de: 'ruft an', en: 'is calling'})}`}
                 </div>
 
                 {/* Subtitle */}
                 <div style={{fontSize: 13, opacity: 0.6, marginBottom: 20}}>
-                    {'klingelt …'}
+                    {t({de: 'klingelt …', en: 'ringing …'})}
                 </div>
 
                 {/* Buttons */}
@@ -239,7 +241,7 @@ const IncomingCallModal: React.FC = () => {
                             opacity: busy ? 0.6 : 1,
                         }}
                     >
-                        {'Annehmen'}
+                        {t({de: 'Annehmen', en: 'Accept'})}
                     </button>
                     <button
                         type='button'
@@ -258,7 +260,7 @@ const IncomingCallModal: React.FC = () => {
                             opacity: busy ? 0.6 : 1,
                         }}
                     >
-                        {'Ablehnen'}
+                        {t({de: 'Ablehnen', en: 'Decline'})}
                     </button>
                 </div>
             </div>
