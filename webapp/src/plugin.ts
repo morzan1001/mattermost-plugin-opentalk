@@ -16,6 +16,7 @@ import ScreenPickerModal from './components/screen_picker_modal/component';
 import {incomingCallReceived, incomingCallCleared, incomingCallsReset} from './store/slice_incoming_calls';
 import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
 import {registerOpenTalkUserSettings} from './user_settings';
+import {initDeviceCache} from './conference/livekit/devices';
 import OpenTalkIcon from './components/channel_header_button/icon';
 import {startMeetingAction} from './components/channel_header_button/action';
 import {getConnectionStatus} from './client/rest';
@@ -114,6 +115,10 @@ export default class Plugin {
         // screen) can dispatch from RootComponents where useStore() returns
         // null in some Mattermost-Webapp versions.
         setActiveStore(store);
+
+        // Seed the device cache so Settings panel options and publishMic/
+        // publishCam deviceId fallbacks are ready before the first meeting.
+        initDeviceCache();
 
         // Browser-devtools handle for ad-hoc inspection of conference state:
         //   window.opentalk.state()      → { hasClient, hasLiveKit, ... }

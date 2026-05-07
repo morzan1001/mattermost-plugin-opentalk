@@ -2,6 +2,7 @@ import type {Store, Action} from 'redux';
 
 import {OpenTalkConferenceClient} from './client';
 import {isElectron, getDesktopSources, captureDesktopStream} from './livekit/desktop_capturer';
+import {getMuteOnJoin} from './livekit/devices';
 import {LiveKitRoom} from './livekit/room';
 import {pickScreenSource} from './livekit/screen_picker';
 import * as trackRegistry from './livekit/track_registry';
@@ -186,6 +187,11 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
 
     lk.on('connected', () => {
         store.dispatch(setLivekitConnected(true));
+
+        if (getMuteOnJoin()) {
+            // User opted in to start muted; skip enableMic.
+            return;
+        }
 
         // Default-on: enable mic. User can toggle off via UI.
         lk.enableMic().

@@ -1,5 +1,7 @@
 import {createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack, type Room} from 'livekit-client';
 
+import {getPreferredMicId, getPreferredCamId} from './devices';
+
 export interface MicOptions {
     deviceId?: string;
 }
@@ -20,10 +22,11 @@ export class MicPermissionDeniedError extends Error {
 export async function publishMic(room: Room, opts: MicOptions = {}): Promise<LocalAudioTrack> {
     let track: LocalAudioTrack;
     try {
+        const deviceId = opts.deviceId ?? getPreferredMicId();
         track = await createLocalAudioTrack({
             echoCancellation: true,
             noiseSuppression: true,
-            ...(opts.deviceId ? {deviceId: opts.deviceId} : {}),
+            ...(deviceId ? {deviceId} : {}),
         });
     } catch (err) {
         throw new MicPermissionDeniedError(err as Error);
@@ -57,8 +60,9 @@ export class CamPermissionDeniedError extends Error {
 export async function publishCam(room: Room, opts: CamOptions = {}): Promise<LocalVideoTrack> {
     let track: LocalVideoTrack;
     try {
+        const deviceId = opts.deviceId ?? getPreferredCamId();
         track = await createLocalVideoTrack({
-            ...(opts.deviceId ? {deviceId: opts.deviceId} : {}),
+            ...(deviceId ? {deviceId} : {}),
         });
     } catch (err) {
         throw new CamPermissionDeniedError(err as Error);

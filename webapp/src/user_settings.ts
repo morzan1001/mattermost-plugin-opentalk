@@ -1,3 +1,14 @@
+import {
+    initDeviceCache,
+    getAudioDevices,
+    getVideoDevices,
+    getPreferredMicId,
+    setPreferredMicId,
+    getPreferredCamId,
+    setPreferredCamId,
+    getMuteOnJoin,
+    setMuteOnJoin,
+} from './conference/livekit/devices';
 import type {PluginRegistry} from './types/mattermost-webapp';
 
 // Same key used by plugin.ts's ringtoneEnabled() reader. Keep in sync.
@@ -17,6 +28,8 @@ const pluginID = 'de.opentalk.mattermost-plugin';
  * `settings` array as we add channel-toast / DND / volume preferences.
  */
 export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
+    // Ensure device cache is warm so the options arrays below are populated.
+    initDeviceCache();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reg: any = registry;
     if (typeof reg.registerUserSettings !== 'function') {
@@ -49,6 +62,42 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
                             persistRingtone(value === 'true' || value === true);
                         },
                     },
+                    {
+                        name: 'preferredMicId',
+                        type: 'radio',
+                        helpText: 'Wähle das Mikrofon, das in OpenTalk-Meetings verwendet wird.',
+                        default: '',
+                        options: getAudioDevices().map((d) => ({value: d.deviceId, text: d.label})),
+                        currentValue: () => getPreferredMicId() ?? '',
+                        onConfigChange: (value: unknown) => {
+                            if (typeof value === 'string') {
+                                setPreferredMicId(value);
+                            }
+                        },
+                    },
+                    {
+                        name: 'preferredCamId',
+                        type: 'radio',
+                        helpText: 'Wähle die Kamera, die in OpenTalk-Meetings verwendet wird.',
+                        default: '',
+                        options: getVideoDevices().map((d) => ({value: d.deviceId, text: d.label})),
+                        currentValue: () => getPreferredCamId() ?? '',
+                        onConfigChange: (value: unknown) => {
+                            if (typeof value === 'string') {
+                                setPreferredCamId(value);
+                            }
+                        },
+                    },
+                    {
+                        name: 'muteOnJoin',
+                        type: 'bool',
+                        helpText: 'Tritt Meetings standardmäßig stummgeschaltet bei. Du kannst das Mikrofon dann manuell aktivieren.',
+                        default: 'false',
+                        currentValue: () => (getMuteOnJoin() ? 'true' : 'false'),
+                        onConfigChange: (value: unknown) => {
+                            setMuteOnJoin(value === 'true' || value === true);
+                        },
+                    },
                 ],
             },
         ],
@@ -58,6 +107,22 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
             if (Object.prototype.hasOwnProperty.call(values, 'ringtoneEnabled')) {
                 const v = values.ringtoneEnabled;
                 persistRingtone(v === 'true' || v === true);
+            }
+            if (Object.prototype.hasOwnProperty.call(values, 'preferredMicId')) {
+                const v = values.preferredMicId;
+                if (typeof v === 'string') {
+                    setPreferredMicId(v);
+                }
+            }
+            if (Object.prototype.hasOwnProperty.call(values, 'preferredCamId')) {
+                const v = values.preferredCamId;
+                if (typeof v === 'string') {
+                    setPreferredCamId(v);
+                }
+            }
+            if (Object.prototype.hasOwnProperty.call(values, 'muteOnJoin')) {
+                const v = values.muteOnJoin;
+                setMuteOnJoin(v === 'true' || v === true);
             }
         },
     });
