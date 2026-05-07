@@ -31,7 +31,10 @@ Vollständige Architektur und Sequenzen: siehe Design-Spec.
 | 6 | LiveKit-Integration | ✅ |
 | 7 | Floating-Widget + Expanded-View | ✅ |
 | 8 | DM-Ringing + Push-Notifications + Channel-Toast | ✅ |
-| 9 | Meeting-Lifecycle + Resilience (Reconnect, TTL-Reaper, Hand-Raise) | offen |
+| 9a | Meeting-Lifecycle: Heartbeat + TTL-Reaper + Resumption-Token-Reuse | ✅ |
+| 9b | Hand-Raise (raise_hands signaling-module + UI) | offen |
+| 9c | Device-Pickers (Mic/Cam/Speaker) + Auto-Mute-on-Join | offen |
+| 9d | Slack-Polish: Auto-Status, Pre-Join-Device-Check | offen |
 | 10 | Testing (Unit + E2E) | wartet |
 | 11 | Doku + Release | wartet |
 
