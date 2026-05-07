@@ -66,6 +66,14 @@ func (r *Reaper) Stop() {
 	}
 }
 
+// RunOnce executes a single reaper tick synchronously. It is safe to call
+// from tests and from an admin-trigger endpoint without starting the
+// background loop. RunOnce does not acquire the mu lock because tick() itself
+// is stateless (all state lives in the KV-store and the callback).
+func (r *Reaper) RunOnce() {
+	r.tick()
+}
+
 func (r *Reaper) loop(ctx context.Context) {
 	t := time.NewTicker(r.interval)
 	defer t.Stop()
