@@ -370,6 +370,50 @@ func (h *Handlers) MeetingsDismiss(w nethttp.ResponseWriter, r *nethttp.Request)
 	w.WriteHeader(nethttp.StatusNoContent)
 }
 
+type heartbeatRequest struct {
+	ChannelID string `json:"channel_id"`
+}
+
+// MeetingsHeartbeat updates the LastHeartbeat timestamp on the active
+// meeting for the given channel. The webapp pings this endpoint every
+// 30s while the user is in a meeting; the reaper uses the timestamp to
+// detect dead sessions and end orphaned meetings.
+//
+// Quietly returns 204 if no active meeting is found — the webapp shouldn't
+// have to coordinate with the server about meeting-end races.
+func (h *Handlers) MeetingsHeartbeat(w nethttp.ResponseWriter, r *nethttp.Request) {
+	mmUserID := r.Header.Get("Mattermost-User-ID")
+	if mmUserID == "" {
+		nethttp.Error(w, "unauthorized", nethttp.StatusUnauthorized)
+		return
+	}
+	var body heartbeatRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		nethttp.Error(w, "bad request: "+err.Error(), nethttp.StatusBadRequest)
+		return
+	}
+	if body.ChannelID == "" {
+		nethttp.Error(w, "channel_id required", nethttp.StatusBadRequest)
+		return
+	}
+
+	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
+	if err != nil || am == nil {
+		// No active meeting — no-op. Keeps the webapp's heartbeat
+		// ticker from alarming when the meeting just ended elsewhere.
+		w.WriteHeader(nethttp.StatusNoContent)
+		return
+	}
+
+	am.LastHeartbeat = time.Now().UTC()
+	if sErr := h.Store.SaveActiveMeeting(am); sErr != nil {
+		nethttp.Error(w, "save heartbeat: "+sErr.Error(), nethttp.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(nethttp.StatusNoContent)
+}
+
 func allIn(set, want []string) bool {
 	if len(want) == 0 {
 		return true

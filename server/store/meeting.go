@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -56,6 +57,44 @@ func (s *Store) LoadActiveMeeting(channelID string) (*ActiveMeeting, error) {
 
 func (s *Store) DeleteActiveMeeting(channelID string) error {
 	return s.Delete(meetingKey(channelID))
+}
+
+// ListActiveMeetings enumerates every meeting_<channelID> KV entry by
+// paging through KVList. Used by the reaper to find stale heartbeats.
+// Returns nil + nil on empty, partial result + nil on per-key parse
+// errors (best-effort).
+func (s *Store) ListActiveMeetings() ([]*ActiveMeeting, error) {
+	out := make([]*ActiveMeeting, 0, 8)
+	page := 0
+	const perPage = 200
+	for {
+		keys, appErr := s.api.KVList(page, perPage)
+		if appErr != nil {
+			return out, appErr
+		}
+		if len(keys) == 0 {
+			break
+		}
+		for _, k := range keys {
+			if !strings.HasPrefix(k, "meeting_") {
+				continue
+			}
+			raw, err := s.Get(k)
+			if err != nil {
+				continue
+			}
+			var am ActiveMeeting
+			if jErr := json.Unmarshal(raw, &am); jErr != nil {
+				continue
+			}
+			out = append(out, &am)
+		}
+		if len(keys) < perPage {
+			break
+		}
+		page++
+	}
+	return out, nil
 }
 
 func dismissalKey(channelID, roomID string) string {

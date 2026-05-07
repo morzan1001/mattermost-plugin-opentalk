@@ -19,6 +19,7 @@ import (
 	"github.com/opentalk/mattermost-plugin-opentalk/server/oidc"
 	"github.com/opentalk/mattermost-plugin-opentalk/server/opentalk"
 	"github.com/opentalk/mattermost-plugin-opentalk/server/post"
+	"github.com/opentalk/mattermost-plugin-opentalk/server/reaper"
 	"github.com/opentalk/mattermost-plugin-opentalk/server/store"
 )
 
@@ -41,6 +42,8 @@ type Plugin struct {
 	store      *store.Store
 	oidcClient *oidc.Client
 	oidcMu     sync.RWMutex
+
+	reaper *reaper.Reaper
 }
 
 func (p *Plugin) OnActivate() error {
@@ -58,17 +61,11 @@ func (p *Plugin) OnActivate() error {
 
 	p.store = store.New(p.API)
 
-	// Purge runtime state from the previous plugin process. Active meetings
-	// from before the redeploy aren't reachable any more (the WS clients
-	// have been disconnected and reset their session-slice on bundle reload),
-	// so leaving them in KV would only feed stale incoming-call modals when
-	// any session reconciles state. Same logic for dismissal sets.
-	if n, err := p.store.PurgeKeysWithPrefix("meeting_"); err == nil && n > 0 {
-		p.API.LogInfo("[opentalk] purged stale active-meetings on activate", "count", n)
-	}
-	if n, err := p.store.PurgeKeysWithPrefix("dismiss_"); err == nil && n > 0 {
-		p.API.LogInfo("[opentalk] purged stale dismissals on activate", "count", n)
-	}
+	// Replace the previous OnActivate-purge with a heartbeat-driven reaper.
+	// Stale meetings (no heartbeat for >5min) are ended within ~60s.
+	p.reaper = reaper.New(p.API, p.store, p.endMeetingFromReaper,
+		60*time.Second, 5*time.Minute)
+	p.reaper.Start()
 
 	if err := p.API.RegisterCommand(&model.Command{
 		Trigger:          command.Trigger,
@@ -112,7 +109,30 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 }
 
 func (p *Plugin) OnDeactivate() error {
+	if p.reaper != nil {
+		p.reaper.Stop()
+	}
 	return nil
+}
+
+// endMeetingFromReaper is the callback the reaper invokes for each stale
+// meeting. Mirrors the post-update + broadcast + KV-cleanup that the
+// MeetingsEnd HTTP handler does, minus the host-permission check. The
+// post status flips to ENDED (NOT MISSED — MISSED is reserved for the
+// "DM recipients all declined before anyone joined" path).
+func (p *Plugin) endMeetingFromReaper(am *store.ActiveMeeting) {
+	if am.PostID != "" {
+		if pp, appErr := p.API.GetPost(am.PostID); appErr == nil && pp != nil {
+			post.ApplyEndedStatus(pp, time.Now().UTC())
+			_ = p.client.Post.UpdatePost(pp)
+		}
+	}
+	_ = p.store.DeleteActiveMeeting(am.ChannelID)
+	_ = p.store.DeleteDismissals(am.ChannelID, am.RoomID)
+	p.API.PublishWebSocketEvent("meeting_ended", map[string]any{
+		"channel_id": am.ChannelID,
+		"room_id":    am.RoomID,
+	}, &model.WebsocketBroadcast{ChannelId: am.ChannelID})
 }
 
 // NotificationWillBePushed is called by the Mattermost server before any
