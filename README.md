@@ -158,6 +158,8 @@ make lint       # golangci-lint + eslint
 make watch      # webapp in watch mode
 ```
 
+The webapp test suite is ~370 Jest tests across 50 suites; the server suite covers slash-command handlers, the OIDC flow, the OpenTalk client, the post helpers, the reaper, and the store.
+
 ## License
 
 Apache-2.0 for plugin code authored in this repository. Source files extracted from the OpenTalk web frontend retain their original EUPL-1.2 license; those files carry SPDX headers identifying them individually.
