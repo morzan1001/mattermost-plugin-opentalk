@@ -65,6 +65,8 @@ func (h *Handler) Execute(args *model.CommandArgs) (*model.CommandResponse, *mod
 		return h.end(args)
 	case "join":
 		return h.join(args)
+	case "ring":
+		return h.ring(args)
 	case "help":
 		return h.help(args)
 	default:

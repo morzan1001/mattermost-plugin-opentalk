@@ -11,6 +11,7 @@ func AutocompleteData() *model.AutocompleteData {
 	root.AddCommand(model.NewAutocompleteData("dial-in", "", "Zeige SIP-Dial-In-Info des aktiven Meetings"))
 	root.AddCommand(model.NewAutocompleteData("end", "", "Beende das aktive Meeting (nur Host)"))
 	root.AddCommand(model.NewAutocompleteData("join", "", "Tritt dem aktiven Meeting bei (öffnet OpenTalk im neuen Tab)"))
+	root.AddCommand(model.NewAutocompleteData("ring", "[on|off|status]", "Klingelton bei eingehenden Anrufen ein-/ausschalten"))
 	root.AddCommand(model.NewAutocompleteData("help", "", "Hilfe zu /opentalk"))
 	return root
 }

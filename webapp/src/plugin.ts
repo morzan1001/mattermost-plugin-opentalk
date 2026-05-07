@@ -73,20 +73,22 @@ const ringtoneSettingKey = 'opentalk:ringtone-enabled';
 // now is also too old to ring for.
 const incomingCallFreshnessMs = 30000;
 
-// Default OFF until the user explicitly opts in via the Settings-modal toggle
-// or window.opentalk.ringtone(true). Background: in-vivo testing produced
-// repeating-ring loops we couldn't trace; keeping ringing opt-in until we
-// figure out the root cause is safer than torturing the user with it on by
-// default.
+// Default ON (calls + slack convention). The earlier "perpetual ring on
+// activate" loop was traced to the IncomingCallModal mounting unconditionally
+// as a RootComponent and starting the ringtone in an empty-deps useEffect
+// before the call/idle gate ever ran. That's now fixed by gating the
+// effect on isShowingCall — see meeting_mini_bar/incoming_call_modal.
+// User can still opt out via Settings-modal, /opentalk ring off, or
+// window.opentalk.ringtone(false).
 function ringtoneEnabled(): boolean {
     if (typeof window === 'undefined') {
-        return false;
+        return true;
     }
     try {
         const v = window.localStorage.getItem(ringtoneSettingKey);
-        return v === 'true';
+        return v !== 'false';
     } catch {
-        return false;
+        return true;
     }
 }
 
@@ -95,6 +97,13 @@ interface IncomingCallDismissedMessage {
         channel_id: string;
         room_id: string;
         mm_user_id: string;
+    };
+}
+
+interface RingSettingChangedMessage {
+    data: {
+        mm_user_id: string;
+        enabled: boolean;
     };
 }
 
@@ -244,6 +253,26 @@ export default class Plugin {
                 }));
             },
         );
+        // Slash-command fallback for users on MM versions where the
+        // OpenTalk Settings section isn't visible. /opentalk ring on|off
+        // server-side broadcasts ring_setting_changed targeted at the
+        // requesting user; webapp persists it to localStorage.
+        registry.registerWebSocketEventHandler?.(
+            `custom_${pluginId}_ring_setting_changed`,
+            (msg: RingSettingChangedMessage) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const myId = (store.getState() as any)?.entities?.users?.currentUserId;
+                if (msg.data.mm_user_id !== myId) {
+                    return;
+                }
+                try {
+                    window.localStorage.setItem(ringtoneSettingKey, msg.data.enabled ? 'true' : 'false');
+                } catch {
+                    /* swallow */
+                }
+            },
+        );
+
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_incoming_call_dismissed`,
             (msg: IncomingCallDismissedMessage) => {

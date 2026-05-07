@@ -3,6 +3,8 @@ import type {PluginRegistry} from './types/mattermost-webapp';
 // Same key used by plugin.ts's ringtoneEnabled() reader. Keep in sync.
 const ringtoneSettingKey = 'opentalk:ringtone-enabled';
 
+const pluginID = 'de.opentalk.mattermost-plugin';
+
 /**
  * Registers an "OpenTalk" section in the Mattermost User-Settings modal.
  *
@@ -22,7 +24,10 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
     }
 
     reg.registerUserSettings({
-        id: 'opentalk',
+        // Use the full pluginID — mattermost-plugin-calls uses the same
+        // convention. Some MM versions namespace settings by the registered
+        // plugin id; an unknown short id may make the section invisible.
+        id: pluginID,
         uiName: 'OpenTalk',
         icon: 'icon-phone-outline',
         sections: [
@@ -32,8 +37,8 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
                     {
                         name: 'ringtoneEnabled',
                         type: 'bool',
-                        helpText: 'Spielt einen Klingelton ab und zeigt ein Pop-up, wenn dich jemand in einer Direktnachricht anruft. Aus Vorsicht standardmäßig deaktiviert; aktiviere hier, wenn du Anrufe empfangen möchtest.',
-                        default: 'false',
+                        helpText: 'Spielt einen Klingelton ab und zeigt ein Pop-up, wenn dich jemand in einer Direktnachricht anruft.',
+                        default: 'true',
 
                         // Some MM versions read the current value via this
                         // callback; others through the modal's own state.
@@ -60,13 +65,13 @@ export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
 
 function readRingtone(): string {
     if (typeof window === 'undefined') {
-        return 'false';
+        return 'true';
     }
     try {
         const v = window.localStorage.getItem(ringtoneSettingKey);
-        return v === 'true' ? 'true' : 'false';
+        return v === 'false' ? 'false' : 'true';
     } catch {
-        return 'false';
+        return 'true';
     }
 }
 

@@ -43,25 +43,21 @@ const MeetingMiniBar: React.FC = () => {
         return localId ? order.filter((id: string) => id !== localId).length : order.length;
     });
 
-    // Dynamic min-size: the widget never shrinks below "fits current
-    // content". Adding self-cam bumps the min-width by 72px (preview tile
-    // + gap); a non-empty tile-strip row bumps min-height to fit one row
-    // of 128x72 tiles. User resize larger always wins.
-    const baseMinWidth = 440;
+    // Width is user-resizable and persisted. Min-width grows when self-cam
+    // adds the preview tile so the buttons never get crowded. Height is
+    // intentionally NOT controlled here — see the comment near the widget
+    // root: content drives height so the widget collapses to a single
+    // controls row when alone and grows naturally when remote tiles arrive.
+    const baseMinWidth = 380;
     const minWidth = baseMinWidth + (session.camEnabled ? 72 : 0);
-    const minHeight = remoteCount > 0 ? 180 : 64;
 
     const resize = useResizable({
-        storageKey: 'opentalk:widget-size:v5',
-        defaultSize: {width: minWidth, height: minHeight},
-        minSize: {width: minWidth, height: minHeight},
+        storageKey: 'opentalk:widget-size:v6',
+        defaultSize: {width: minWidth, height: 0},
+        minSize: {width: minWidth, height: 0},
     });
 
-    // Clamp the rendered size to the *current* dynamic minimums even when
-    // the persisted size from a previous session was smaller (e.g. user
-    // had cam off when they resized, then enables cam).
     const widgetWidth = Math.max(typeof resize.style.width === 'number' ? resize.style.width : minWidth, minWidth);
-    const widgetHeight = Math.max(typeof resize.style.height === 'number' ? resize.style.height : minHeight, minHeight);
 
     const duration = useMeetingDuration(session.joinedAt);
 
@@ -129,8 +125,13 @@ const MeetingMiniBar: React.FC = () => {
                     fontFamily: 'Inter, system-ui, sans-serif',
                     overflow: 'hidden',
                     ...drag.style,
+
+                    // Width: user-resizable, clamped to a content-aware min.
+                    // Height: intentionally absent — content (controls row +
+                    // optional tile-strip row) drives height. Widget collapses
+                    // to a single row when alone, grows when remotes arrive,
+                    // and shrinks when they leave. No empty space below tiles.
                     width: widgetWidth,
-                    height: widgetHeight,
                 }}
             >
                 {/* Drag handle — full-width grab strip at the top */}
@@ -175,20 +176,23 @@ const MeetingMiniBar: React.FC = () => {
                     )}
                     {session.status === 'connected' && (
                         <>
-                            <span
+                            <div
                                 style={{
                                     padding: '0 8px 0 4px',
-                                    fontSize: 13,
-                                    fontWeight: 500,
-                                    color: 'rgba(255,255,255,0.8)',
+                                    color: 'rgba(255,255,255,0.85)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    lineHeight: 1.1,
+                                    minWidth: 0,
                                 }}
                             >
-                                {session.participantCount}
-                                {' Teilnehmer'}
+                                <span style={{fontSize: 13, fontWeight: 500}}>
+                                    {`${session.participantCount} Teilnehmer`}
+                                </span>
                                 {duration && (
-                                    <span style={{opacity: 0.7, marginLeft: 6}}>{`· ${duration}`}</span>
+                                    <span style={{fontSize: 11, opacity: 0.65}}>{duration}</span>
                                 )}
-                            </span>
+                            </div>
 
                             <SelfPreview/>
 
@@ -216,9 +220,6 @@ const MeetingMiniBar: React.FC = () => {
                             alignItems: 'flex-start',
                             gap: 6,
                             flexWrap: 'wrap',
-                            flex: 1,
-                            minHeight: 0,
-                            overflowY: 'auto',
                             alignContent: 'flex-start',
                         }}
                     >
@@ -230,13 +231,14 @@ const MeetingMiniBar: React.FC = () => {
                 {!isMinimized && (
                     <div
                         {...resize.handleProps}
+                        title='Breite ziehen'
                         style={{
                             position: 'absolute',
                             right: 0,
+                            top: 0,
                             bottom: 0,
-                            width: 12,
-                            height: 12,
-                            cursor: 'nwse-resize',
+                            width: 6,
+                            cursor: 'ew-resize',
                             background: 'transparent',
                         }}
                     />
