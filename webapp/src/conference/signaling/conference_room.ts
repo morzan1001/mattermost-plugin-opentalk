@@ -18,6 +18,42 @@ import {CoreNamespace, type Participant} from './modules/core';
 import {LivekitNamespace} from './modules/livekit';
 import {SignalingSocket} from './socket';
 
+const RESUMPTION_KEY_PREFIX = 'opentalk:resumption:';
+
+function readResumption(roomID: string): string | undefined {
+    if (typeof window === 'undefined') {
+        return undefined;
+    }
+    try {
+        const v = window.localStorage.getItem(RESUMPTION_KEY_PREFIX + roomID);
+        return v ?? undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function writeResumption(roomID: string, value: string): void {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    try {
+        window.localStorage.setItem(RESUMPTION_KEY_PREFIX + roomID, value);
+    } catch {
+        /* swallow — quota/private mode */
+    }
+}
+
+function clearResumption(roomID: string): void {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    try {
+        window.localStorage.removeItem(RESUMPTION_KEY_PREFIX + roomID);
+    } catch {
+        /* swallow */
+    }
+}
+
 export interface AuthProvider {
     getTicket(roomID: string, channelID: string, deviceSecret: string, displayName: string): Promise<{
         ticket: string;
@@ -43,6 +79,7 @@ export class ConferenceRoom {
     private readonly auth: AuthProvider;
     private readonly defaultRoomserverURL: string;
     private state: RoomState = 'idle';
+    private roomID: string = '';
     private socket?: SignalingSocket;
     private listener?: EventListener;
     private participants: Participant[] = [];
@@ -84,11 +121,15 @@ export class ConferenceRoom {
         if (this.state !== 'idle') {
             return Promise.reject(new Error(`ConferenceRoom: connect() called from non-idle state (${this.state})`));
         }
+        this.roomID = roomID;
         this.state = 'authenticating';
 
         return this.auth.getTicket(roomID, channelID, deviceSecret, displayName).then(
             (r) => {
                 const ticket = r.ticket;
+                if (r.resumption) {
+                    writeResumption(roomID, r.resumption);
+                }
                 const roomserverURL = r.roomserverURL || this.defaultRoomserverURL;
 
                 this.state = 'connecting';
@@ -193,7 +234,11 @@ export class ConferenceRoom {
                 });
 
                 this.socket.on('open', () => {
-                    this.socket?.send(buildFrame(CoreNamespace, 'join', {displayName}));
+                    const resumption = readResumption(roomID);
+                    this.socket?.send(buildFrame(CoreNamespace, 'join', {
+                        displayName,
+                        ...(resumption ? {resumption} : {}),
+                    }));
                 });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.socket.on('close', (e: any) => {
@@ -256,6 +301,9 @@ export class ConferenceRoom {
         }
         this.socket?.disconnect();
         this.state = 'closed';
+        if (this.roomID) {
+            clearResumption(this.roomID);
+        }
         // Emit `closed` synchronously so the UI updates immediately. The
         // browser's WS onclose handler (which would also emit) is gated by
         // closedEmitted so we never double-fire.

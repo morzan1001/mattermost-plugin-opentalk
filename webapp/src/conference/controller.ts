@@ -7,7 +7,7 @@ import {pickScreenSource} from './livekit/screen_picker';
 import * as trackRegistry from './livekit/track_registry';
 import type {Participant} from './signaling/modules/core';
 
-import {getOrCreateDeviceSecret} from '../client/rest';
+import {getOrCreateDeviceSecret, heartbeat} from '../client/rest';
 import {
     participantAdded,
     participantRemoved,
@@ -45,6 +45,27 @@ function toParticipantInfo(p: Participant): ParticipantInfo {
 
 let activeClient: OpenTalkConferenceClient | null = null;
 let activeLiveKit: LiveKitRoom | null = null;
+let heartbeatIntervalId: number | null = null;
+
+function startHeartbeat(channelID: string): void {
+    stopHeartbeat();
+
+    // Fire one immediately so the reaper sees freshness right away.
+    heartbeat(channelID).catch(() => {/* swallow */});
+    heartbeatIntervalId = window.setInterval(() => {
+        heartbeat(channelID).catch((e: Error) => {
+            // eslint-disable-next-line no-console
+            console.warn('[opentalk] heartbeat failed:', e.message);
+        });
+    }, 30000);
+}
+
+function stopHeartbeat(): void {
+    if (heartbeatIntervalId !== null) {
+        window.clearInterval(heartbeatIntervalId);
+        heartbeatIntervalId = null;
+    }
+}
 
 // The Mattermost-Webapp's <Provider> tree does not always reach plugin-
 // rendered RootComponents (e.g. our MeetingMiniBar) reliably — useStore()
@@ -102,6 +123,8 @@ export async function startConferenceConnection(
         if (data.livekit?.url && data.livekit?.token) {
             bringUpLiveKit(data.livekit.url, data.livekit.token, store);
         }
+
+        startHeartbeat(channelID);
     });
     client.on('livekit_credentials', ({url, token}) => {
         if (activeLiveKit) {
@@ -122,11 +145,13 @@ export async function startConferenceConnection(
     client.on('closed', () => {
         store.dispatch(disconnected());
         store.dispatch(participantsReset());
+        stopHeartbeat();
         activeClient = null;
     });
     client.on('error', (err) => {
         store.dispatch(connectError({error: err.message}));
         store.dispatch(participantsReset());
+        stopHeartbeat();
         activeClient = null;
     });
 
@@ -241,6 +266,7 @@ export async function leaveActiveConference(): Promise<void> {
     const c = activeClient;
     activeClient = null;
     await c.leave();
+    stopHeartbeat();
 }
 
 // endActiveMeeting tells the plugin server to terminate the meeting for
@@ -374,6 +400,7 @@ export function _reset(): void {
     activeClient = null;
     activeLiveKit = null;
     activeStore = null;
+    stopHeartbeat();
 }
 
 // Browser-debug introspection: surfaces the truthiness of the controller's

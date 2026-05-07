@@ -90,6 +90,18 @@ export async function joinMeeting(
     return r.json();
 }
 
+export async function heartbeat(channelID: string): Promise<void> {
+    await fetch('/plugins/de.opentalk.mattermost-plugin/api/v1/meetings/heartbeat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'include',
+        body: JSON.stringify({channel_id: channelID}),
+    });
+}
+
 export async function dismissIncomingCall(channelID: string, roomID: string): Promise<void> {
     const r = await fetch('/plugins/de.opentalk.mattermost-plugin/api/v1/meetings/dismiss', {
         method: 'POST',

@@ -75,10 +75,11 @@ describe('ConferenceRoom', () => {
         const ws = getWS();
         ws.onopen?.({} as Event);
 
-        // Sent payload should be snake_cased {namespace: 'control', payload: {action: 'join', display_name: 'alice'}}
+        // Sent payload should be snake_cased {namespace: 'control', payload: {action: 'join', display_name: 'alice'}}.
+        // The resumption token is persisted after getTicket resolves and is included in the join frame.
         expect(ws.sent.length).toBe(1);
         const sent = JSON.parse(ws.sent[0]);
-        expect(sent).toEqual({namespace: 'control', payload: {action: 'join', display_name: 'alice'}});
+        expect(sent).toEqual({namespace: 'control', payload: {action: 'join', display_name: 'alice', resumption: 'resumption-1'}});
     });
 
     it('emits "connected" with participants on joinSuccess', async () => {
