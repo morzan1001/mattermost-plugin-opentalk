@@ -71,6 +71,33 @@ function stopHeartbeat(): void {
     }
 }
 
+// Slack-inspired auto-status: while in a meeting, show "Im OpenTalk-Meeting"
+// as the user's MM custom-status so coworkers see the user is busy. Cleared
+// on any session end. Fire-and-forget — failures are non-blocking.
+function setOpenTalkStatus(): void {
+    fetch('/api/v4/users/me/status/custom', {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+            emoji: 'phone',
+            text: 'Im OpenTalk-Meeting',
+            duration: 'four_hours',
+        }),
+    }).catch(() => { /* swallow */ });
+}
+
+function clearOpenTalkStatus(): void {
+    fetch('/api/v4/users/me/status/custom', {
+        method: 'DELETE',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        credentials: 'include',
+    }).catch(() => { /* swallow */ });
+}
+
 // The Mattermost-Webapp's <Provider> tree does not always reach plugin-
 // rendered RootComponents (e.g. our MeetingMiniBar) reliably — useStore()
 // can return null in that context, which silently swallows onClick handlers
@@ -129,6 +156,7 @@ export async function startConferenceConnection(
         }
 
         startHeartbeat(channelID);
+        setOpenTalkStatus();
     });
     client.on('livekit_credentials', ({url, token}) => {
         if (activeLiveKit) {
@@ -159,12 +187,14 @@ export async function startConferenceConnection(
         store.dispatch(disconnected());
         store.dispatch(participantsReset());
         stopHeartbeat();
+        clearOpenTalkStatus();
         activeClient = null;
     });
     client.on('error', (err) => {
         store.dispatch(connectError({error: err.message}));
         store.dispatch(participantsReset());
         stopHeartbeat();
+        clearOpenTalkStatus();
         activeClient = null;
     });
 
@@ -285,6 +315,7 @@ export async function leaveActiveConference(): Promise<void> {
     activeClient = null;
     await c.leave();
     stopHeartbeat();
+    clearOpenTalkStatus();
 }
 
 // endActiveMeeting tells the plugin server to terminate the meeting for
