@@ -1,30 +1,6 @@
 /*
- * Portiert aus opentalk/web-frontend@00241cd
- * app/src/api/types/incoming/core.ts
- * app/src/api/types/outgoing/core.ts
- *
  * SPDX-License-Identifier: EUPL-1.2
  * SPDX-FileCopyrightText: OpenTalk GmbH <mail@opentalk.eu>
- *
- * Adaptations from the OpenTalk source:
- *   - Discriminator key unified to `action` (upstream uses `message` for
- *     incoming and `action` for outgoing). The plugin's webapp consumes both
- *     directions through the same `SignalingFrame<...>` shape.
- *   - Action discriminants stored in camelCase. The wire format is snake_case;
- *     the `SignalingSocket` (sibling) handles snake_case<->camelCase
- *     conversion of action values on outgoing frames.
- *   - The `handler = createModule<RootState>(...)` block is intentionally
- *     omitted (RTK runtime dep, see phase5-port-plan.md "DO NOT PORT").
- *   - `Participant` is a minimal MVP shape (id + displayName + a couple of
- *     optional fields). Upstream uses `RoomserverParticipant` with ~12 module
- *     references that aren't used in Tasks 8/9.
- *   - `JoinSuccess` is an MVP subset: only `participants` + `livekit`
- *     bootstrap. Upstream `JoinSuccess extends JoinSuccessRoomserver` pulls in
- *     ~12 module shapes (chat, breakout, polls, automod, sharedFolder,
- *     legalVote, whiteboard, recording, timer, meetingNotes, …) which are
- *     all out of MVP scope. See phase5-port-plan.md "Surprises / Caveats" #5.
- *   - Outgoing actions include `join` + `leave` (the unified MVP wire) plus
- *     `enterRoom` (the upstream `enter_room` command).
  */
 
 // Wire-protocol namespace. Despite the file/type name being "Core", the

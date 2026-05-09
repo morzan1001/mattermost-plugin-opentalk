@@ -46,6 +46,8 @@ const MeetingMiniBar: React.FC = () => {
     // default until the first measurement lands.
     const rowRef = useRef<HTMLDivElement | null>(null);
     const [measuredMinWidth, setMeasuredMinWidth] = useState<number | null>(null);
+
+    // Re-measure after every render — content width changes when buttons appear/disappear.
     useLayoutEffect(() => {
         if (!rowRef.current) {
             return;

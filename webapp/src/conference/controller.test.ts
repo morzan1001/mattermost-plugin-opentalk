@@ -63,6 +63,7 @@ jest.mock('./client', () => {
         raiseHand = jest.fn();
         lowerHand = jest.fn();
         enableRaiseHands = jest.fn();
+        sendDebrief = jest.fn();
         getParticipants = jest.fn().mockReturnValue([]);
         getState = jest.fn().mockReturnValue('connected');
     }

@@ -1,21 +1,6 @@
 /*
- * Portiert aus opentalk/web-frontend@00241cd
- * app/src/api/types/incoming/moderation.ts
- * app/src/api/types/outgoing/moderation.ts
- *
  * SPDX-License-Identifier: EUPL-1.2
  * SPDX-FileCopyrightText: OpenTalk GmbH <mail@opentalk.eu>
- *
- * Adaptations from the OpenTalk source:
- *   - Discriminator key unified to `action` (upstream uses `message` for
- *     incoming and `action` for outgoing).
- *   - Action discriminants stored in camelCase; the SignalingSocket converts
- *     to/from snake_case on the wire.
- *   - `ParticipantId`, `Role`, `KickScope`, `Timestamp` from upstream
- *     `app/src/types/common.ts` are flattened to plain string types here. The
- *     branding doesn't carry over the wire boundary anyway.
- *   - The `handler = createModule<RootState>(...)` block is intentionally
- *     omitted (RTK runtime dep).
  */
 
 import type {ParticipantRole} from './core';

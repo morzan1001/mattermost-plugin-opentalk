@@ -43,7 +43,6 @@ import {PLUGIN_STATE_KEY} from '../util/selectors';
 
 const ALLOWED_ROLES = new Set<string>(['moderator', 'user', 'guest']);
 
-/** Maps a signaling Participant to the slice's ParticipantInfo shape. */
 function toParticipantInfo(p: Participant): ParticipantInfo {
     const role = (p.role && ALLOWED_ROLES.has(p.role)) ? p.role as ParticipantInfo['role'] : undefined;
     return {id: p.id, displayName: p.displayName, role};
@@ -153,12 +152,7 @@ export async function startConferenceConnection(
         // OpenTalk's raise-hands feature is OFF by default per room. Hosts
         // turn it on so participants' raiseHand calls aren't silently dropped.
         if (isHost) {
-            // eslint-disable-next-line no-console
-            console.log('[opentalk] auto-enabling raise-hands on host-join');
             client.enableRaiseHands();
-        } else {
-            // eslint-disable-next-line no-console
-            console.log('[opentalk] not host on join, raise-hands stays at server default');
         }
     });
     client.on('livekit_credentials', ({url, token}) => {
@@ -333,12 +327,7 @@ export async function endActiveMeeting(): Promise<void> {
 
     // Kick all participants on the OpenTalk side before we leave. Best-effort:
     // failure must not block teardown.
-    try {
-        activeClient?.sendDebrief();
-    } catch (e) {
-        // eslint-disable-next-line no-console
-        console.warn('[opentalk] moderation debrief failed:', e);
-    }
+    activeClient?.sendDebrief();
 
     await leaveActiveConference();
     if (!channelID) {
@@ -417,13 +406,9 @@ export async function toggleScreenShare(): Promise<void> {
         activeStore.dispatch(setScreenShareEnabled(false));
     } else {
         try {
-            // eslint-disable-next-line no-console
-            console.warn('[opentalk] toggleScreenShare: isElectron=', isElectron(), 'ua=', navigator.userAgent);
             let usedGetDisplayMedia = false;
             try {
                 const stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: false});
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk] screen-share via getDisplayMedia');
                 await lk.enableScreenShareFromStream(stream);
                 usedGetDisplayMedia = true;
             } catch (gdmErr) {
@@ -434,31 +419,21 @@ export async function toggleScreenShare(): Promise<void> {
                 console.warn('[opentalk] getDisplayMedia failed, trying Electron postMessage bridge', gdmErr);
             }
             if (!usedGetDisplayMedia) {
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk] screen-share via Electron desktop_capturer');
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk] electron path: requesting desktop sources via desktopAPI');
                 const sources = await getDesktopSources().catch((e: Error) => {
                     // eslint-disable-next-line no-console
                     console.warn('[opentalk] getDesktopSources failed:', e.message);
                     throw e;
                 });
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk] got', sources.length, 'desktop sources');
                 if (sources.length === 0) {
                     // eslint-disable-next-line no-alert
                     window.alert(t({de: 'Keine Bildschirme/Fenster verfügbar zum Teilen.', en: 'No screens or windows available to share.'}));
                     return;
                 }
                 const sourceId = await pickScreenSource(sources);
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk] picked sourceId=', sourceId);
                 if (!sourceId) {
                     return;
                 }
                 const stream = await captureDesktopStream(sourceId);
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk] captured stream, video-tracks=', stream.getVideoTracks().length);
                 await lk.enableScreenShareFromStream(stream);
             }
 

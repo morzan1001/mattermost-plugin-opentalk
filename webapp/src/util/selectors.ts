@@ -33,3 +33,8 @@ export function selectIsExpanded(state: AnyState): boolean {
 export function selectIsMinimized(state: AnyState): boolean {
     return state?.[stateKey]?.session?.minimized === true;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function selectJoinedAt(state: AnyState): number | undefined {
+    return state?.[stateKey]?.session?.joinedAt as number | undefined;
+}

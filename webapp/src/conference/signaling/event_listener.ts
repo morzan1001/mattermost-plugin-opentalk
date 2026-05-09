@@ -1,20 +1,4 @@
 /*
- * Portiert aus opentalk/web-frontend@00241cd
- * app/src/modules/EventListener.ts
- *
- * Adaptions vs upstream:
- * - Upstream EventListener.ts is just a tiny BaseEventEmitter wrapper around
- *   `mitt`. The actual frame-dispatch logic in OpenTalk lives in their
- *   SignalingSocket. This file pulls those concerns apart: SignalingSocket
- *   (Task 4) emits raw camelCased frames and EventListener routes them to
- *   typed (namespace, action) handlers.
- * - Normalizes incoming frames so that downstream handlers always see
- *   payload.action as a camelCase string. Handles two upstream quirks:
- *     * incoming uses `message:` while outgoing uses `action:` -- we rewrite
- *       `message` to `action` if `action` is absent.
- *     * payload.action values arrive snake_case from the wire -- we convert
- *       to camelCase to match our discriminated unions in modules/*.ts.
- *
  * SPDX-License-Identifier: EUPL-1.2
  * SPDX-FileCopyrightText: OpenTalk GmbH <mail@opentalk.eu>
  */
@@ -104,10 +88,7 @@ export class EventListener {
         this.emitter.all.clear();
         this.anyListeners.clear();
 
-        // Note: SignalingSocket.on() in Task 4 doesn't expose an off() method.
-        // After dispose() the listener is still attached at the socket level
-        // but the emitter is empty so handlers are no-ops. If we add
-        // socket.off() later, plug it here.
+        // dispose() clears the emitter; the underlying socket listener stays attached (no off() in SignalingSocket).
     }
 }
 

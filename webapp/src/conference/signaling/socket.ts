@@ -1,29 +1,6 @@
 /*
- * Portiert aus opentalk/web-frontend@00241cd
- * app/src/modules/WebRTC/SignalingSocket.ts
- *
  * SPDX-License-Identifier: EUPL-1.2
  * SPDX-FileCopyrightText: OpenTalk GmbH <mail@opentalk.eu>
- *
- * Adaptations from the OpenTalk source:
- *   - Removed window.debugKillSignaling debug hook (Phase-1-Inventory: must be
- *     removed before shipping).
- *   - Stripped OpenTalk-internal imports (../../api/types/{incoming,outgoing},
- *     ../../logger, ../../types, ../EventListener) that don't apply to the
- *     plugin's webapp.
- *   - Replaced BaseEventEmitter (mitt-based) with a tiny self-contained
- *     listener registry; mitt is a Task-7 (EventListener) dependency, not
- *     needed here.
- *   - Constructor signature simplified to (roomserverURL, ticket) and the WS
- *     URL is built as `${baseURL}/v1/signaling/${ticket}` (Phase-0-Spike
- *     confirmed path).
- *   - Public surface trimmed to: connect(), disconnect(), send(payload),
- *     on(event, listener), isOpen(). Heartbeat / reconnect / close-code-driven
- *     state machine from the OpenTalk original is intentionally out of scope
- *     for this task and will be re-added in a later phase if required.
- *   - Event names are 'open' | 'message' | 'close' | 'error' (vs the original
- *     'connectionstatechange' | 'message'); the plugin webapp consumes raw
- *     lifecycle events.
  */
 
 import camelcaseKeys from 'camelcase-keys';
@@ -85,14 +62,6 @@ export class SignalingSocket {
         this.protocols = [`ticket#${ticket}`, 'opentalk-signaling-json-v1.0'];
     }
 
-    public getURL(): string {
-        return this.url;
-    }
-
-    public isOpen(): boolean {
-        return this.ws?.readyState === WebSocket.OPEN;
-    }
-
     public connect(): void {
         const ws = new WebSocket(this.url, this.protocols);
         this.ws = ws;
@@ -120,13 +89,6 @@ export class SignalingSocket {
             throw new Error('SignalingSocket: send() called before connect()');
         }
         const wire = snakeCaseActionValues(snakecaseKeys(payload, {deep: true}));
-        const ns = (wire as {namespace?: unknown}).namespace;
-        const inner = (wire as {payload?: {action?: unknown}}).payload;
-        const action = inner?.action;
-        if (typeof ns === 'string' && typeof action === 'string') {
-            // eslint-disable-next-line no-console
-            console.log('[opentalk] WS send:', ns + ':' + action, inner);
-        }
         this.ws.send(JSON.stringify(wire));
     }
 

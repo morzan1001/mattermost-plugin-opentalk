@@ -1,13 +1,4 @@
 /*
- * Portiert aus opentalk/web-frontend@00241cd
- * app/src/modules/WebRTC/ConferenceRoom.ts
- *
- * Adaptions vs upstream:
- * - apiUtils-based ticket request replaced by injected AuthProvider.
- * - Waiting-room flow, retry-with-resumption, heartbeats, breakout-room
- *   transitions, and PKCE generation are out of scope for Phase 5 (MVP).
- *   Add them in a later phase if/when needed.
- *
  * SPDX-License-Identifier: EUPL-1.2
  * SPDX-FileCopyrightText: OpenTalk GmbH <mail@opentalk.eu>
  */
@@ -144,13 +135,6 @@ export class ConferenceRoom {
                 this.socket = new SignalingSocket(roomserverURL, ticket);
                 this.listener = new EventListener(this.socket);
 
-                // TODO: drop after raise-hands + screen-share Electron paths
-                // are confirmed working. Logs every incoming signaling frame.
-                this.listener.onAny((msg) => {
-                    // eslint-disable-next-line no-console
-                    console.warn('[opentalk] WS frame:', msg.namespace + ':' + msg.payload.action, msg.payload);
-                });
-
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'joinSuccess', (payload: any) => {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -189,20 +173,13 @@ export class ConferenceRoom {
                         isHost: payload.is_room_owner === true || payload.isRoomOwner === true,
                     });
 
-                    // Also emit livekit_credentials so the controller path is
-                    // uniform regardless of whether the server inlines the
-                    // bootstrap in joinSuccess or sends it as a separate
-                    // frame. The controller is idempotent on this signal.
+                    // Uniform path regardless of joinSuccess vs. separate credentials frame.
                     if (livekit) {
                         this.emit('livekit_credentials', livekit);
                     }
                 });
 
-                // The OpenTalk roomserver actually emits `control:joined`
-                // and `control:left` (verified via wire-log on v26.x). The
-                // upstream-frontend type definitions in modules/core.ts
-                // keep `participantConnected`/`participantDisconnected` as
-                // legacy aliases — listen for both so we're forward-compat.
+                // Listen for both joined and participantConnected for forward-compat.
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const onJoinedFrame = (payload: any) => {
                     if (this.state !== 'connected') {
@@ -257,14 +234,14 @@ export class ConferenceRoom {
                 // localId so the local user's hand-state updates either way.
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'handRaised', (payload: any) => {
-                    const participant = payload.participantId ?? payload.participant_id ?? payload.participant ?? payload.id ?? this.localId;
+                    const participant = payload.participantId ?? payload.participant_id ?? payload.participant ?? this.localId;
                     if (participant) {
                         this.emit('hand_raised', {participantId: participant as string});
                     }
                 });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'handLowered', (payload: any) => {
-                    const participant = payload.participantId ?? payload.participant_id ?? payload.participant ?? payload.id ?? this.localId;
+                    const participant = payload.participantId ?? payload.participant_id ?? payload.participant ?? this.localId;
                     if (participant) {
                         this.emit('hand_lowered', {participantId: participant as string});
                     }

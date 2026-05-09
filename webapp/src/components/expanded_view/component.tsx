@@ -13,7 +13,7 @@ import type {ParticipantInfo} from '../../store/slice_participants';
 import type {SessionStatus} from '../../store/slice_session';
 import {setExpanded} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {PLUGIN_STATE_KEY, selectIsExpanded, selectIsHost, selectSessionStatus} from '../../util/selectors';
+import {PLUGIN_STATE_KEY, selectIsExpanded, selectIsHost, selectJoinedAt, selectSessionStatus} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 import {HandIcon} from '../icons';
 import {LeaveCallModal} from '../leave_call_modal';
@@ -25,8 +25,7 @@ const ExpandedView: React.FC = () => {
     const expanded = useSelector(selectIsExpanded);
     const status = useSelector(selectSessionStatus) as SessionStatus;
     const isHost = useSelector(selectIsHost);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const joinedAt = useSelector((s: any) => s?.[stateKey]?.session?.joinedAt) as number | undefined;
+    const joinedAt = useSelector(selectJoinedAt);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const raisedParticipants = useSelector((s: any): ParticipantInfo[] => {

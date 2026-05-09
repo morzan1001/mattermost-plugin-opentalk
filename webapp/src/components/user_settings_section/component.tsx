@@ -8,9 +8,8 @@ import {
     getMuteOnJoin,
     setMuteOnJoin,
 } from '../../conference/livekit/devices';
+import {ringtoneSettingKey} from '../../user_settings';
 import {useT} from '../../util/i18n';
-
-const ringtoneSettingKey = 'opentalk:ringtone-enabled';
 
 function readRingtone(): boolean {
     if (typeof window === 'undefined') {

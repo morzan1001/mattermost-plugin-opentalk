@@ -20,7 +20,7 @@ import SwitchCallModal from './components/switch_call_modal/component';
 import ScreenPickerModal from './components/screen_picker_modal/component';
 import {incomingCallReceived, incomingCallCleared, incomingCallsReset} from './store/slice_incoming_calls';
 import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
-import {registerOpenTalkUserSettings} from './user_settings';
+import {registerOpenTalkUserSettings, ringtoneSettingKey} from './user_settings';
 import {initDeviceCache} from './conference/livekit/devices';
 import {
     setActiveStore,
@@ -70,8 +70,6 @@ interface MeetingStartedMessage {
         created_at_unix_ms?: number;
     };
 }
-
-const ringtoneSettingKey = 'opentalk:ringtone-enabled';
 
 // Stale threshold: ignore incoming-call broadcasts older than this. Matches
 // the modal's auto-decline timer, so anything we'd have auto-dismissed by
