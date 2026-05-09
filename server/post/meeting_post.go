@@ -19,6 +19,55 @@ import (
 // MeetingPostType is the Post.Type value the webapp registers a renderer for.
 const MeetingPostType = "custom_opentalk_meeting"
 
+// formatRelativeAge returns a short locale-aware "X ago" string for the given
+// past time. Granularities: "just now" (< 60s), "Nm" (< 1h), "Nh" (< 24h),
+// "Nd" (>= 24h). Negative or zero durations are clamped to "just now".
+func formatRelativeAge(then time.Time, locale string) string {
+	d := time.Since(then)
+	if d < time.Minute {
+		return i18n.T(locale, i18n.Translatable{
+			DE: "gerade eben",
+			EN: "just now",
+		})
+	}
+	if d < time.Hour {
+		mins := int(d / time.Minute)
+		return i18n.T(locale, i18n.Translatable{
+			DE: fmt.Sprintf("vor %d Min", mins),
+			EN: fmt.Sprintf("%d min ago", mins),
+		})
+	}
+	if d < 24*time.Hour {
+		hrs := int(d / time.Hour)
+		return i18n.T(locale, i18n.Translatable{
+			DE: fmt.Sprintf("vor %d Std", hrs),
+			EN: fmt.Sprintf("%d h ago", hrs),
+		})
+	}
+	days := int(d / (24 * time.Hour))
+	return i18n.T(locale, i18n.Translatable{
+		DE: fmt.Sprintf("vor %d Tagen", days),
+		EN: fmt.Sprintf("%d d ago", days),
+	})
+}
+
+// formatDuration returns a short locale-neutral duration like "5m" or "1h 23m"
+// from a positive seconds count.
+func formatDuration(durationSeconds int64) string {
+	if durationSeconds <= 0 {
+		return ""
+	}
+	h := durationSeconds / 3600
+	m := (durationSeconds % 3600) / 60
+	if h > 0 {
+		return fmt.Sprintf("%dh %dm", h, m)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm", m)
+	}
+	return fmt.Sprintf("%ds", durationSeconds)
+}
+
 // PostActionPathEnd / PostActionPathDismiss are the relative plugin URLs the
 // attachment action buttons POST to.
 const (
@@ -88,8 +137,8 @@ func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostUsername, 
 		EN: fmt.Sprintf("Host: %s", hostUsername),
 	})
 	startedLine := i18n.T(locale, i18n.Translatable{
-		DE: fmt.Sprintf("Gestartet um %s", startedAt.Format("15:04")),
-		EN: fmt.Sprintf("Started at %s", startedAt.Format("15:04")),
+		DE: "Gestartet " + formatRelativeAge(startedAt, locale),
+		EN: "Started " + formatRelativeAge(startedAt, locale),
 	})
 	joinLine := i18n.T(locale, i18n.Translatable{
 		DE: fmt.Sprintf("[Meeting beitreten](%s)", inviteURL),
@@ -192,16 +241,9 @@ func rebuildAttachmentForStatus(p *model.Post, status string, when time.Time, du
 	hostUsername, _ := p.GetProp("host_username").(string)
 
 	if status == "ENDED" {
-		text := fmt.Sprintf("Ended at %s.", when.Format("15:04"))
+		text := "Ended " + formatRelativeAge(when, "en") + "."
 		if durationSeconds > 0 {
-			h := durationSeconds / 3600
-			m := (durationSeconds % 3600) / 60
-			s := durationSeconds % 60
-			if h > 0 {
-				text = fmt.Sprintf("Ended at %s, duration %d:%02d:%02d.", when.Format("15:04"), h, m, s)
-			} else {
-				text = fmt.Sprintf("Ended at %s, duration %d:%02d.", when.Format("15:04"), m, s)
-			}
+			text = fmt.Sprintf("Ended %s, duration %s.", formatRelativeAge(when, "en"), formatDuration(durationSeconds))
 		}
 		p.AddProp("attachments", []*model.SlackAttachment{{
 			Title: "OpenTalk meeting (ended)",
