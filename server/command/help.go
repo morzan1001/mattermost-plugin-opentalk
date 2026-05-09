@@ -22,7 +22,10 @@ func buildHelp(locale string) string {
 - ` + "`/opentalk end`" + ` — beendet das Meeting (nur für Host)
 - ` + "`/opentalk dial-in`" + ` — zeigt SIP-Einwahldaten
 - ` + "`/opentalk ring on|off`" + ` — Klingelton bei eingehenden Anrufen ein-/ausschalten
-- ` + "`/opentalk help`" + ` — diese Hilfe`,
+- ` + "`/opentalk help`" + ` — diese Hilfe
+
+**Auf dem Handy**
+Auf der Mattermost-Mobil-App öffnet der Beitritt den OpenTalk-Web-Client im System-Browser. Aktionen wie *Meeting beenden* oder *Ablehnen* sind als Schaltflächen im Meeting-Post verfügbar; Slash-Kommandos funktionieren wie auf dem Desktop.`,
 		EN: `**OpenTalk Plugin – commands**
 - ` + "`/opentalk connect`" + ` — link your Mattermost account to OpenTalk
 - ` + "`/opentalk disconnect`" + ` — remove the link
@@ -32,6 +35,9 @@ func buildHelp(locale string) string {
 - ` + "`/opentalk end`" + ` — end the meeting (host only)
 - ` + "`/opentalk dial-in`" + ` — show SIP dial-in details
 - ` + "`/opentalk ring on|off`" + ` — toggle ringtone for incoming calls
-- ` + "`/opentalk help`" + ` — this help`,
+- ` + "`/opentalk help`" + ` — this help
+
+**On Mobile**
+On the Mattermost mobile app, joining a meeting opens the OpenTalk web client in your system browser. Actions like *End meeting* and *Decline* are available as buttons on the meeting post; slash commands work the same as on desktop.`,
 	})
 }

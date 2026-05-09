@@ -62,3 +62,15 @@ func TestBuildHelp_ContainsAllSubcommands(t *testing.T) {
 		}
 	}
 }
+
+func TestHelp_IncludesMobileSection(t *testing.T) {
+	deOut := buildHelp("de")
+	assert.Contains(t, deOut, "Mobil")
+	assert.Contains(t, deOut, "Browser",
+		"German mobile section must mention that the call opens in the browser")
+
+	enOut := buildHelp("en")
+	assert.Contains(t, enOut, "Mobile")
+	assert.Contains(t, enOut, "browser",
+		"English mobile section must mention that the call opens in the browser")
+}
