@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useLayoutEffect, useRef, useState} from 'react';
 import {useSelector, useDispatch} from 'react-redux';
 
 import {SelfPreview} from './self_preview';
@@ -40,15 +40,26 @@ const MeetingMiniBar: React.FC = () => {
         return localId ? order.filter((id: string) => id !== localId).length : order.length;
     });
 
-    // Floor matches the natural width of the controls bar + counter; cam-on
-    // adds the SelfPreview tile. Below this the buttons start to squish and
-    // the participant counter overlaps.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const camEnabled = useSelector((s: any) => Boolean(s?.[stateKey]?.session?.camEnabled));
-    const baseMinWidth = camEnabled ? 560 : 480;
+    // The minimum width is the row's natural scrollWidth, measured after
+    // layout. Anything smaller squishes buttons; anything larger creates an
+    // empty stripe to the right of the controls. Falls back to a coarse
+    // default until the first measurement lands.
+    const rowRef = useRef<HTMLDivElement | null>(null);
+    const [measuredMinWidth, setMeasuredMinWidth] = useState<number | null>(null);
+    useLayoutEffect(() => {
+        if (!rowRef.current) {
+            return;
+        }
+        const w = rowRef.current.scrollWidth;
+        if (w > 0 && w !== measuredMinWidth) {
+            setMeasuredMinWidth(w);
+        }
+    });
+
+    const baseMinWidth = measuredMinWidth ?? 0;
 
     const resize = useResizable({
-        storageKey: 'opentalk:widget-size:v8',
+        storageKey: 'opentalk:widget-size:v9',
         defaultSize: {width: baseMinWidth, height: 0},
         minSize: {width: baseMinWidth, height: 0},
     });
@@ -151,12 +162,13 @@ const MeetingMiniBar: React.FC = () => {
 
                 {/* Main content row */}
                 <div
+                    ref={rowRef}
                     style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: 8,
                         padding: '0 10px 8px 10px',
-                        minWidth: 0,
+                        width: 'max-content',
                     }}
                 >
                     {session.status === 'connecting' && (
