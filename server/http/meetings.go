@@ -278,9 +278,8 @@ func (h *Handlers) MeetingsEnd(w nethttp.ResponseWriter, r *nethttp.Request) {
 	w.WriteHeader(nethttp.StatusNoContent)
 }
 
-// endMeetingFor performs the meeting-end side-effects: marks the post ENDED,
-// deletes the ActiveMeeting record, broadcasts meeting_ended. Returns the
-// updated *model.Post so callers that need it for a post-action response can use it.
+// endMeetingFor performs the meeting-end side-effects (post update, KV delete, broadcast).
+// Returns the updated post for callers that need it (e.g. post-action responses).
 func (h *Handlers) endMeetingFor(am *store.ActiveMeeting) (*model.Post, error) {
 	var updated *model.Post
 	if am.PostID != "" && h.PostGetter != nil && h.PostUpdater != nil {
@@ -303,10 +302,8 @@ func (h *Handlers) endMeetingFor(am *store.ActiveMeeting) (*model.Post, error) {
 	return updated, nil
 }
 
-// MeetingsPostActionEnd is the post-action endpoint backing the "End meeting"
-// button on the bot-post attachment. Host-gated; non-host clicks return an
-// EphemeralText. Successful host clicks return an Update so the mobile client
-// rerenders the post in its ENDED state without reload.
+// MeetingsPostActionEnd backs the End-meeting button on a meeting-post attachment.
+// Host-gated; non-host clicks return an EphemeralText, host clicks return an Update.
 func (h *Handlers) MeetingsPostActionEnd(w nethttp.ResponseWriter, r *nethttp.Request) {
 	mmUserID := r.Header.Get("Mattermost-User-ID")
 	if mmUserID == "" {
@@ -346,6 +343,60 @@ func (h *Handlers) MeetingsPostActionEnd(w nethttp.ResponseWriter, r *nethttp.Re
 	writePostActionResponse(w, &model.PostActionIntegrationResponse{Update: updated})
 }
 
+// MeetingsPostActionDismiss backs the Decline button on a DM meeting attachment.
+// Returns an Update post when the dismissal flips the meeting to MISSED.
+func (h *Handlers) MeetingsPostActionDismiss(w nethttp.ResponseWriter, r *nethttp.Request) {
+	mmUserID := r.Header.Get("Mattermost-User-ID")
+	if mmUserID == "" {
+		nethttp.Error(w, "unauthorized", nethttp.StatusUnauthorized)
+		return
+	}
+	var body model.PostActionIntegrationRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		nethttp.Error(w, "bad request: "+err.Error(), nethttp.StatusBadRequest)
+		return
+	}
+	channelID, _ := body.Context["channel_id"].(string)
+	roomID, _ := body.Context["room_id"].(string)
+	if channelID == "" || roomID == "" {
+		nethttp.Error(w, "channel_id and room_id required in context", nethttp.StatusBadRequest)
+		return
+	}
+
+	am, err := h.Store.LoadActiveMeeting(channelID)
+	if err != nil {
+		writePostActionResponse(w, &model.PostActionIntegrationResponse{
+			EphemeralText: "This meeting is no longer active.",
+		})
+		return
+	}
+	if am.RoomID != roomID {
+		writePostActionResponse(w, &model.PostActionIntegrationResponse{
+			EphemeralText: "This meeting is no longer active.",
+		})
+		return
+	}
+	if mmUserID == am.HostUserID {
+		writePostActionResponse(w, &model.PostActionIntegrationResponse{
+			EphemeralText: "You are the host of this meeting.",
+		})
+		return
+	}
+
+	updated, dErr := h.dismissFor(am, mmUserID)
+	if dErr != nil {
+		nethttp.Error(w, "save dismissal: "+dErr.Error(), nethttp.StatusInternalServerError)
+		return
+	}
+	if updated != nil {
+		writePostActionResponse(w, &model.PostActionIntegrationResponse{Update: updated})
+		return
+	}
+	writePostActionResponse(w, &model.PostActionIntegrationResponse{
+		EphemeralText: "Call declined.",
+	})
+}
+
 func writePostActionResponse(w nethttp.ResponseWriter, resp *model.PostActionIntegrationResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(nethttp.StatusOK)
@@ -355,6 +406,53 @@ func writePostActionResponse(w nethttp.ResponseWriter, resp *model.PostActionInt
 type dismissRequest struct {
 	ChannelID string `json:"channel_id"`
 	RoomID    string `json:"room_id"`
+}
+
+// dismissFor records the dismissal and returns the updated post if the dismissal flipped the meeting to MISSED.
+func (h *Handlers) dismissFor(am *store.ActiveMeeting, mmUserID string) (*model.Post, error) {
+	dismissedSet, err := h.Store.AddDismissal(am.ChannelID, am.RoomID, mmUserID)
+	if err != nil {
+		return nil, err
+	}
+	if h.BroadcastFunc != nil {
+		h.BroadcastFunc("incoming_call_dismissed", map[string]any{
+			"channel_id": am.ChannelID,
+			"room_id":    am.RoomID,
+			"mm_user_id": mmUserID,
+		})
+	}
+	if h.ChannelMembersOf == nil {
+		return nil, nil
+	}
+	members := h.ChannelMembersOf(am.ChannelID)
+	recipients := make([]string, 0, len(members))
+	for _, uid := range members {
+		if uid != am.HostUserID {
+			recipients = append(recipients, uid)
+		}
+	}
+	if len(recipients) == 0 || !allIn(dismissedSet, recipients) {
+		return nil, nil
+	}
+
+	var updated *model.Post
+	if am.PostID != "" && h.PostGetter != nil && h.PostUpdater != nil {
+		if pp, ge := h.PostGetter(am.PostID); ge == nil && pp != nil {
+			post.ApplyMissedStatus(pp, time.Now().UTC())
+			if uErr := h.PostUpdater(pp); uErr == nil {
+				updated = pp
+			}
+		}
+	}
+	_ = h.Store.DeleteActiveMeeting(am.ChannelID)
+	_ = h.Store.DeleteDismissals(am.ChannelID, am.RoomID)
+	if h.BroadcastFunc != nil {
+		h.BroadcastFunc("meeting_ended", map[string]any{
+			"channel_id": am.ChannelID,
+			"room_id":    am.RoomID,
+		})
+	}
+	return updated, nil
 }
 
 // MeetingsDismiss records that the requesting user declined the incoming call.
@@ -379,7 +477,6 @@ func (h *Handlers) MeetingsDismiss(w nethttp.ResponseWriter, r *nethttp.Request)
 	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			// Meeting already ended; treat dismiss as a no-op.
 			w.WriteHeader(nethttp.StatusNoContent)
 			return
 		}
@@ -387,52 +484,14 @@ func (h *Handlers) MeetingsDismiss(w nethttp.ResponseWriter, r *nethttp.Request)
 		return
 	}
 	if am.RoomID != body.RoomID {
-		// Different meeting is now active; stale dismiss — no-op.
 		w.WriteHeader(nethttp.StatusNoContent)
 		return
 	}
 
-	dismissedSet, err := h.Store.AddDismissal(body.ChannelID, body.RoomID, mmUserID)
-	if err != nil {
-		nethttp.Error(w, "save dismissal: "+err.Error(), nethttp.StatusInternalServerError)
+	if _, eErr := h.dismissFor(am, mmUserID); eErr != nil {
+		nethttp.Error(w, "save dismissal: "+eErr.Error(), nethttp.StatusInternalServerError)
 		return
 	}
-
-	if h.BroadcastFunc != nil {
-		h.BroadcastFunc("incoming_call_dismissed", map[string]any{
-			"channel_id": body.ChannelID,
-			"room_id":    body.RoomID,
-			"mm_user_id": mmUserID,
-		})
-	}
-
-	// All non-host members declined? -> MISSED.
-	if h.ChannelMembersOf != nil {
-		members := h.ChannelMembersOf(body.ChannelID)
-		recipients := make([]string, 0, len(members))
-		for _, uid := range members {
-			if uid != am.HostUserID {
-				recipients = append(recipients, uid)
-			}
-		}
-		if len(recipients) > 0 && allIn(dismissedSet, recipients) {
-			if am.PostID != "" && h.PostGetter != nil && h.PostUpdater != nil {
-				if pp, ge := h.PostGetter(am.PostID); ge == nil && pp != nil {
-					post.ApplyMissedStatus(pp, time.Now().UTC())
-					_ = h.PostUpdater(pp)
-				}
-			}
-			_ = h.Store.DeleteActiveMeeting(body.ChannelID)
-			_ = h.Store.DeleteDismissals(body.ChannelID, body.RoomID)
-			if h.BroadcastFunc != nil {
-				h.BroadcastFunc("meeting_ended", map[string]any{
-					"channel_id": body.ChannelID,
-					"room_id":    body.RoomID,
-				})
-			}
-		}
-	}
-
 	w.WriteHeader(nethttp.StatusNoContent)
 }
 

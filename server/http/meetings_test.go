@@ -385,3 +385,103 @@ func TestMeetingsPostActionEnd_NonHost(t *testing.T) {
 	assert.NotEmpty(t, resp.EphemeralText, "non-host gets a friendly ephemeral message")
 	api.AssertNotCalled(t, "KVDelete", mock.Anything)
 }
+
+func TestMeetingsPostActionDismiss_StillLive(t *testing.T) {
+	api := &plugintest.API{}
+	am := &store.ActiveMeeting{
+		ChannelID:  "dm-ch",
+		RoomID:     "room-1",
+		HostUserID: "host-uid",
+		PostID:     "post-1",
+	}
+	stored, _ := json.Marshal(am)
+	api.On("KVGet", "meeting_dm-ch").Return(stored, nil)
+	api.On("KVGet", mock.MatchedBy(func(k string) bool {
+		return strings.HasPrefix(k, "dismiss_")
+	})).Return([]byte(nil), nil)
+	api.On("KVSetWithExpiry", mock.MatchedBy(func(k string) bool {
+		return strings.HasPrefix(k, "dismiss_")
+	}), mock.Anything, mock.AnythingOfType("int64")).Return(nil)
+
+	h := &Handlers{
+		Store:         store.New(api),
+		BroadcastFunc: func(string, map[string]any) {},
+		ChannelMembersOf: func(string) []string {
+			return []string{"host-uid", "alice", "bob"}
+		},
+	}
+
+	body, _ := json.Marshal(model.PostActionIntegrationRequest{
+		UserId:    "alice",
+		ChannelId: "dm-ch",
+		Context: map[string]any{
+			"channel_id": "dm-ch",
+			"room_id":    "room-1",
+		},
+	})
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/post-action/dismiss", bytes.NewReader(body))
+	req.Header.Set("Mattermost-User-ID", "alice")
+	rr := httptest.NewRecorder()
+	h.MeetingsPostActionDismiss(rr, req)
+
+	require.Equal(t, nethttp.StatusOK, rr.Code)
+	var resp model.PostActionIntegrationResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.Nil(t, resp.Update, "still-live meeting: no Update")
+	assert.NotEmpty(t, resp.EphemeralText, "still-live meeting: ephemeral confirmation")
+}
+
+func TestMeetingsPostActionDismiss_FlipsMissed(t *testing.T) {
+	api := &plugintest.API{}
+	am := &store.ActiveMeeting{
+		ChannelID:  "dm-ch",
+		RoomID:     "room-1",
+		HostUserID: "host-uid",
+		PostID:     "post-1",
+	}
+	stored, _ := json.Marshal(am)
+	api.On("KVGet", "meeting_dm-ch").Return(stored, nil)
+	api.On("KVGet", mock.MatchedBy(func(k string) bool {
+		return strings.HasPrefix(k, "dismiss_")
+	})).Return([]byte(nil), nil)
+	api.On("KVSetWithExpiry", mock.MatchedBy(func(k string) bool {
+		return strings.HasPrefix(k, "dismiss_")
+	}), mock.Anything, mock.AnythingOfType("int64")).Return(nil)
+	api.On("KVDelete", mock.MatchedBy(func(k string) bool {
+		return strings.HasPrefix(k, "meeting_") || strings.HasPrefix(k, "dismiss_")
+	})).Return(nil)
+
+	h := &Handlers{
+		Store:         store.New(api),
+		BroadcastFunc: func(string, map[string]any) {},
+		ChannelMembersOf: func(string) []string {
+			return []string{"host-uid", "alice"}
+		},
+		PostGetter: func(id string) (*model.Post, error) {
+			return &model.Post{Id: id, Props: model.StringInterface{
+				"frontend_url":  "https://opentalk.example",
+				"host_username": "host-display",
+			}}, nil
+		},
+		PostUpdater: func(*model.Post) error { return nil },
+	}
+
+	body, _ := json.Marshal(model.PostActionIntegrationRequest{
+		UserId:    "alice",
+		ChannelId: "dm-ch",
+		Context: map[string]any{
+			"channel_id": "dm-ch",
+			"room_id":    "room-1",
+		},
+	})
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/post-action/dismiss", bytes.NewReader(body))
+	req.Header.Set("Mattermost-User-ID", "alice")
+	rr := httptest.NewRecorder()
+	h.MeetingsPostActionDismiss(rr, req)
+
+	require.Equal(t, nethttp.StatusOK, rr.Code)
+	var resp model.PostActionIntegrationResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Update, "last decliner: Update with MISSED post")
+	assert.Equal(t, "MISSED", resp.Update.GetProp("status"))
+}
