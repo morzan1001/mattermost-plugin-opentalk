@@ -129,6 +129,19 @@ export interface ModerationDisableMicrophoneRestrictions {
     action: 'disableMicrophoneRestrictions';
 }
 
+export interface ModerationEnableRaiseHands {
+    action: 'enableRaiseHands';
+}
+
+export interface ModerationDisableRaiseHands {
+    action: 'disableRaiseHands';
+}
+
+export interface ModerationResetRaisedHands {
+    action: 'resetRaisedHands';
+    target?: string[];
+}
+
 export type ModerationOutgoing =
     | ModerationKick
     | ModerationBan
@@ -144,7 +157,10 @@ export type ModerationOutgoing =
     | ModerationAccept
     | ModerationMute
     | ModerationEnableMicrophoneRestrictions
-    | ModerationDisableMicrophoneRestrictions;
+    | ModerationDisableMicrophoneRestrictions
+    | ModerationEnableRaiseHands
+    | ModerationDisableRaiseHands
+    | ModerationResetRaisedHands;
 
 // ---------- Incoming ----------
 
@@ -238,6 +254,22 @@ export interface ModerationErrorMessage {
     error: ModerationError;
 }
 
+export interface ModerationRaiseHandsEnabled {
+    action: 'raiseHandsEnabled';
+    issuedBy: string;
+}
+
+export interface ModerationRaiseHandsDisabled {
+    action: 'raiseHandsDisabled';
+    issuedBy: string;
+}
+
+export interface ModerationRaisedHandResetByModerator {
+    action: 'raisedHandResetByModerator';
+    issuedBy: string;
+    participants: string[];
+}
+
 export type ModerationIncoming =
     | ModerationKicked
     | ModerationBanned
@@ -256,4 +288,7 @@ export type ModerationIncoming =
     | ModerationMuted
     | ModerationMicrophoneRestrictionsEnabled
     | ModerationMicrophoneRestrictionsDisabled
-    | ModerationErrorMessage;
+    | ModerationErrorMessage
+    | ModerationRaiseHandsEnabled
+    | ModerationRaiseHandsDisabled
+    | ModerationRaisedHandResetByModerator;

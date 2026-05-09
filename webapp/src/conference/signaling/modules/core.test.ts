@@ -1,5 +1,5 @@
 import {buildFrame} from '../frame';
-import {CoreNamespace, type CoreOutgoing, type CoreIncoming, type Participant} from './core';
+import {CoreNamespace, type CoreOutgoing, type CoreIncoming, type Participant, type CoreHandRaised} from './core';
 
 describe('core module types', () => {
     it('CoreNamespace constant is "core"', () => {
@@ -31,6 +31,36 @@ describe('core module types', () => {
         if (m.action === 'joinSuccess') {
             expect(m.participants).toHaveLength(1);
             expect(m.livekit?.url).toBe('wss://lk.example');
+        }
+    });
+
+    it('typechecks a raiseHand outgoing frame in control namespace', () => {
+        const f = buildFrame(
+            CoreNamespace,
+            'raiseHand',
+            {} satisfies Omit<Extract<CoreOutgoing, {action: 'raiseHand'}>, 'action'>,
+        );
+        expect(f.payload.action).toBe('raiseHand');
+    });
+
+    it('typechecks a lowerHand outgoing frame in control namespace', () => {
+        const f = buildFrame(
+            CoreNamespace,
+            'lowerHand',
+            {} satisfies Omit<Extract<CoreOutgoing, {action: 'lowerHand'}>, 'action'>,
+        );
+        expect(f.payload.action).toBe('lowerHand');
+    });
+
+    it('typechecks a handRaised incoming frame in control namespace', () => {
+        const m: CoreHandRaised = {action: 'handRaised', participant: 'u1'};
+        expect(m.participant).toBe('u1');
+    });
+
+    it('typechecks a handLowered incoming frame in control namespace', () => {
+        const m: CoreIncoming = {action: 'handLowered', participant: 'u1'};
+        if (m.action === 'handLowered') {
+            expect(m.participant).toBe('u1');
         }
     });
 });

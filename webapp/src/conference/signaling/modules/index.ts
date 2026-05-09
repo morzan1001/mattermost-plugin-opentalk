@@ -1,5 +1,5 @@
 /*
- * Barrel re-export for the four MVP signaling modules ported from
+ * Barrel re-export for the three MVP signaling modules ported from
  * opentalk/web-frontend@00241cd.
  *
  * SPDX-License-Identifier: EUPL-1.2
@@ -9,4 +9,3 @@
 export * from './core';
 export * from './livekit';
 export * from './moderation';
-export * from './raise_hands';

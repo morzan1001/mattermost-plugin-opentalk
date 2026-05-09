@@ -104,7 +104,15 @@ export interface CoreEnterRoom {
     action: 'enterRoom';
 }
 
-export type CoreOutgoing = CoreJoin | CoreLeave | CoreEnterRoom;
+export interface CoreRaiseHand {
+    action: 'raiseHand';
+}
+
+export interface CoreLowerHand {
+    action: 'lowerHand';
+}
+
+export type CoreOutgoing = CoreJoin | CoreLeave | CoreEnterRoom | CoreRaiseHand | CoreLowerHand;
 
 // ---------- Incoming ----------
 
@@ -181,6 +189,16 @@ export interface CoreRoomParametersChanged {
     };
 }
 
+export interface CoreHandRaised {
+    action: 'handRaised';
+    participant: string;
+}
+
+export interface CoreHandLowered {
+    action: 'handLowered';
+    participant: string;
+}
+
 export type CoreIncoming =
     | CoreJoinSuccess
     | CoreParticipantConnected
@@ -190,4 +208,6 @@ export type CoreIncoming =
     | CoreLeftWaitingRoom
     | CoreInWaitingRoom
     | CoreClosing
-    | CoreRoomParametersChanged;
+    | CoreRoomParametersChanged
+    | CoreHandRaised
+    | CoreHandLowered;

@@ -17,7 +17,6 @@ import {buildFrame} from './frame';
 import {CoreNamespace, type Participant} from './modules/core';
 import {LivekitNamespace} from './modules/livekit';
 import {ModerationNamespace, type KickScope} from './modules/moderation';
-import {RaiseHandsNamespace} from './modules/raise_hands';
 import {SignalingSocket} from './socket';
 
 const RESUMPTION_KEY_PREFIX = 'opentalk:resumption:';
@@ -249,29 +248,24 @@ export class ConferenceRoom {
                 });
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                this.listener.on(RaiseHandsNamespace, 'handRaised', (payload: any) => {
+                this.listener.on(CoreNamespace, 'handRaised', (payload: any) => {
                     const participant = payload.participant ?? payload.id;
                     if (participant) {
                         this.emit('hand_raised', {participantId: participant as string});
                     }
                 });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                this.listener.on(RaiseHandsNamespace, 'handLowered', (payload: any) => {
+                this.listener.on(CoreNamespace, 'handLowered', (payload: any) => {
                     const participant = payload.participant ?? payload.id;
                     if (participant) {
                         this.emit('hand_lowered', {participantId: participant as string});
                     }
                 });
-                this.listener.on(RaiseHandsNamespace, 'raiseHandsEnabled', () => {
+                this.listener.on(ModerationNamespace, 'raiseHandsEnabled', () => {
                     this.emit('raise_hands_toggled', {enabled: true});
                 });
-                this.listener.on(RaiseHandsNamespace, 'raiseHandsDisabled', () => {
+                this.listener.on(ModerationNamespace, 'raiseHandsDisabled', () => {
                     this.emit('raise_hands_toggled', {enabled: false});
-                });
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                this.listener.on(RaiseHandsNamespace, 'error', (payload: any) => {
-                    // eslint-disable-next-line no-console
-                    console.warn('[opentalk] raise_hands error:', payload);
                 });
 
                 this.socket.on('open', () => {
@@ -329,14 +323,14 @@ export class ConferenceRoom {
         if (this.state !== 'connected' || !this.socket) {
             return;
         }
-        this.socket.send(buildFrame(RaiseHandsNamespace, 'raiseHand', {}));
+        this.socket.send(buildFrame(CoreNamespace, 'raiseHand', {}));
     }
 
     public lowerHand(): void {
         if (this.state !== 'connected' || !this.socket) {
             return;
         }
-        this.socket.send(buildFrame(RaiseHandsNamespace, 'lowerHand', {}));
+        this.socket.send(buildFrame(CoreNamespace, 'lowerHand', {}));
     }
 
     /** Host-only: turn the raise-hands feature on for the room. OpenTalk
@@ -346,7 +340,7 @@ export class ConferenceRoom {
         if (this.state !== 'connected' || !this.socket) {
             return;
         }
-        this.socket.send(buildFrame(RaiseHandsNamespace, 'enableRaiseHands', {}));
+        this.socket.send(buildFrame(ModerationNamespace, 'enableRaiseHands', {}));
     }
 
     /** Host-only: kick all participants out of the room. Used when ending the
