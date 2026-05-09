@@ -3,7 +3,6 @@ package http
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	nethttp "net/http"
 	"time"
 
@@ -108,7 +107,7 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 
 	// Build and post the custom-post via the bot. We persist ActiveMeeting
 	// *before* the post so that even if the post call fails we still know
-	// about the live room (cleanup is handled by Phase-5 expiry logic).
+	// about the live room; the reaper will clean it up.
 	hostName := mmUserID
 	if h.HostUsernameOf != nil {
 		if n := h.HostUsernameOf(mmUserID); n != "" {
@@ -279,15 +278,15 @@ func (h *Handlers) MeetingsEnd(w nethttp.ResponseWriter, r *nethttp.Request) {
 	w.WriteHeader(nethttp.StatusNoContent)
 }
 
-// endMeetingFor performs the meeting-end side-effects (post update, KV delete, broadcast).
-// Returns the updated post for callers that need it (e.g. post-action responses).
+// endMeetingFor runs the end-meeting side-effects and returns the updated post.
 func (h *Handlers) endMeetingFor(am *store.ActiveMeeting) (*model.Post, error) {
-	// Best-effort: revoke the OpenTalk invite so the link stops working.
-	// Failures are logged but do not block the local end-flow.
-	if h.OpenTalk != nil && h.AccessTokenFor != nil && am.InviteCode != "" {
+	// Best-effort invite revoke; failures don't block the end-flow.
+	if am.InviteCode != "" && h.OpenTalk != nil && h.AccessTokenFor != nil {
 		if token, terr := h.AccessTokenFor(am.HostUserID); terr == nil {
 			if dErr := h.OpenTalk.DeleteInvite(token, am.RoomID, am.InviteCode); dErr != nil {
-				fmt.Printf("[opentalk] DeleteInvite room=%s invite=%s: %v\n", am.RoomID, am.InviteCode, dErr)
+				if h.LogWarn != nil {
+					h.LogWarn("[opentalk] DeleteInvite failed", "room", am.RoomID, "invite", am.InviteCode, "err", dErr.Error())
+				}
 			}
 		}
 	}
@@ -350,9 +349,7 @@ func (h *Handlers) MeetingsPostActionEnd(w nethttp.ResponseWriter, r *nethttp.Re
 		return
 	}
 	if updated == nil {
-		// Post lookup or update failed; the meeting is still ended in KV.
-		// Falling back to ephemeral keeps the user informed instead of a
-		// silent no-op response.
+		// Post update failed; meeting is ended in KV.
 		writePostActionResponse(w, &model.PostActionIntegrationResponse{
 			EphemeralText: "Meeting ended.",
 		})
@@ -417,10 +414,7 @@ func writePostActionResponse(w nethttp.ResponseWriter, resp *model.PostActionInt
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// staleMeetingResponse builds a response for a tap on a button whose meeting is
-// no longer active (already ended elsewhere). When postID is set and the post
-// is fetchable, the response carries the up-to-date post as Update so the
-// mobile client refreshes its cached view; otherwise only the ephemeral text.
+// staleMeetingResponse returns an Update when the post is still fetchable, else only an ephemeral.
 func (h *Handlers) staleMeetingResponse(postID, ephemeral string) *model.PostActionIntegrationResponse {
 	resp := &model.PostActionIntegrationResponse{EphemeralText: ephemeral}
 	if postID != "" && h.PostGetter != nil {
@@ -527,13 +521,7 @@ type heartbeatRequest struct {
 	ChannelID string `json:"channel_id"`
 }
 
-// MeetingsHeartbeat updates the LastHeartbeat timestamp on the active
-// meeting for the given channel. The webapp pings this endpoint every
-// 30s while the user is in a meeting; the reaper uses the timestamp to
-// detect dead sessions and end orphaned meetings.
-//
-// Quietly returns 204 if no active meeting is found — the webapp shouldn't
-// have to coordinate with the server about meeting-end races.
+// MeetingsHeartbeat advances LastHeartbeat for the host. Returns 204 silently on race with meeting-end.
 func (h *Handlers) MeetingsHeartbeat(w nethttp.ResponseWriter, r *nethttp.Request) {
 	mmUserID := r.Header.Get("Mattermost-User-ID")
 	if mmUserID == "" {
@@ -551,17 +539,12 @@ func (h *Handlers) MeetingsHeartbeat(w nethttp.ResponseWriter, r *nethttp.Reques
 	}
 
 	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
-	if err != nil || am == nil {
-		// No active meeting — no-op. Keeps the webapp's heartbeat
-		// ticker from alarming when the meeting just ended elsewhere.
+	if err != nil {
 		w.WriteHeader(nethttp.StatusNoContent)
 		return
 	}
 
 	if am.HostUserID != mmUserID {
-		// Only the host may advance the heartbeat timestamp. Non-host
-		// members get a quiet 204 so the webapp's fire-and-forget
-		// pattern needs no error path.
 		w.WriteHeader(nethttp.StatusNoContent)
 		return
 	}

@@ -14,11 +14,7 @@ import (
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
-// EndMeetingFunc is called for each stale meeting the reaper detects.
-// Implementation is provided by the host plugin (server/plugin.go) so
-// the same post-update + broadcast + KV-cleanup happens regardless of
-// whether the host clicked "end for all", all DM-recipients declined,
-// or the reaper detected a dead session.
+// EndMeetingFunc ends a stale meeting detected by the reaper.
 type EndMeetingFunc func(am *store.ActiveMeeting)
 
 type Reaper struct {
@@ -56,8 +52,11 @@ func (r *Reaper) Start() {
 	go r.loop(ctx)
 }
 
-// Stop terminates the loop. Idempotent.
+// Stop terminates the loop. Idempotent; safe to call on a nil receiver.
 func (r *Reaper) Stop() {
+	if r == nil {
+		return
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.cancel != nil {
@@ -66,10 +65,7 @@ func (r *Reaper) Stop() {
 	}
 }
 
-// RunOnce executes a single reaper tick synchronously. It is safe to call
-// from tests and from an admin-trigger endpoint without starting the
-// background loop. RunOnce does not acquire the mu lock because tick() itself
-// is stateless (all state lives in the KV-store and the callback).
+// RunOnce executes a single reaper tick synchronously; safe to call from tests.
 func (r *Reaper) RunOnce() {
 	r.tick()
 }
@@ -78,8 +74,7 @@ func (r *Reaper) loop(ctx context.Context) {
 	t := time.NewTicker(r.interval)
 	defer t.Stop()
 
-	// Tick immediately so a long-stale entry at deploy time is cleaned
-	// up promptly without waiting one interval.
+	// Tick immediately to clean up long-stale entries at deploy time.
 	r.tick()
 
 	for {

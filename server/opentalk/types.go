@@ -62,11 +62,7 @@ type StartInvitedRequest struct {
 	Resumption   string `json:"resumption,omitempty"`
 }
 
-// StartResponse is the shared response shape for both start endpoints.
-// Notable: the live runforest instance returns {ticket, resumption} - the
-// older OpenAPI's {token, roomserver_address} shape is not used. The webapp
-// builds the WS-URL itself by combining a configured roomserver-base-URL with
-// the ticket.
+// The controller returns {ticket, resumption}; the webapp builds the WS-URL from a configured base.
 type StartResponse struct {
 	Ticket     string `json:"ticket"`
 	Resumption string `json:"resumption"`

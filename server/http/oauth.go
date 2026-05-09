@@ -49,6 +49,8 @@ type Handlers struct {
 
 	// IsDMChannel returns true if the given channel is a direct or group channel.
 	IsDMChannel func(channelID string) bool
+
+	LogWarn func(msg string, args ...any)
 }
 
 type MeetingDefaults struct {

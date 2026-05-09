@@ -113,9 +113,7 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 }
 
 func (p *Plugin) OnDeactivate() error {
-	if p.reaper != nil {
-		p.reaper.Stop()
-	}
+	p.reaper.Stop()
 	return nil
 }
 
@@ -237,8 +235,7 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 
 		BotUserID:   p.botUserID,
 		FrontendURL: cfg.OpenTalkFrontendURL,
-		// pluginapi.PostService.CreatePost mutates in-place and returns only
-		// error; adapt to the (post, error) signature the handler expects.
+		// pluginapi.Post.CreatePost mutates in-place; adapt to (post, error) shape.
 		CreatePost: func(mp *model.Post) (*model.Post, error) {
 			if err := p.client.Post.CreatePost(mp); err != nil {
 				return nil, err
@@ -278,8 +275,6 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			return p.client.Post.UpdatePost(mp)
 		},
 
-		// Dismiss endpoint needs the member list to detect when all DM
-		// recipients have declined (auto-MISSED transition).
 		ChannelMembersOf: func(channelID string) []string {
 			members, err := p.API.GetChannelMembers(channelID, 0, 100)
 			if err != nil || members == nil {
@@ -298,17 +293,15 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			}
 			return ch.Type == model.ChannelTypeDirect || ch.Type == model.ChannelTypeGroup
 		},
+		LogWarn: func(msg string, args ...any) {
+			p.API.LogWarn(msg, args...)
+		},
 	}
 	pluginhttp.NewRouter(handlers).ServeHTTP(w, r)
 }
 
-// CreateMeeting orchestrates room creation, invite generation, an initial
-// host start-ticket, KV persistence, and the bot-authored custom-post for
-// the given channel. Returns the persisted ActiveMeeting (with PostID).
-//
-// Used by both the HTTP handler and the /opentalk start slash command.
-// device_secret is generated here for callers that don't have one (slash-
-// command path). Returns an error if the user is not connected to OpenTalk.
+// CreateMeeting provisions an OpenTalk room + bot post for channelID on behalf of mmUserID.
+// Used by the slash-command path (HTTP handler has its own equivalent in MeetingsCreate).
 func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting, error) {
 	cfg := p.getConfiguration()
 
@@ -317,8 +310,7 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		return nil, fmt.Errorf("access token: %w", err)
 	}
 
-	// Guard: if a meeting is already active in this channel, return it as a
-	// sentinel so callers can branch with errors.Is(err, store.ErrMeetingAlreadyActive).
+	// Guard: callers can branch with errors.Is(err, store.ErrMeetingAlreadyActive).
 	if existing, lErr := p.store.LoadActiveMeeting(channelID); lErr == nil && existing != nil {
 		return existing, store.ErrMeetingAlreadyActive
 	}
@@ -390,10 +382,7 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 			"host_name":    hostName,
 			"post_id":      botPost.Id,
 
-			// Freshness marker so the webapp can ignore broadcasts that
-			// arrive on a late WS-reconnect / plugin re-activate (we don't
-			// want to ring the user for a meeting that was started 5 min
-			// ago and is essentially stale).
+			// lets the webapp ignore stale broadcasts on WS reconnect
 			"created_at_unix_ms": time.Now().UnixMilli(),
 		}
 		if isDM {

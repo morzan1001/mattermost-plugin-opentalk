@@ -1,9 +1,6 @@
-// Package post owns the Mattermost-Post-Type used by the plugin to render
-// in-channel meeting cards. The server constructs the post via the Bot user;
-// the webapp registers a custom React component to render it. The same post
-// also carries a Slack-style attachment so clients without a custom-post
-// renderer (mattermost-mobile, ad-hoc viewers) get a usable card with a
-// join link and action buttons.
+// Package post builds and mutates the custom meeting-post and its Slack attachment.
+// The webapp registers a custom React component for MeetingPostType; clients without
+// such a renderer (mattermost-mobile) fall through to the attachment.
 package post
 
 import (
@@ -75,14 +72,8 @@ const (
 	PostActionPathDismiss = "/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/post-action/dismiss"
 )
 
-// BuildMeetingPost constructs the initial bot-authored post for a freshly
-// created meeting. The Message field is plain text including the join URL —
-// the universal fallback. props.attachments carries a richer Slack-style
-// card for clients that render attachments (mattermost-mobile). The webapp
-// suppresses the attachment via its custom-post renderer.
-//
-// isDM is true for direct or group channels; controls whether the "Decline"
-// action is emitted on the attachment.
+// BuildMeetingPost returns the initial bot post for a freshly-created meeting.
+// isDM controls whether the Decline action button is included on the attachment.
 func BuildMeetingPost(am *store.ActiveMeeting, frontendURL, hostUsername, locale string, isDM bool) *model.Post {
 	msg := i18n.T(locale, i18n.Translatable{
 		DE: "OpenTalk-Meeting",
@@ -116,26 +107,17 @@ func BuildMeetingPost(am *store.ActiveMeeting, frontendURL, hostUsername, locale
 	}
 }
 
-// buildStartedAttachment builds the Slack-style attachment that ships with a
-// freshly-created meeting post. Color blue, contains a markdown join link
-// and dial-in line if SIP is enabled, plus an End-meeting action and an
-// optional Decline action for DM/GM channels.
+// buildStartedAttachment returns the Slack-style card for the initial meeting post.
 func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostUsername, locale string, isDM bool) []*model.SlackAttachment {
 	inviteURL := fmt.Sprintf("%s/invite/%s", frontendURL, am.InviteCode)
 	startedAt := am.CreatedAt
-	if startedAt.IsZero() {
-		startedAt = time.Now().UTC()
-	}
 
 	title := i18n.T(locale, i18n.Translatable{
 		DE: "OpenTalk-Meeting",
 		EN: "OpenTalk meeting",
 	})
 
-	hostLine := i18n.T(locale, i18n.Translatable{
-		DE: fmt.Sprintf("Host: %s", hostUsername),
-		EN: fmt.Sprintf("Host: %s", hostUsername),
-	})
+	hostLine := fmt.Sprintf("Host: %s", hostUsername)
 	startedLine := i18n.T(locale, i18n.Translatable{
 		DE: "Gestartet " + formatRelativeAge(startedAt, locale),
 		EN: "Started " + formatRelativeAge(startedAt, locale),
@@ -205,8 +187,7 @@ func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostUsername, 
 	}}
 }
 
-// ApplyEndedStatus mutates an existing meeting-post in place to mark the
-// meeting as ended. The caller is responsible for calling pluginapi.Post.Update.
+// ApplyEndedStatus mutates an existing meeting-post in place to mark the meeting as ended.
 func ApplyEndedStatus(p *model.Post, endedAt time.Time) {
 	startedAtRaw := p.GetProp("started_at")
 	var duration int64
@@ -235,10 +216,7 @@ func ApplyMissedStatus(p *model.Post, when time.Time) {
 	rebuildAttachmentForStatus(p, "MISSED", when, 0)
 }
 
-// rebuildAttachmentForStatus rewrites props.attachments to a status-appropriate
-// shape. Reads host_username off the post props for the MISSED text. Locale
-// is not preserved on the post — channel-locale at update time is unknown —
-// so the rebuilt attachment renders in English. Acceptable degradation.
+// rebuildAttachmentForStatus rewrites props.attachments; rebuilt attachments are always English (caller-locale unknown at update time).
 func rebuildAttachmentForStatus(p *model.Post, status string, when time.Time, durationSeconds int64) {
 	hostUsername, _ := p.GetProp("host_username").(string)
 
@@ -255,7 +233,6 @@ func rebuildAttachmentForStatus(p *model.Post, status string, when time.Time, du
 		return
 	}
 
-	// MISSED.
 	p.AddProp("attachments", []*model.SlackAttachment{{
 		Title: "OpenTalk meeting (missed)",
 		Text:  fmt.Sprintf("Missed call from %s.", hostUsername),
