@@ -423,7 +423,6 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 				push := &model.PushNotification{
 					Version:     model.PushMessageV2,
 					Type:        model.PushTypeMessage,
-					SubType:     model.PushSubTypeCalls,
 					TeamId:      ch.TeamId,
 					ChannelId:   channelID,
 					PostId:      botPost.Id,
