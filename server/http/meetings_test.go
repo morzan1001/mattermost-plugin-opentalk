@@ -297,3 +297,91 @@ func TestMeetingsHeartbeat_FlipsHostHeartbeatReceived(t *testing.T) {
 		"first host heartbeat must flip the flag")
 	assert.False(t, got.LastHeartbeat.IsZero(), "LastHeartbeat must be advanced")
 }
+
+func TestMeetingsPostActionEnd_Host(t *testing.T) {
+	api := &plugintest.API{}
+
+	am := &store.ActiveMeeting{
+		ChannelID:  "ch-1",
+		RoomID:     "room-1",
+		HostUserID: "host-uid",
+		PostID:     "post-1",
+		CreatedAt:  time.Now().UTC().Add(-5 * time.Minute),
+	}
+	stored, err := json.Marshal(am)
+	require.NoError(t, err)
+	api.On("KVGet", "meeting_ch-1").Return(stored, nil)
+	api.On("KVDelete", "meeting_ch-1").Return(nil)
+
+	var broadcasts []string
+	h := &Handlers{
+		Store: store.New(api),
+		PostGetter: func(id string) (*model.Post, error) {
+			return &model.Post{Id: id, Props: model.StringInterface{
+				"started_at":    am.CreatedAt.Unix(),
+				"frontend_url":  "https://opentalk.example",
+				"host_username": "alice",
+			}}, nil
+		},
+		PostUpdater: func(p *model.Post) error { return nil },
+		BroadcastFunc: func(event string, _ map[string]any) {
+			broadcasts = append(broadcasts, event)
+		},
+	}
+
+	body, _ := json.Marshal(model.PostActionIntegrationRequest{
+		UserId:    "host-uid",
+		ChannelId: "ch-1",
+		PostId:    "post-1",
+		Context: map[string]any{
+			"channel_id": "ch-1",
+			"room_id":    "room-1",
+		},
+	})
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/post-action/end", bytes.NewReader(body))
+	req.Header.Set("Mattermost-User-ID", "host-uid")
+	rr := httptest.NewRecorder()
+	h.MeetingsPostActionEnd(rr, req)
+
+	require.Equal(t, nethttp.StatusOK, rr.Code, "host end action returns 200")
+
+	var resp model.PostActionIntegrationResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Update, "response must carry an Update post")
+	assert.Equal(t, "ENDED", resp.Update.GetProp("status"))
+	assert.Contains(t, broadcasts, "meeting_ended")
+}
+
+func TestMeetingsPostActionEnd_NonHost(t *testing.T) {
+	api := &plugintest.API{}
+	am := &store.ActiveMeeting{
+		ChannelID:  "ch-1",
+		RoomID:     "room-1",
+		HostUserID: "host-uid",
+		PostID:     "post-1",
+	}
+	stored, err := json.Marshal(am)
+	require.NoError(t, err)
+	api.On("KVGet", "meeting_ch-1").Return(stored, nil)
+
+	h := &Handlers{Store: store.New(api)}
+
+	body, _ := json.Marshal(model.PostActionIntegrationRequest{
+		UserId:    "intruder-uid",
+		ChannelId: "ch-1",
+		Context: map[string]any{
+			"channel_id": "ch-1",
+		},
+	})
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/post-action/end", bytes.NewReader(body))
+	req.Header.Set("Mattermost-User-ID", "intruder-uid")
+	rr := httptest.NewRecorder()
+	h.MeetingsPostActionEnd(rr, req)
+
+	require.Equal(t, nethttp.StatusOK, rr.Code, "non-host returns 200 with ephemeral text")
+	var resp model.PostActionIntegrationResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.Nil(t, resp.Update)
+	assert.NotEmpty(t, resp.EphemeralText, "non-host gets a friendly ephemeral message")
+	api.AssertNotCalled(t, "KVDelete", mock.Anything)
+}

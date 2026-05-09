@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/mattermost/mattermost/server/public/model"
 
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/opentalk"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/post"
@@ -270,27 +271,85 @@ func (h *Handlers) MeetingsEnd(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 
-	// Mark post ENDED (best-effort; meeting state is gone after this).
+	if _, eErr := h.endMeetingFor(am); eErr != nil {
+		nethttp.Error(w, "delete meeting: "+eErr.Error(), nethttp.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(nethttp.StatusNoContent)
+}
+
+// endMeetingFor performs the meeting-end side-effects: marks the post ENDED,
+// deletes the ActiveMeeting record, broadcasts meeting_ended. Returns the
+// updated *model.Post so callers that need it for a post-action response can use it.
+func (h *Handlers) endMeetingFor(am *store.ActiveMeeting) (*model.Post, error) {
+	var updated *model.Post
 	if am.PostID != "" && h.PostGetter != nil && h.PostUpdater != nil {
 		if p, getErr := h.PostGetter(am.PostID); getErr == nil && p != nil {
 			post.ApplyEndedStatus(p, time.Now().UTC())
-			_ = h.PostUpdater(p)
+			if uErr := h.PostUpdater(p); uErr == nil {
+				updated = p
+			}
 		}
 	}
-
-	if delErr := h.Store.DeleteActiveMeeting(body.ChannelID); delErr != nil {
-		nethttp.Error(w, "delete meeting: "+delErr.Error(), nethttp.StatusInternalServerError)
-		return
+	if delErr := h.Store.DeleteActiveMeeting(am.ChannelID); delErr != nil {
+		return updated, delErr
 	}
-
 	if h.BroadcastFunc != nil {
 		h.BroadcastFunc("meeting_ended", map[string]any{
-			"channel_id": body.ChannelID,
+			"channel_id": am.ChannelID,
 			"room_id":    am.RoomID,
 		})
 	}
+	return updated, nil
+}
 
-	w.WriteHeader(nethttp.StatusNoContent)
+// MeetingsPostActionEnd is the post-action endpoint backing the "End meeting"
+// button on the bot-post attachment. Host-gated; non-host clicks return an
+// EphemeralText. Successful host clicks return an Update so the mobile client
+// rerenders the post in its ENDED state without reload.
+func (h *Handlers) MeetingsPostActionEnd(w nethttp.ResponseWriter, r *nethttp.Request) {
+	mmUserID := r.Header.Get("Mattermost-User-ID")
+	if mmUserID == "" {
+		nethttp.Error(w, "unauthorized", nethttp.StatusUnauthorized)
+		return
+	}
+	var body model.PostActionIntegrationRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		nethttp.Error(w, "bad request: "+err.Error(), nethttp.StatusBadRequest)
+		return
+	}
+	channelID, _ := body.Context["channel_id"].(string)
+	if channelID == "" {
+		nethttp.Error(w, "channel_id required in context", nethttp.StatusBadRequest)
+		return
+	}
+
+	am, err := h.Store.LoadActiveMeeting(channelID)
+	if err != nil {
+		writePostActionResponse(w, &model.PostActionIntegrationResponse{
+			EphemeralText: "This meeting is no longer active.",
+		})
+		return
+	}
+	if am.HostUserID != mmUserID {
+		writePostActionResponse(w, &model.PostActionIntegrationResponse{
+			EphemeralText: "Only the host can end this meeting.",
+		})
+		return
+	}
+
+	updated, eErr := h.endMeetingFor(am)
+	if eErr != nil {
+		nethttp.Error(w, "end meeting: "+eErr.Error(), nethttp.StatusInternalServerError)
+		return
+	}
+	writePostActionResponse(w, &model.PostActionIntegrationResponse{Update: updated})
+}
+
+func writePostActionResponse(w nethttp.ResponseWriter, resp *model.PostActionIntegrationResponse) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(nethttp.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 type dismissRequest struct {
