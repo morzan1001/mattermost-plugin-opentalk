@@ -127,3 +127,24 @@ func TestBuildMeetingPost_AttachmentSTARTED_Channel(t *testing.T) {
 		"End button must point at the post-action endpoint")
 	assert.Equal(t, "ch-1", endAction.Integration.Context["channel_id"])
 }
+
+func TestBuildMeetingPost_AttachmentSTARTED_DM(t *testing.T) {
+	am := &store.ActiveMeeting{
+		ChannelID:  "ch-dm",
+		RoomID:     "room-dm",
+		InviteCode: "inv-dm",
+		HostUserID: "host-uid",
+	}
+
+	post := BuildMeetingPost(am, "https://opentalk.example", "alice", "en", true)
+	rawAtt := post.GetProp("attachments")
+	atts, ok := rawAtt.([]*model.SlackAttachment)
+	require.True(t, ok)
+	require.Len(t, atts, 1)
+
+	att := atts[0]
+	require.Len(t, att.Actions, 2, "DM post: End + Decline")
+	assert.Equal(t, "end", att.Actions[0].Id)
+	assert.Equal(t, "dismiss", att.Actions[1].Id)
+	assert.Contains(t, att.Actions[1].Integration.URL, "/api/v1/meetings/post-action/dismiss")
+}

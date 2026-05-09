@@ -291,6 +291,13 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			}
 			return out
 		},
+		IsDMChannel: func(channelID string) bool {
+			ch, err := p.API.GetChannel(channelID)
+			if err != nil || ch == nil {
+				return false
+			}
+			return ch.Type == model.ChannelTypeDirect || ch.Type == model.ChannelTypeGroup
+		},
 	}
 	pluginhttp.NewRouter(handlers).ServeHTTP(w, r)
 }
@@ -360,7 +367,12 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		hostName = displayNameOf(u)
 		hostLocale = u.Locale
 	}
-	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostName, hostLocale, false)
+
+	ch, chErr := p.API.GetChannel(channelID)
+	isDM := chErr == nil && ch != nil &&
+		(ch.Type == model.ChannelTypeDirect || ch.Type == model.ChannelTypeGroup)
+
+	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostName, hostLocale, isDM)
 	botPost.UserId = p.botUserID
 	if err := p.client.Post.CreatePost(botPost); err != nil {
 		return nil, fmt.Errorf("post meeting card: %w", err)
@@ -370,9 +382,7 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		return nil, fmt.Errorf("persist meeting (with post_id): %w", err)
 	}
 
-	ch, chErr := p.API.GetChannel(channelID)
 	if chErr == nil && ch != nil {
-		isDM := ch.Type == model.ChannelTypeDirect || ch.Type == model.ChannelTypeGroup
 		payload := map[string]any{
 			"channel_id":   channelID,
 			"room_id":      room.ID,

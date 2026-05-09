@@ -46,6 +46,9 @@ type Handlers struct {
 	// Dismiss endpoint uses ChannelMembersOf to detect when all DM recipients
 	// have declined and auto-transitions the meeting to MISSED.
 	ChannelMembersOf func(channelID string) []string
+
+	// IsDMChannel returns true if the given channel is a direct or group channel.
+	IsDMChannel func(channelID string) bool
 }
 
 type MeetingDefaults struct {
