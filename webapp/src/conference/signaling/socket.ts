@@ -119,6 +119,13 @@ export class SignalingSocket {
             throw new Error('SignalingSocket: send() called before connect()');
         }
         const wire = snakeCaseActionValues(snakecaseKeys(payload, {deep: true}));
+        const ns = (wire as {namespace?: unknown}).namespace;
+        const inner = (wire as {payload?: {action?: unknown}}).payload;
+        const action = inner?.action;
+        if (typeof ns === 'string' && typeof action === 'string') {
+            // eslint-disable-next-line no-console
+            console.log('[opentalk] WS send:', ns + ':' + action, inner);
+        }
         this.ws.send(JSON.stringify(wire));
     }
 
