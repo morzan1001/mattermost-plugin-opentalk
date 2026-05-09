@@ -29,6 +29,11 @@ type ActiveMeeting struct {
 	EnableSIP     bool      `json:"enable_sip"`
 	DialInNumber  string    `json:"dial_in_number,omitempty"`
 	DialInPIN     string    `json:"dial_in_pin,omitempty"`
+
+	// HostHeartbeatReceived flips to true the first time the host's webapp
+	// reports a heartbeat against this meeting. Mobile-only hosts never set
+	// it; the reaper grants them a longer initial grace before reaping.
+	HostHeartbeatReceived bool `json:"host_heartbeat_received,omitempty"`
 }
 
 func meetingKey(channelID string) string {

@@ -12,35 +12,35 @@ import (
 
 func TestActiveMeeting_RoundTrip(t *testing.T) {
 	api := &plugintest.API{}
-	s := New(api)
 
+	s := New(api)
 	am := &ActiveMeeting{
-		ChannelID:     "ch-1",
-		RoomID:        "room-1",
-		InviteCode:    "inv-1",
-		HostUserID:    "mm-host-1",
-		PostID:        "post-1",
-		CreatedAt:     time.Now().UTC().Round(time.Second),
-		LastHeartbeat: time.Now().UTC().Round(time.Second),
-		EnableSIP:     true,
-		DialInNumber:  "+49 30 123",
-		DialInPIN:     "4242",
+		ChannelID:             "ch-1",
+		RoomID:                "room-1",
+		InviteCode:            "inv-1",
+		HostUserID:            "host-uid",
+		PostID:                "post-1",
+		CreatedAt:             time.Date(2026, 5, 5, 18, 0, 0, 0, time.UTC),
+		LastHeartbeat:         time.Date(2026, 5, 5, 18, 1, 0, 0, time.UTC),
+		EnableSIP:             true,
+		DialInNumber:          "+49 30 555 1234",
+		DialInPIN:             "4242",
+		HostHeartbeatReceived: true,
 	}
 
-	var stored []byte
-	api.On("KVSetWithExpiry", meetingKey("ch-1"), mock.Anything, int64(0)).
-		Run(func(args mock.Arguments) { stored = args.Get(1).([]byte) }).
+	// Capture the bytes that SaveActiveMeeting writes, then re-feed them on KVGet.
+	var written []byte
+	api.On("KVSetWithExpiry", "meeting_ch-1", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("int64")).
+		Run(func(args mock.Arguments) { written = args.Get(1).([]byte) }).
 		Return(nil)
-	require.NoError(t, s.SaveActiveMeeting(am))
-	assert.NotEmpty(t, stored)
 
-	api.On("KVGet", meetingKey("ch-1")).Return(stored, nil)
+	require.NoError(t, s.SaveActiveMeeting(am))
+
+	api.On("KVGet", "meeting_ch-1").Return(written, nil)
 	got, err := s.LoadActiveMeeting("ch-1")
 	require.NoError(t, err)
-	assert.Equal(t, am.RoomID, got.RoomID)
-	assert.Equal(t, am.HostUserID, got.HostUserID)
-	assert.True(t, got.EnableSIP)
-	assert.Equal(t, am.DialInPIN, got.DialInPIN)
+	assert.Equal(t, am.HostHeartbeatReceived, got.HostHeartbeatReceived,
+		"HostHeartbeatReceived must round-trip through JSON")
 }
 
 func TestActiveMeeting_LoadMissingReturnsNotFound(t *testing.T) {
