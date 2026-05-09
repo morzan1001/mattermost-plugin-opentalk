@@ -30,7 +30,7 @@ jobs:
 
       - name: Lint
         run: make lint
-        continue-on-error: true  # phase-1: lint warnings allowed; tighten in phase 11
+        continue-on-error: true
 
       - name: Test
         run: make test

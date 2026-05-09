@@ -17,3 +17,6 @@ webapp/node_modules/
 webapp/dist/
 webapp/coverage/
 webapp/junit.xml
+
+CLAUDE.md 
+.claude/
