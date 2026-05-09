@@ -153,9 +153,11 @@ export async function startConferenceConnection(
         // OpenTalk's raise-hands feature is OFF by default per room. Hosts
         // turn it on so participants' raiseHand calls aren't silently dropped.
         if (isHost) {
+            // eslint-disable-next-line no-console
             console.log('[opentalk] auto-enabling raise-hands on host-join');
             client.enableRaiseHands();
         } else {
+            // eslint-disable-next-line no-console
             console.log('[opentalk] not host on join, raise-hands stays at server default');
         }
     });
@@ -328,6 +330,16 @@ export async function endActiveMeeting(): Promise<void> {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const channelID: string | undefined = activeStore.getState()?.[PLUGIN_STATE_KEY]?.session?.channelID;
+
+    // Kick all participants on the OpenTalk side before we leave. Best-effort:
+    // failure must not block teardown.
+    try {
+        activeClient?.sendDebrief();
+    } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[opentalk] moderation debrief failed:', e);
+    }
+
     await leaveActiveConference();
     if (!channelID) {
         return;

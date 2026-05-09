@@ -16,6 +16,7 @@ import {EventListener} from './event_listener';
 import {buildFrame} from './frame';
 import {CoreNamespace, type Participant} from './modules/core';
 import {LivekitNamespace} from './modules/livekit';
+import {ModerationNamespace, type KickScope} from './modules/moderation';
 import {RaiseHandsNamespace} from './modules/raise_hands';
 import {SignalingSocket} from './socket';
 
@@ -267,6 +268,11 @@ export class ConferenceRoom {
                 this.listener.on(RaiseHandsNamespace, 'raiseHandsDisabled', () => {
                     this.emit('raise_hands_toggled', {enabled: false});
                 });
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(RaiseHandsNamespace, 'error', (payload: any) => {
+                    // eslint-disable-next-line no-console
+                    console.warn('[opentalk] raise_hands error:', payload);
+                });
 
                 this.socket.on('open', () => {
                     const resumption = readResumption(roomID);
@@ -341,6 +347,16 @@ export class ConferenceRoom {
             return;
         }
         this.socket.send(buildFrame(RaiseHandsNamespace, 'enableRaiseHands', {}));
+    }
+
+    /** Host-only: kick all participants out of the room. Used when ending the
+     * meeting for everyone so connected peers are disconnected on the OpenTalk
+     * side before the host leaves. */
+    public sendDebrief(kickScope: KickScope): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(ModerationNamespace, 'debrief', {kickScope}));
     }
 
     public async leave(): Promise<void> {

@@ -26,7 +26,9 @@ describe('sessionReducer', () => {
             livekitConnected: false,
             expanded: false,
             minimized: false,
-            raiseHandsEnabled: true,
+            joinedAt: undefined,
+            localParticipantId: undefined,
+            raiseHandsEnabled: false,
         });
     });
 
@@ -44,7 +46,9 @@ describe('sessionReducer', () => {
             livekitConnected: false,
             expanded: false,
             minimized: false,
-            raiseHandsEnabled: true,
+            joinedAt: undefined,
+            localParticipantId: undefined,
+            raiseHandsEnabled: false,
         });
     });
 
@@ -126,7 +130,9 @@ describe('sessionReducer', () => {
             livekitConnected: false,
             expanded: false,
             minimized: false,
-            raiseHandsEnabled: true,
+            joinedAt: undefined,
+            localParticipantId: undefined,
+            raiseHandsEnabled: false,
         });
     });
 

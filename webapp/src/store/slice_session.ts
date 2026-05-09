@@ -49,7 +49,7 @@ const initial: SessionState = {
     minimized: false,
     joinedAt: undefined,
     localParticipantId: undefined,
-    raiseHandsEnabled: true,
+    raiseHandsEnabled: false,
 };
 
 export function connectStarted(payload: {channelID: string; roomID: string}) {
