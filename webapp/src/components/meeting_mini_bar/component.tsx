@@ -40,10 +40,15 @@ const MeetingMiniBar: React.FC = () => {
         return localId ? order.filter((id: string) => id !== localId).length : order.length;
     });
 
-    const baseMinWidth = 200;
+    // Floor matches the natural width of the controls bar + counter; cam-on
+    // adds the SelfPreview tile. Below this the buttons start to squish and
+    // the participant counter overlaps.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const camEnabled = useSelector((s: any) => Boolean(s?.[stateKey]?.session?.camEnabled));
+    const baseMinWidth = camEnabled ? 560 : 480;
 
     const resize = useResizable({
-        storageKey: 'opentalk:widget-size:v7',
+        storageKey: 'opentalk:widget-size:v8',
         defaultSize: {width: baseMinWidth, height: 0},
         minSize: {width: baseMinWidth, height: 0},
     });
