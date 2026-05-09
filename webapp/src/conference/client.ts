@@ -79,6 +79,10 @@ export class OpenTalkConferenceClient {
         this.room.enableRaiseHands();
     }
 
+    public sendDebrief(): void {
+        this.room.sendDebrief('all');
+    }
+
     public getState(): RoomState {
         return this.room.getState();
     }

@@ -486,6 +486,45 @@ func TestMeetingsPostActionDismiss_FlipsMissed(t *testing.T) {
 	assert.Equal(t, "MISSED", resp.Update.GetProp("status"))
 }
 
+// TestEndMeetingFor_DeleteInviteFailureIsNonFatal verifies that a failure from
+// DeleteInvite does not prevent the local KV record from being deleted or the
+// meeting_ended broadcast from firing.
+func TestEndMeetingFor_DeleteInviteFailureIsNonFatal(t *testing.T) {
+	// Stub OpenTalk server that rejects all DELETE requests.
+	otSrv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		if r.Method == nethttp.MethodDelete {
+			w.WriteHeader(nethttp.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(nethttp.StatusNotFound)
+	}))
+	defer otSrv.Close()
+
+	api := &plugintest.API{}
+	am := &store.ActiveMeeting{
+		ChannelID:  "ch-1",
+		RoomID:     "room-1",
+		HostUserID: "host-uid",
+		InviteCode: "inv-1",
+	}
+	api.On("KVDelete", "meeting_ch-1").Return(nil)
+
+	var broadcasts []string
+	h := &Handlers{
+		Store:          store.New(api),
+		OpenTalk:       opentalk.NewClient(otSrv.URL),
+		AccessTokenFor: func(_ string) (string, error) { return "tok", nil },
+		BroadcastFunc: func(event string, _ map[string]any) {
+			broadcasts = append(broadcasts, event)
+		},
+	}
+
+	_, err := h.endMeetingFor(am)
+	require.NoError(t, err, "DeleteInvite failure must not propagate")
+	assert.Contains(t, broadcasts, "meeting_ended")
+	api.AssertCalled(t, "KVDelete", "meeting_ch-1")
+}
+
 func TestRouter_PostActionRoutesRegistered(t *testing.T) {
 	api := &plugintest.API{}
 	api.On("KVGet", mock.AnythingOfType("string")).Return([]byte(nil), nil).Maybe()

@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	nethttp "net/http"
 	"time"
 
@@ -281,6 +282,16 @@ func (h *Handlers) MeetingsEnd(w nethttp.ResponseWriter, r *nethttp.Request) {
 // endMeetingFor performs the meeting-end side-effects (post update, KV delete, broadcast).
 // Returns the updated post for callers that need it (e.g. post-action responses).
 func (h *Handlers) endMeetingFor(am *store.ActiveMeeting) (*model.Post, error) {
+	// Best-effort: revoke the OpenTalk invite so the link stops working.
+	// Failures are logged but do not block the local end-flow.
+	if h.OpenTalk != nil && h.AccessTokenFor != nil && am.InviteCode != "" {
+		if token, terr := h.AccessTokenFor(am.HostUserID); terr == nil {
+			if dErr := h.OpenTalk.DeleteInvite(token, am.RoomID, am.InviteCode); dErr != nil {
+				fmt.Printf("[opentalk] DeleteInvite room=%s invite=%s: %v\n", am.RoomID, am.InviteCode, dErr)
+			}
+		}
+	}
+
 	var updated *model.Post
 	if am.PostID != "" && h.PostGetter != nil && h.PostUpdater != nil {
 		if p, getErr := h.PostGetter(am.PostID); getErr == nil && p != nil {
