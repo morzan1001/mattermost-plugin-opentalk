@@ -9,9 +9,9 @@ import {setModuleLocale, t, useT} from './i18n';
 function makeStoreWithLocale(locale: string | undefined) {
     const profiles: Record<string, {locale?: string}> = {};
     if (locale !== undefined) {
-        profiles['u1'] = {locale};
+        profiles.u1 = {locale};
     } else {
-        profiles['u1'] = {};
+        profiles.u1 = {};
     }
     return createStore(() => ({
         entities: {

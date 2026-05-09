@@ -100,7 +100,6 @@ func TestRunOnce_FreshMeeting_NotEnded(t *testing.T) {
 	assert.Empty(t, ended, "fresh meeting should not be ended")
 }
 
-
 // TestRunOnce_StaleMeeting_Ended verifies that a meeting whose LastHeartbeat
 // is older than the staleness threshold IS passed to the end callback.
 func TestRunOnce_StaleMeeting_Ended(t *testing.T) {

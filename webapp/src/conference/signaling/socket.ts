@@ -76,6 +76,7 @@ export class SignalingSocket {
 
     constructor(roomserverURL: string, ticket: string) {
         const base = roomserverURL.replace(/\/+$/, '');
+
         // OpenTalk authenticates the WS upgrade via a Sec-WebSocket-Protocol
         // entry of the form `ticket#<ticket-id>#<random>` (the # marker stays
         // unencoded; it is part of the protocol-name token, not a URL

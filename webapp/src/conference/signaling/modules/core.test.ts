@@ -1,5 +1,6 @@
-import {buildFrame} from '../frame';
 import {CoreNamespace, type CoreOutgoing, type CoreIncoming, type Participant, type CoreHandRaised} from './core';
+
+import {buildFrame} from '../frame';
 
 describe('core module types', () => {
     it('CoreNamespace constant is "core"', () => {

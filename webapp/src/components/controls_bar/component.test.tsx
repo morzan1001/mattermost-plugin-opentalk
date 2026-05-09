@@ -15,7 +15,6 @@ jest.mock('../../conference/controller', () => ({
 import {ControlsBar} from './component';
 
 import {toggleMic} from '../../conference/controller';
-
 import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;

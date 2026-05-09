@@ -10,7 +10,6 @@ import ChannelCallToast from './component';
 
 import {startConferenceConnection} from '../../conference/controller';
 import {activeMeetingDismissed} from '../../store/slice_active_meetings';
-
 import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;

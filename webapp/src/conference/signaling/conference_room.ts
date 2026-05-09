@@ -155,6 +155,7 @@ export class ConferenceRoom {
                 this.listener.on(CoreNamespace, 'joinSuccess', (payload: any) => {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const others = (payload.participants ?? []).map((p: any) => this.normalizeParticipant(p));
+
                     // OpenTalk's joinSuccess lists only the OTHER participants;
                     // our own user info is at the top-level (id, display_name, role).
                     const self = this.normalizeParticipant({
@@ -380,6 +381,7 @@ export class ConferenceRoom {
         if (this.roomID) {
             clearResumption(this.roomID);
         }
+
         // Emit `closed` synchronously so the UI updates immediately. The
         // browser's WS onclose handler (which would also emit) is gated by
         // closedEmitted so we never double-fire.

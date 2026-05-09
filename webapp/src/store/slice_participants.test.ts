@@ -82,7 +82,7 @@ describe('participantsReducer', () => {
         const p = {id: 'a', displayName: 'Alice'};
         let state = participantsReducer(undefined, participantAdded({participant: p}));
         state = participantsReducer(state, handRaised({participantID: 'a'}));
-        expect(state.byId['a'].handRaised).toBe(true);
+        expect(state.byId.a.handRaised).toBe(true);
     });
 
     it('HAND_RAISED — no-op for absent participant', () => {
@@ -95,7 +95,7 @@ describe('participantsReducer', () => {
         const p = {id: 'a', displayName: 'Alice', handRaised: true};
         let state = participantsReducer(undefined, participantAdded({participant: p}));
         state = participantsReducer(state, handLowered({participantID: 'a'}));
-        expect(state.byId['a'].handRaised).toBe(false);
+        expect(state.byId.a.handRaised).toBe(false);
     });
 
     it('HANDS_RESET — clears handRaised for all participants', () => {
@@ -103,7 +103,7 @@ describe('participantsReducer', () => {
         const p2 = {id: 'b', displayName: 'Bob', handRaised: true};
         let state = participantsReducer(undefined, participantsBulkSet({participants: [p1, p2]}));
         state = participantsReducer(state, handsReset());
-        expect(state.byId['a'].handRaised).toBe(false);
-        expect(state.byId['b'].handRaised).toBe(false);
+        expect(state.byId.a.handRaised).toBe(false);
+        expect(state.byId.b.handRaised).toBe(false);
     });
 });

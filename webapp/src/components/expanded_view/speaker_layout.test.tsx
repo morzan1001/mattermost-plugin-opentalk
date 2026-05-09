@@ -6,7 +6,6 @@ import {createStore} from 'redux';
 import {SpeakerLayout} from './speaker_layout';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
-
 import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;

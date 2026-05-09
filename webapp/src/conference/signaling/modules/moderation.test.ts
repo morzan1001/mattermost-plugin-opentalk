@@ -1,5 +1,6 @@
-import {buildFrame} from '../frame';
 import {ModerationNamespace, type ModerationOutgoing, type ModerationIncoming, type ModerationRaiseHandsEnabled} from './moderation';
+
+import {buildFrame} from '../frame';
 
 describe('moderation module types', () => {
     it('ModerationNamespace constant is "moderation"', () => {

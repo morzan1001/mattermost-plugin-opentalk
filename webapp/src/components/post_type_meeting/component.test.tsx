@@ -89,7 +89,7 @@ describe('PostTypeMeeting', () => {
             },
         };
         renderWithStore(p as any);
-        expect(screen.queryByRole("button", {name: /Join meeting/i})).toBeNull();
+        expect(screen.queryByRole('button', {name: /Join meeting/i})).toBeNull();
         expect(screen.getByText(/Meeting ended/)).toBeInTheDocument();
         expect(screen.getByText(/15:00/)).toBeInTheDocument();
     });
@@ -97,7 +97,7 @@ describe('PostTypeMeeting', () => {
     it('shows MISSED state', () => {
         const p = {...basePost, props: {...basePost.props, status: 'MISSED'}};
         renderWithStore(p as any);
-        expect(screen.queryByRole("button", {name: /Join meeting/i})).toBeNull();
+        expect(screen.queryByRole('button', {name: /Join meeting/i})).toBeNull();
         expect(screen.getByText(/Meeting missed/)).toBeInTheDocument();
     });
 });

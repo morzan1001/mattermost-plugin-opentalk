@@ -1,5 +1,5 @@
-import Plugin from './plugin';
 import {id as pluginId} from './manifest';
+import Plugin from './plugin';
 
 describe('Plugin', () => {
     function setup() {

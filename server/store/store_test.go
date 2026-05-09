@@ -18,7 +18,7 @@ func TestHashKey_StableHash(t *testing.T) {
 
 func TestDismissalKey_FitsKVLimit(t *testing.T) {
 	// Realistic worst-case: 26-char channel ID + 36-char UUID room ID + separators.
-	channelID := "abcdefghijklmnopqrstuvwxyz" // 26 chars
+	channelID := "abcdefghijklmnopqrstuvwxyz"        // 26 chars
 	roomID := "12345678-1234-1234-1234-123456789012" // 36-char UUID
 	key := dismissalKey(channelID, roomID)
 	assert.True(t, len(key) <= 150,

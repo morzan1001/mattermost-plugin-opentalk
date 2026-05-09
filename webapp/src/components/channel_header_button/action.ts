@@ -1,5 +1,7 @@
-import {Store, Action} from 'redux';
-import {GlobalState} from '@mattermost/types/store';
+import type {Store, Action} from 'redux';
+
+import type {GlobalState} from '@mattermost/types/store';
+
 import {createMeeting, getOrCreateDeviceSecret} from '../../client/rest';
 import {startConferenceConnection} from '../../conference/controller';
 import {selectCurrentDisplayName} from '../../util/display_name';

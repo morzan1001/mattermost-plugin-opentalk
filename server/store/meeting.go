@@ -122,7 +122,7 @@ func (s *Store) AddDismissal(channelID, roomID, mmUserID string) ([]string, erro
 		return nil, err
 	}
 	// 1h TTL — keep the set well past the call's lifetime to avoid races.
-	if err := s.Set(dismissalKey(channelID, roomID), raw, int64((1*time.Hour).Seconds())); err != nil {
+	if err := s.Set(dismissalKey(channelID, roomID), raw, int64((1 * time.Hour).Seconds())); err != nil {
 		return nil, err
 	}
 	return set, nil

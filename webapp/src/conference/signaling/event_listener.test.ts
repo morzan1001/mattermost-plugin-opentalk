@@ -1,5 +1,5 @@
-import {SignalingSocket} from './socket';
 import {EventListener} from './event_listener';
+import {SignalingSocket} from './socket';
 
 class FakeWebSocket {
     static instances: FakeWebSocket[] = [];
@@ -12,7 +12,9 @@ class FakeWebSocket {
     constructor(public url: string, _protocols?: string | string[]) {
         FakeWebSocket.instances.push(this);
     }
-    send(d: string) { this.sent.push(d); }
+    send(d: string) {
+        this.sent.push(d);
+    }
     close() {
         this.readyState = 3;
         this.onclose?.({code: 1000} as CloseEvent);

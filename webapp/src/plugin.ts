@@ -1,15 +1,20 @@
 import React from 'react';
-import {Store, Action} from 'redux';
-import {GlobalState} from '@mattermost/types/store';
-import {PluginRegistry} from './types/mattermost-webapp';
-import reducer from './store/reducer';
-import {setConnected} from './store/slice_oauth';
-import {id as pluginId} from './manifest';
-import PostTypeMeeting from './components/post_type_meeting/component';
-import MeetingMiniBar from './components/meeting_mini_bar/component';
+import type {Store, Action} from 'redux';
+
+import type {GlobalState} from '@mattermost/types/store';
+
+import {getConnectionStatus} from './client/rest';
 import AudioRenderer from './components/audio_renderer/component';
-import ExpandedView from './components/expanded_view/component';
 import ChannelCallToast from './components/channel_call_toast/component';
+import {startMeetingAction} from './components/channel_header_button/action';
+import OpenTalkIcon from './components/channel_header_button/icon';
+import ExpandedView from './components/expanded_view/component';
+import MeetingMiniBar from './components/meeting_mini_bar/component';
+import PostTypeMeeting from './components/post_type_meeting/component';
+import {id as pluginId} from './manifest';
+import reducer from './store/reducer';
+import {PluginRegistry} from './types/mattermost-webapp';
+import {setConnected} from './store/slice_oauth';
 import IncomingCallModal from './components/incoming_call_modal/component';
 import SwitchCallModal from './components/switch_call_modal/component';
 import ScreenPickerModal from './components/screen_picker_modal/component';
@@ -17,9 +22,6 @@ import {incomingCallReceived, incomingCallCleared, incomingCallsReset} from './s
 import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
 import {registerOpenTalkUserSettings} from './user_settings';
 import {initDeviceCache} from './conference/livekit/devices';
-import OpenTalkIcon from './components/channel_header_button/icon';
-import {startMeetingAction} from './components/channel_header_button/action';
-import {getConnectionStatus} from './client/rest';
 import {
     setActiveStore,
     toggleMic,

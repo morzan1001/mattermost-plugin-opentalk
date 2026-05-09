@@ -130,10 +130,13 @@ export interface CoreJoinSuccess {
         token: string;
         room?: string;
     };
+
     /** The participant id assigned by the server, if known. */
     id?: string;
+
     /** True when the joining user owns the room. */
     isRoomOwner?: boolean;
+
     /** Catch-all for upstream balloon fields the MVP doesn't use yet. */
     [extra: string]: unknown;
 }
@@ -142,6 +145,7 @@ export interface CoreParticipantConnected {
     action: 'participantConnected';
     participantId: string;
     connectionId?: string;
+
     /** Per-module peer state. MVP keeps it loose; upstream is `PeerModuleData`. */
     peerData?: Record<string, unknown>;
 }

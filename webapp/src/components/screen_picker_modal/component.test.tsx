@@ -1,5 +1,5 @@
-import React from 'react';
 import {render, screen, fireEvent, act} from '@testing-library/react';
+import React from 'react';
 import {Provider} from 'react-redux';
 import {createStore} from 'redux';
 
@@ -9,6 +9,7 @@ jest.mock('../../conference/livekit/screen_picker', () => {
     return {
         subscribeScreenPicker: jest.fn((listener: (state: {open: boolean; sources: any[]}) => void) => {
             mockCb = listener;
+
             // Immediately call with closed state, matching real behaviour.
             listener({open: false, sources: []});
             return () => {
@@ -16,6 +17,7 @@ jest.mock('../../conference/livekit/screen_picker', () => {
             };
         }),
         resolveScreenPicker: jest.fn(),
+
         // Helper exposed only in tests to push state changes.
         __fireState: (state: {open: boolean; sources: any[]}) => {
             if (mockCb) {

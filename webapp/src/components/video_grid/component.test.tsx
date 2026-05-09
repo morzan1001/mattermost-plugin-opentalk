@@ -1,7 +1,8 @@
-import React from 'react';
 import {render} from '@testing-library/react';
+import React from 'react';
 import {Provider} from 'react-redux';
 import {createStore} from 'redux';
+
 import VideoGrid from './component';
 
 import {PLUGIN_STATE_KEY} from '../../util/selectors';

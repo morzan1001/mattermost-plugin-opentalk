@@ -1,7 +1,8 @@
-import {joinMeeting} from '../client/rest';
 
 import {ConferenceRoom, type AuthProvider, type RoomState} from './signaling/conference_room';
 import type {Participant} from './signaling/modules/core';
+
+import {joinMeeting} from '../client/rest';
 
 export interface ConnectedEvent {
     participants: Participant[];

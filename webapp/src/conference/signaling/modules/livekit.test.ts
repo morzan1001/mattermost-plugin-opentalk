@@ -1,5 +1,6 @@
-import {buildFrame} from '../frame';
 import {LivekitNamespace, type LiveKitOutgoing, type LiveKitIncoming} from './livekit';
+
+import {buildFrame} from '../frame';
 
 describe('livekit module types', () => {
     it('LivekitNamespace constant is "livekit"', () => {

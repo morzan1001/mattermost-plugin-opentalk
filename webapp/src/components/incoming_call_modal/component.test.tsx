@@ -14,7 +14,6 @@ import IncomingCallModal from './component';
 import {dismissIncomingCall} from '../../client/rest';
 import {startConferenceConnection} from '../../conference/controller';
 import {incomingCallDismissed, incomingCallCleared} from '../../store/slice_incoming_calls';
-
 import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;

@@ -1,5 +1,6 @@
 import React, {useEffect, useMemo, useRef} from 'react';
 import {useSelector} from 'react-redux';
+
 import * as trackRegistry from '../../conference/livekit/track_registry';
 import {PLUGIN_STATE_KEY, selectSessionStatus} from '../../util/selectors';
 
@@ -34,7 +35,10 @@ const AudioElement: React.FC<{trackId: string}> = ({trackId}) => {
         };
     }, [trackId]);
 
-    return <audio ref={elRef} autoPlay={true}/>;
+    return (<audio
+        ref={elRef}
+        autoPlay={true}
+    />);
 };
 
 const AudioRenderer: React.FC = () => {
@@ -58,9 +62,15 @@ const AudioRenderer: React.FC = () => {
         return null;
     }
     return (
-        <div className='opentalk-audio-renderer' style={{display: 'none'}}>
+        <div
+            className='opentalk-audio-renderer'
+            style={{display: 'none'}}
+        >
             {audioTracks.map((a) => (
-                <AudioElement key={a.trackId} trackId={a.trackId}/>
+                <AudioElement
+                    key={a.trackId}
+                    trackId={a.trackId}
+                />
             ))}
         </div>
     );
