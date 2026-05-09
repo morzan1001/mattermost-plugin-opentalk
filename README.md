@@ -138,6 +138,10 @@ make watch      # webapp in watch mode
 
 The webapp suite covers components, store slices, conference signaling, and the LiveKit wrapper; the server suite covers slash-command handlers, the OIDC flow, the OpenTalk client, the post helpers, the reaper, and the store.
 
+## Credits
+
+The incoming-call ringtone is ["Digital Phone Ring" by Perkin](https://freesound.org/people/Perkin/sounds/178377/), released under [CC0 1.0 (Public Domain Dedication)](https://creativecommons.org/publicdomain/zero/1.0/).
+
 ## License
 
 Apache-2.0 for plugin code authored in this repository. Source files extracted from the OpenTalk web frontend retain their original EUPL-1.2 license; those files carry SPDX headers identifying them individually.

@@ -71,6 +71,10 @@ const config = {
                     },
                 ],
             },
+            {
+                test: /\.ogg$/,
+                type: 'asset/inline',
+            },
         ],
     },
     externals: {

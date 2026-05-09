@@ -1,79 +1,44 @@
-import {useRef, useEffect} from 'react';
+import {useEffect, useRef} from 'react';
 
-interface ActiveSession {
-    osc: OscillatorNode;
-    gain: GainNode;
-    interval: number;
-}
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — webpack inlines this OGG via asset/inline (data: URL)
+import incomingCallURL from '../sounds/incoming_call.ogg';
 
 export function useRingtone(): {start: () => void; stop: () => void} {
-    const ctxRef = useRef<AudioContext | null>(null);
-    const sessionRef = useRef<ActiveSession | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
 
     const stop = () => {
-        if (!sessionRef.current) {
+        const a = audioRef.current;
+        if (!a) {
             return;
         }
-        const {osc, gain, interval} = sessionRef.current;
-        const ctx = ctxRef.current!;
-
-        clearInterval(interval);
-
-        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.08);
-
-        setTimeout(() => {
-            try {
-                osc.stop();
-                osc.disconnect();
-                gain.disconnect();
-            } catch {
-                // already stopped — silently ignore
-            }
-        }, 100);
-
-        sessionRef.current = null;
+        a.pause();
+        a.currentTime = 0;
     };
 
     const start = () => {
-        if (sessionRef.current) {
+        if (typeof window === 'undefined' || typeof Audio === 'undefined') {
             return;
         }
-
-        // Lazy-create AudioContext
-        if (!ctxRef.current) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-            ctxRef.current = new AudioContextClass() as AudioContext;
+        if (!audioRef.current) {
+            const a = new Audio(incomingCallURL as string);
+            a.loop = true;
+            a.volume = 0.6;
+            audioRef.current = a;
         }
-        const ctx = ctxRef.current;
-
-        const osc = ctx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.value = 700;
-
-        const gain = ctx.createGain();
-        gain.gain.value = 0.15;
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-
-        const interval = window.setInterval(() => {
-            if (sessionRef.current) {
-                const currentFreq = sessionRef.current.osc.frequency.value;
-                sessionRef.current.osc.frequency.value = currentFreq === 700 ? 600 : 700;
-            }
-        }, 500);
-
-        sessionRef.current = {osc, gain, interval};
+        const a = audioRef.current;
+        a.currentTime = 0;
+        a.play().catch(() => {
+            // autoplay denied (no user gesture); silent failure is fine —
+            // the visual modal still alerts the user.
+        });
     };
 
     useEffect(() => {
         return () => {
             stop();
+            audioRef.current = null;
         };
-
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return {start, stop};
