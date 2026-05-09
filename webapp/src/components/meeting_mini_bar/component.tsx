@@ -39,19 +39,15 @@ const MeetingMiniBar: React.FC = () => {
         return localId ? order.filter((id: string) => id !== localId).length : order.length;
     });
 
-    // Min-width derived from content: counter+duration (~140), 7 buttons of
-    // 36px + 1 divider + 8px gaps (~316), plus 20px padding. Self-cam adds a
-    // 64px preview + 8px gap when on. Height is content-driven.
-    const baseMinWidth = 480;
-    const minWidth = baseMinWidth + (session.camEnabled ? 72 : 0);
+    const baseMinWidth = 200;
 
     const resize = useResizable({
         storageKey: 'opentalk:widget-size:v7',
-        defaultSize: {width: minWidth, height: 0},
-        minSize: {width: minWidth, height: 0},
+        defaultSize: {width: baseMinWidth, height: 0},
+        minSize: {width: baseMinWidth, height: 0},
     });
 
-    const widgetWidth = Math.max(typeof resize.style.width === 'number' ? resize.style.width : minWidth, minWidth);
+    const widgetWidth = Math.max(typeof resize.style.width === 'number' ? resize.style.width : baseMinWidth, baseMinWidth);
 
     const duration = useMeetingDuration(session.joinedAt);
 
@@ -184,8 +180,6 @@ const MeetingMiniBar: React.FC = () => {
                             </div>
 
                             <SelfPreview/>
-
-                            <div style={{flex: 1}}/>
 
                             <ControlsBar
                                 showExpand={true}

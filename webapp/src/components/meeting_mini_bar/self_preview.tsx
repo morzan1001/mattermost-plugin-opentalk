@@ -6,29 +6,10 @@ import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;
 
-/**
- * Small local-camera preview shown inside the mini-bar's controls row.
- * Renders nothing unless the local user has camera enabled and a video
- * track is registered for their participant id.
- */
-export const SelfPreview: React.FC = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const localId: string | undefined = useSelector((s: any) => s[stateKey]?.session?.localParticipantId);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const camEnabled: boolean = useSelector((s: any) => s[stateKey]?.session?.camEnabled === true);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const trackId: string | undefined = useSelector((s: any) =>
-        (localId ? s[stateKey]?.tracks?.perParticipant?.[localId]?.videoTrackId : undefined),
-    );
-
+const SelfPreviewInner: React.FC<{trackId: string}> = ({trackId}) => {
     const elRef = useRef<HTMLVideoElement | null>(null);
 
     useEffect(() => {
-        if (!trackId) {
-            return undefined;
-        }
         const track = trackRegistry.get(trackId);
         const el = elRef.current;
         if (!track || !el) {
@@ -49,6 +30,34 @@ export const SelfPreview: React.FC = () => {
         };
     }, [trackId]);
 
+    return (
+        <video
+            ref={elRef}
+            autoPlay={true}
+            playsInline={true}
+            muted={true}
+            style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                transform: 'scaleX(-1)',
+            }}
+        />
+    );
+};
+
+export const SelfPreview: React.FC = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const localId: string | undefined = useSelector((s: any) => s[stateKey]?.session?.localParticipantId);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const camEnabled: boolean = useSelector((s: any) => s[stateKey]?.session?.camEnabled === true);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const trackId: string | undefined = useSelector((s: any) =>
+        (localId ? s[stateKey]?.tracks?.perParticipant?.[localId]?.videoTrackId : undefined),
+    );
+
     if (!camEnabled || !trackId) {
         return null;
     }
@@ -66,21 +75,7 @@ export const SelfPreview: React.FC = () => {
                 flexShrink: 0,
             }}
         >
-            <video
-                ref={elRef}
-                autoPlay={true}
-                playsInline={true}
-                muted={true}
-                style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-
-                    // Mirror the local camera so it feels like a mirror,
-                    // matching the OpenTalk-Frontend convention.
-                    transform: 'scaleX(-1)',
-                }}
-            />
+            <SelfPreviewInner trackId={trackId}/>
         </div>
     );
 };
