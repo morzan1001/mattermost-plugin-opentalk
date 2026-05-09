@@ -26,7 +26,7 @@ func TestBuildMeetingPost_Initial(t *testing.T) {
 	post := BuildMeetingPost(am, "https://opentalk.example", "alice", "", false)
 	assert.Equal(t, MeetingPostType, post.Type)
 	assert.Equal(t, "ch-1", post.ChannelId)
-	assert.Contains(t, post.Message, "https://opentalk.example/invite/inv-1")
+	assert.Equal(t, "OpenTalk meeting", post.Message)
 	assert.Equal(t, "room-1", post.GetProp("room_id"))
 	assert.Equal(t, "inv-1", post.GetProp("invite_code"))
 	assert.Equal(t, "host-uid", post.GetProp("host_user_id"))
@@ -44,10 +44,10 @@ func TestBuildMeetingPost_LocaleDE(t *testing.T) {
 		InviteCode: "i",
 	}
 	postDE := BuildMeetingPost(am, "https://o.example", "u", "de", false)
-	assert.Contains(t, postDE.Message, "gestartet")
+	assert.Equal(t, "OpenTalk-Meeting", postDE.Message)
 
 	postEN := BuildMeetingPost(am, "https://o.example", "u", "en", false)
-	assert.Contains(t, postEN.Message, "started")
+	assert.Equal(t, "OpenTalk meeting", postEN.Message)
 }
 
 func TestBuildMeetingPost_NoSIPLeavesDialInProps(t *testing.T) {

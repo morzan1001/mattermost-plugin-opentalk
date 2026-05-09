@@ -35,11 +35,10 @@ const (
 // isDM is true for direct or group channels; controls whether the "Decline"
 // action is emitted on the attachment.
 func BuildMeetingPost(am *store.ActiveMeeting, frontendURL, hostUsername, locale string, isDM bool) *model.Post {
-	inviteURL := fmt.Sprintf("%s/invite/%s", frontendURL, am.InviteCode)
-	msg := fmt.Sprintf(i18n.T(locale, i18n.Translatable{
-		DE: "OpenTalk-Meeting gestartet — beitreten: %s",
-		EN: "OpenTalk meeting started — join: %s",
-	}), inviteURL)
+	msg := i18n.T(locale, i18n.Translatable{
+		DE: "OpenTalk-Meeting",
+		EN: "OpenTalk meeting",
+	})
 
 	props := model.StringInterface{
 		"room_id":       am.RoomID,

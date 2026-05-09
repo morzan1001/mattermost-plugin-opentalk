@@ -92,7 +92,7 @@ func TestMeetingsCreate_HappyPath(t *testing.T) {
 	require.NotNil(t, capturedPost, "expected bot-post to be created")
 	assert.Equal(t, "custom_opentalk_meeting", capturedPost.Type)
 	assert.Equal(t, "alice", capturedPost.GetProp("host_username"))
-	assert.Contains(t, capturedPost.Message, "https://opentalk.example/invite/inv-1")
+	assert.Equal(t, "OpenTalk meeting", capturedPost.Message)
 	assert.Equal(t, "post-1", resp["post_id"])
 }
 
