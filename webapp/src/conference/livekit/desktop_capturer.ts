@@ -12,57 +12,33 @@ export function isElectron(): boolean {
     return ua.includes('Electron') || ua.includes('Mattermost');
 }
 
-/**
- * Asks the Mattermost-Desktop main process for available screen/window
- * sources via the postMessage protocol that mattermost-plugin-calls also
- * uses. Resolves with the list, or rejects after a 3s timeout if the
- * desktop bridge isn't available.
- */
-export function getDesktopSources(): Promise<DesktopSource[]> {
-    return new Promise((resolve, reject) => {
-        if (typeof window === 'undefined') {
-            reject(new Error('no window'));
-            return;
-        }
-        const handler = (event: MessageEvent) => {
-            if (event.data?.type === 'desktop-sources-result') {
-                window.removeEventListener('message', handler);
-                clearTimeout(timer);
-
-                // Some MM-Desktop versions wrap the array in .message,
-                // others put it at .data.sources or .data.message directly.
-                // Normalize.
-                const raw = event.data.message ?? event.data.sources ?? [];
-
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const sources: DesktopSource[] = (Array.isArray(raw) ? raw : []).map((s: any) => ({
-                    id: s.id,
-                    name: s.name ?? '',
-                    thumbnailURL: s.thumbnailURL ?? s.thumbnail_url ?? s.thumbnail ?? '',
-                }));
-                resolve(sources);
-            }
+// window.desktopAPI is injected by Mattermost-Desktop's contextBridge
+// (externalAPI.ts). Available in MM-Desktop 6.x plugin webviews.
+declare global {
+    interface Window {
+        desktopAPI?: {
+            getDesktopSources(opts: {
+                types: Array<'screen' | 'window'>;
+                thumbnailSize?: {width: number; height: number};
+            }): Promise<DesktopSource[]>;
         };
-        window.addEventListener('message', handler);
-        const timer = window.setTimeout(() => {
-            window.removeEventListener('message', handler);
-            reject(new Error('desktop-bridge timeout — Mattermost-Desktop ist nicht verfügbar oder zu alt'));
-        }, 3000);
-        window.postMessage(
-            {
-                type: 'get-desktop-sources',
-                message: {types: ['screen', 'window'], thumbnailSize: {width: 320, height: 200}},
-            },
-            window.location.origin,
-        );
+    }
+}
+
+export function getDesktopSources(): Promise<DesktopSource[]> {
+    if (typeof window === 'undefined' || !window.desktopAPI?.getDesktopSources) {
+        return Promise.reject(new Error(
+            'Mattermost Desktop screen-share API unavailable (window.desktopAPI.getDesktopSources missing). Update Mattermost Desktop or use a browser.',
+        ));
+    }
+    return window.desktopAPI.getDesktopSources({
+        types: ['screen', 'window'],
+        thumbnailSize: {width: 320, height: 200},
     });
 }
 
-/**
- * Captures a MediaStream for the chosen Chromium source-id using the
- * Chromium-only chromeMediaSource constraints. Throws on permission
- * denial or invalid id.
- */
+// Captures a MediaStream for the chosen Chromium source-id using the
+// chromeMediaSource constraints. Throws on permission denial or invalid id.
 export async function captureDesktopStream(sourceId: string): Promise<MediaStream> {
     // Cast: TypeScript's MediaTrackConstraints type doesn't know about
     // chromeMediaSource. The constraint shape is the standard Electron/Chromium

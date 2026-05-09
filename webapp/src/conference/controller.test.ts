@@ -537,7 +537,7 @@ describe('toggleScreenShare', () => {
         expect(dispatched.find((a) => a.type === 'opentalk/session/set_screen_share_enabled')?.payload?.value).toBe(true);
     });
 
-    it('falls back to Electron postMessage bridge when getDisplayMedia rejects in Electron', async () => {
+    it('falls back to Electron desktopAPI bridge when getDisplayMedia rejects in Electron', async () => {
         (isElectron as jest.Mock).mockReturnValue(true);
         Object.defineProperty(navigator, 'mediaDevices', {
             value: {getDisplayMedia: jest.fn().mockRejectedValue(new Error('not supported'))},

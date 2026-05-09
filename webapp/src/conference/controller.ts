@@ -437,7 +437,7 @@ export async function toggleScreenShare(): Promise<void> {
                 // eslint-disable-next-line no-console
                 console.warn('[opentalk] screen-share via Electron desktop_capturer');
                 // eslint-disable-next-line no-console
-                console.warn('[opentalk] electron path: requesting desktop sources via postMessage');
+                console.warn('[opentalk] electron path: requesting desktop sources via desktopAPI');
                 const sources = await getDesktopSources().catch((e: Error) => {
                     // eslint-disable-next-line no-console
                     console.warn('[opentalk] getDesktopSources failed:', e.message);

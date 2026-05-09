@@ -28,45 +28,39 @@ describe('isElectron()', () => {
 });
 
 describe('getDesktopSources()', () => {
-    beforeEach(() => {
-        jest.useFakeTimers();
-    });
-
     afterEach(() => {
-        jest.useRealTimers();
+        delete (window as any).desktopAPI; // eslint-disable-line @typescript-eslint/no-explicit-any
     });
 
-    it('resolves with sources when desktop-sources-result message is received', async () => {
+    it('resolves with sources returned by window.desktopAPI.getDesktopSources', async () => {
         const mockSources = [
             {id: 'screen:0:0', name: 'Entire Screen', thumbnailURL: 'data:image/png;base64,abc'},
-            {id: 'window:1234:0', name: 'My Window', thumbnail_url: 'data:image/png;base64,xyz'},
+            {id: 'window:1234:0', name: 'My Window', thumbnailURL: 'data:image/png;base64,xyz'},
         ];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).desktopAPI = {
+            getDesktopSources: jest.fn().mockResolvedValue(mockSources),
+        };
 
-        // Schedule the reply message before calling getDesktopSources so the
-        // listener is registered first.
-        const promise = getDesktopSources();
-
-        // Simulate the desktop bridge responding.
-        window.dispatchEvent(
-            new MessageEvent('message', {
-                data: {type: 'desktop-sources-result', message: mockSources},
-            }),
-        );
-
-        const sources = await promise;
+        const sources = await getDesktopSources();
         expect(sources).toHaveLength(2);
         expect(sources[0]).toEqual({id: 'screen:0:0', name: 'Entire Screen', thumbnailURL: 'data:image/png;base64,abc'});
-        // thumbnail_url fallback
         expect(sources[1].thumbnailURL).toBe('data:image/png;base64,xyz');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect((window as any).desktopAPI.getDesktopSources).toHaveBeenCalledWith({
+            types: ['screen', 'window'],
+            thumbnailSize: {width: 320, height: 200},
+        });
     });
 
-    it('rejects after 3s timeout when no reply arrives', async () => {
-        const promise = getDesktopSources();
+    it('rejects when window.desktopAPI is not present', async () => {
+        await expect(getDesktopSources()).rejects.toThrow('window.desktopAPI.getDesktopSources missing');
+    });
 
-        // Advance time past the 3 000 ms timeout.
-        jest.advanceTimersByTime(3001);
-
-        await expect(promise).rejects.toThrow('desktop-bridge timeout');
+    it('rejects when window.desktopAPI.getDesktopSources is missing', async () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).desktopAPI = {};
+        await expect(getDesktopSources()).rejects.toThrow('window.desktopAPI.getDesktopSources missing');
     });
 });
 
