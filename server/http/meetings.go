@@ -117,7 +117,7 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 	if h.LocaleOf != nil {
 		hostLocale = h.LocaleOf(mmUserID)
 	}
-	botPost := post.BuildMeetingPost(am, h.FrontendURL, hostName, hostLocale)
+	botPost := post.BuildMeetingPost(am, h.FrontendURL, hostName, hostLocale, false)
 	botPost.UserId = h.BotUserID
 	created, err := h.CreatePost(botPost)
 	if err != nil {

@@ -360,7 +360,7 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		hostName = displayNameOf(u)
 		hostLocale = u.Locale
 	}
-	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostName, hostLocale)
+	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostName, hostLocale, false)
 	botPost.UserId = p.botUserID
 	if err := p.client.Post.CreatePost(botPost); err != nil {
 		return nil, fmt.Errorf("post meeting card: %w", err)
