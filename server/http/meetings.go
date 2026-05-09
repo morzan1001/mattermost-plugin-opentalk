@@ -340,6 +340,15 @@ func (h *Handlers) MeetingsPostActionEnd(w nethttp.ResponseWriter, r *nethttp.Re
 		nethttp.Error(w, "end meeting: "+eErr.Error(), nethttp.StatusInternalServerError)
 		return
 	}
+	if updated == nil {
+		// Post lookup or update failed; the meeting is still ended in KV.
+		// Falling back to ephemeral keeps the user informed instead of a
+		// silent no-op response.
+		writePostActionResponse(w, &model.PostActionIntegrationResponse{
+			EphemeralText: "Meeting ended.",
+		})
+		return
+	}
 	writePostActionResponse(w, &model.PostActionIntegrationResponse{Update: updated})
 }
 
