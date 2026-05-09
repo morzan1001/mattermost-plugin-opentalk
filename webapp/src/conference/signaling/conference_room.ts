@@ -87,6 +87,7 @@ export class ConferenceRoom {
     private socket?: SignalingSocket;
     private listener?: EventListener;
     private participants: Participant[] = [];
+    private localId: string = '';
     private closedEmitted = false;
     private listeners: Record<EventName, Listener[]> = {
         connected: [],
@@ -163,6 +164,7 @@ export class ConferenceRoom {
                     });
                     const list = [self, ...others];
                     this.participants = list;
+                    this.localId = self.id;
                     this.state = 'connected';
 
                     // Normalize livekit bootstrap if present in joinSuccess.
@@ -247,16 +249,21 @@ export class ConferenceRoom {
                     this.emit('livekit_credentials', {url, token});
                 });
 
+                // OpenTalk's control:handRaised / handLowered frames don't
+                // carry a participant id when they confirm the local user's
+                // own action (the ID is implicit). For broadcasts about other
+                // participants, payload includes participant_id. Fall back to
+                // localId so the local user's hand-state updates either way.
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'handRaised', (payload: any) => {
-                    const participant = payload.participant ?? payload.id;
+                    const participant = payload.participantId ?? payload.participant_id ?? payload.participant ?? payload.id ?? this.localId;
                     if (participant) {
                         this.emit('hand_raised', {participantId: participant as string});
                     }
                 });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'handLowered', (payload: any) => {
-                    const participant = payload.participant ?? payload.id;
+                    const participant = payload.participantId ?? payload.participant_id ?? payload.participant ?? payload.id ?? this.localId;
                     if (participant) {
                         this.emit('hand_lowered', {participantId: participant as string});
                     }
