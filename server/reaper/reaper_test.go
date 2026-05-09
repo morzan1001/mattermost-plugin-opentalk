@@ -82,9 +82,10 @@ func TestRunOnce_EmptyStore(t *testing.T) {
 // is recent (within the staleness window) is NOT passed to the end callback.
 func TestRunOnce_FreshMeeting_NotEnded(t *testing.T) {
 	fresh := &store.ActiveMeeting{
-		ChannelID:     "ch-fresh",
-		RoomID:        "room-fresh",
-		LastHeartbeat: time.Now().UTC(), // just now → fresh
+		ChannelID:             "ch-fresh",
+		RoomID:                "room-fresh",
+		LastHeartbeat:         time.Now().UTC(), // just now → fresh
+		HostHeartbeatReceived: true,
 	}
 
 	api := setupAPIWithMeetings(t, []*store.ActiveMeeting{fresh})
@@ -99,13 +100,15 @@ func TestRunOnce_FreshMeeting_NotEnded(t *testing.T) {
 	assert.Empty(t, ended, "fresh meeting should not be ended")
 }
 
+
 // TestRunOnce_StaleMeeting_Ended verifies that a meeting whose LastHeartbeat
 // is older than the staleness threshold IS passed to the end callback.
 func TestRunOnce_StaleMeeting_Ended(t *testing.T) {
 	stale := &store.ActiveMeeting{
-		ChannelID:     "ch-stale",
-		RoomID:        "room-stale",
-		LastHeartbeat: time.Now().UTC().Add(-10 * time.Minute), // 10 min ago
+		ChannelID:             "ch-stale",
+		RoomID:                "room-stale",
+		LastHeartbeat:         time.Now().UTC().Add(-10 * time.Minute), // 10 min ago
+		HostHeartbeatReceived: true,
 	}
 
 	api := setupAPIWithMeetings(t, []*store.ActiveMeeting{stale})
@@ -132,14 +135,16 @@ func TestRunOnce_StaleMeeting_Ended(t *testing.T) {
 func TestRunOnce_MixedMeetings_OnlyStaleEnded(t *testing.T) {
 	now := time.Now().UTC()
 	fresh := &store.ActiveMeeting{
-		ChannelID:     "ch-1",
-		RoomID:        "room-1",
-		LastHeartbeat: now, // just now
+		ChannelID:             "ch-1",
+		RoomID:                "room-1",
+		LastHeartbeat:         now, // just now
+		HostHeartbeatReceived: true,
 	}
 	stale := &store.ActiveMeeting{
-		ChannelID:     "ch-2",
-		RoomID:        "room-2",
-		LastHeartbeat: now.Add(-20 * time.Minute), // 20 min ago
+		ChannelID:             "ch-2",
+		RoomID:                "room-2",
+		LastHeartbeat:         now.Add(-20 * time.Minute), // 20 min ago
+		HostHeartbeatReceived: true,
 	}
 
 	api := setupAPIWithMeetings(t, []*store.ActiveMeeting{fresh, stale})
@@ -235,4 +240,86 @@ func TestStartStop_ConcurrentSafe(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// TestRunOnce_PreHeartbeat_StaleByOldRule_KeptByGrace covers the case where
+// no webapp heartbeat has been received yet and the meeting's LastHeartbeat
+// is already older than the existing 5-min staleness window — but CreatedAt
+// is younger than the new 30-min grace window. The grace branch must keep it.
+func TestRunOnce_PreHeartbeat_StaleByOldRule_KeptByGrace(t *testing.T) {
+	now := time.Now().UTC()
+	young := &store.ActiveMeeting{
+		ChannelID:             "ch-grace",
+		RoomID:                "room-grace",
+		CreatedAt:             now.Add(-10 * time.Minute),
+		LastHeartbeat:         now.Add(-10 * time.Minute),
+		HostHeartbeatReceived: false,
+	}
+
+	api := setupAPIWithMeetings(t, []*store.ActiveMeeting{young})
+
+	s := store.New(api)
+	var ended []*store.ActiveMeeting
+	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		time.Minute, 5*time.Minute)
+
+	r.RunOnce()
+
+	assert.Empty(t, ended,
+		"pre-heartbeat meeting under the 30-min grace must not be ended even though LastHeartbeat is older than the 5-min staleness")
+}
+
+// TestRunOnce_PreHeartbeat_OldEnough_Ended covers the case where no webapp
+// heartbeat has been received and the meeting is older than the pre-heartbeat
+// grace window — must be ended.
+func TestRunOnce_PreHeartbeat_OldEnough_Ended(t *testing.T) {
+	stale := &store.ActiveMeeting{
+		ChannelID:             "ch-old",
+		RoomID:                "room-old",
+		CreatedAt:             time.Now().UTC().Add(-31 * time.Minute), // older than 30m grace
+		LastHeartbeat:         time.Now().UTC().Add(-31 * time.Minute),
+		HostHeartbeatReceived: false,
+	}
+
+	api := setupAPIWithMeetings(t, []*store.ActiveMeeting{stale})
+	api.On("LogInfo",
+		mock.AnythingOfType("string"),
+		mock.Anything, mock.Anything,
+		mock.Anything, mock.Anything,
+		mock.Anything, mock.Anything,
+	).Return()
+
+	s := store.New(api)
+	var ended []*store.ActiveMeeting
+	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		time.Minute, 5*time.Minute)
+
+	r.RunOnce()
+
+	require.Len(t, ended, 1)
+	assert.Equal(t, "ch-old", ended[0].ChannelID)
+}
+
+// TestRunOnce_PostHeartbeat_FreshHeartbeat_NotEnded covers a meeting where
+// the webapp has heartbeat at least once and the heartbeat is recent — the
+// existing 5-minute staleness path must keep it alive even if CreatedAt is old.
+func TestRunOnce_PostHeartbeat_FreshHeartbeat_NotEnded(t *testing.T) {
+	old := &store.ActiveMeeting{
+		ChannelID:             "ch-active",
+		RoomID:                "room-active",
+		CreatedAt:             time.Now().UTC().Add(-2 * time.Hour), // very old
+		LastHeartbeat:         time.Now().UTC(),                     // beat just now
+		HostHeartbeatReceived: true,
+	}
+
+	api := setupAPIWithMeetings(t, []*store.ActiveMeeting{old})
+
+	s := store.New(api)
+	var ended []*store.ActiveMeeting
+	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		time.Minute, 5*time.Minute)
+
+	r.RunOnce()
+
+	assert.Empty(t, ended, "actively-heartbeating meeting must not be ended")
 }

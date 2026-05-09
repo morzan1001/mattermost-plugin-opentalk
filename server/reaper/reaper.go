@@ -92,15 +92,31 @@ func (r *Reaper) loop(ctx context.Context) {
 	}
 }
 
+const preHeartbeatGrace = 30 * time.Minute
+
 func (r *Reaper) tick() {
 	meetings, err := r.store.ListActiveMeetings()
 	if err != nil {
 		r.api.LogWarn("[opentalk] reaper: ListActiveMeetings failed", "err", err.Error())
 		return
 	}
-	cutoff := time.Now().UTC().Add(-r.staleness)
+	now := time.Now().UTC()
+	staleCutoff := now.Add(-r.staleness)
+	graceCutoff := now.Add(-preHeartbeatGrace)
 	for _, am := range meetings {
-		if am.LastHeartbeat.Before(cutoff) {
+		if !am.HostHeartbeatReceived {
+			// No webapp heartbeat yet — trust CreatedAt for the longer grace.
+			if am.CreatedAt.Before(graceCutoff) {
+				r.api.LogInfo("[opentalk] reaper: ending meeting past pre-heartbeat grace",
+					"channel_id", am.ChannelID,
+					"room_id", am.RoomID,
+					"created_at", am.CreatedAt.Format(time.RFC3339),
+				)
+				r.endMeeting(am)
+			}
+			continue
+		}
+		if am.LastHeartbeat.Before(staleCutoff) {
 			r.api.LogInfo("[opentalk] reaper: ending stale meeting",
 				"channel_id", am.ChannelID,
 				"room_id", am.RoomID,
