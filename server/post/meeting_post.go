@@ -112,6 +112,9 @@ func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostUsername, 
 		EN: "End meeting",
 	})
 
+	// Slack-attachment actions are not per-viewer. Every channel member sees
+	// the End and Decline buttons; non-host taps are rejected server-side
+	// with an ephemeral text by the post-action handlers.
 	actions := []*model.PostAction{{
 		Id:    "end",
 		Name:  endLabel,
