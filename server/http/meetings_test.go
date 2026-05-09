@@ -1,11 +1,13 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
 	nethttp "net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/mattermost/mattermost/server/public/model"
@@ -254,4 +256,44 @@ func TestMeetingsJoin_RejectsMissingUserHeader(t *testing.T) {
 	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
 	router.ServeHTTP(rr, req)
 	assert.Equal(t, nethttp.StatusUnauthorized, rr.Code)
+}
+
+// TestMeetingsHeartbeat_FlipsHostHeartbeatReceivedOnFirstCall verifies that
+// the heartbeat handler flips HostHeartbeatReceived to true on the first
+// successful host call and persists the meeting back to KV.
+func TestMeetingsHeartbeat_FlipsHostHeartbeatReceived(t *testing.T) {
+	api := &plugintest.API{}
+
+	am := &store.ActiveMeeting{
+		ChannelID:             "ch-1",
+		RoomID:                "room-1",
+		HostUserID:            "host-uid",
+		CreatedAt:             time.Now().UTC().Add(-1 * time.Minute),
+		LastHeartbeat:         time.Now().UTC().Add(-1 * time.Minute),
+		HostHeartbeatReceived: false,
+	}
+	stored, err := json.Marshal(am)
+	require.NoError(t, err)
+	api.On("KVGet", "meeting_ch-1").Return(stored, nil)
+
+	var saved []byte
+	api.On("KVSetWithExpiry", "meeting_ch-1", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("int64")).
+		Run(func(args mock.Arguments) { saved = args.Get(1).([]byte) }).
+		Return(nil)
+
+	h := &Handlers{Store: store.New(api)}
+
+	body, _ := json.Marshal(map[string]string{"channel_id": "ch-1"})
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/heartbeat", bytes.NewReader(body))
+	req.Header.Set("Mattermost-User-ID", "host-uid")
+	rr := httptest.NewRecorder()
+	h.MeetingsHeartbeat(rr, req)
+
+	assert.Equal(t, nethttp.StatusNoContent, rr.Code)
+
+	var got store.ActiveMeeting
+	require.NoError(t, json.Unmarshal(saved, &got))
+	assert.True(t, got.HostHeartbeatReceived,
+		"first host heartbeat must flip the flag")
+	assert.False(t, got.LastHeartbeat.IsZero(), "LastHeartbeat must be advanced")
 }

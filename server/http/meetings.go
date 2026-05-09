@@ -417,6 +417,7 @@ func (h *Handlers) MeetingsHeartbeat(w nethttp.ResponseWriter, r *nethttp.Reques
 	}
 
 	am.LastHeartbeat = time.Now().UTC()
+	am.HostHeartbeatReceived = true
 	if sErr := h.Store.SaveActiveMeeting(am); sErr != nil {
 		nethttp.Error(w, "save heartbeat: "+sErr.Error(), nethttp.StatusInternalServerError)
 		return
