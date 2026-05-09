@@ -198,7 +198,7 @@ func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostUsername, 
 	return []*model.SlackAttachment{{
 		Title:   title,
 		Text:    body,
-		Color:   "#1e88e5",
+		Color:   "#00B59C",
 		Actions: actions,
 	}}
 }

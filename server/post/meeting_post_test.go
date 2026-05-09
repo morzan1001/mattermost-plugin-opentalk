@@ -110,7 +110,7 @@ func TestBuildMeetingPost_AttachmentSTARTED_Channel(t *testing.T) {
 	require.Len(t, atts, 1)
 
 	att := atts[0]
-	assert.Equal(t, "#1e88e5", att.Color)
+	assert.Equal(t, "#00B59C", att.Color)
 	assert.NotEmpty(t, att.Title)
 	assert.Contains(t, att.Text, "https://opentalk.example/invite/inv-1",
 		"attachment text must include the join URL as a markdown link")

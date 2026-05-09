@@ -323,9 +323,7 @@ func (h *Handlers) MeetingsPostActionEnd(w nethttp.ResponseWriter, r *nethttp.Re
 
 	am, err := h.Store.LoadActiveMeeting(channelID)
 	if err != nil {
-		writePostActionResponse(w, &model.PostActionIntegrationResponse{
-			EphemeralText: "This meeting is no longer active.",
-		})
+		writePostActionResponse(w, h.staleMeetingResponse(body.PostId, "This meeting is no longer active."))
 		return
 	}
 	if am.HostUserID != mmUserID {
@@ -374,15 +372,11 @@ func (h *Handlers) MeetingsPostActionDismiss(w nethttp.ResponseWriter, r *nethtt
 
 	am, err := h.Store.LoadActiveMeeting(channelID)
 	if err != nil {
-		writePostActionResponse(w, &model.PostActionIntegrationResponse{
-			EphemeralText: "This meeting is no longer active.",
-		})
+		writePostActionResponse(w, h.staleMeetingResponse(body.PostId, "This meeting is no longer active."))
 		return
 	}
 	if am.RoomID != roomID {
-		writePostActionResponse(w, &model.PostActionIntegrationResponse{
-			EphemeralText: "This meeting is no longer active.",
-		})
+		writePostActionResponse(w, h.staleMeetingResponse(body.PostId, "This meeting is no longer active."))
 		return
 	}
 	if mmUserID == am.HostUserID {
@@ -410,6 +404,20 @@ func writePostActionResponse(w nethttp.ResponseWriter, resp *model.PostActionInt
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(nethttp.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// staleMeetingResponse builds a response for a tap on a button whose meeting is
+// no longer active (already ended elsewhere). When postID is set and the post
+// is fetchable, the response carries the up-to-date post as Update so the
+// mobile client refreshes its cached view; otherwise only the ephemeral text.
+func (h *Handlers) staleMeetingResponse(postID, ephemeral string) *model.PostActionIntegrationResponse {
+	resp := &model.PostActionIntegrationResponse{EphemeralText: ephemeral}
+	if postID != "" && h.PostGetter != nil {
+		if p, getErr := h.PostGetter(postID); getErr == nil && p != nil {
+			resp.Update = p
+		}
+	}
+	return resp
 }
 
 type dismissRequest struct {
