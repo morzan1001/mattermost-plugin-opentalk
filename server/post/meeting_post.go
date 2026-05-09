@@ -141,8 +141,8 @@ func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostUsername, 
 		EN: "Started " + formatRelativeAge(startedAt, locale),
 	})
 	joinLine := i18n.T(locale, i18n.Translatable{
-		DE: fmt.Sprintf("[Meeting beitreten](%s)", inviteURL),
-		EN: fmt.Sprintf("[Join meeting](%s)", inviteURL),
+		DE: fmt.Sprintf("**[Meeting beitreten](%s)**", inviteURL),
+		EN: fmt.Sprintf("**[Join meeting](%s)**", inviteURL),
 	})
 
 	body := hostLine + "\n" + startedLine
@@ -153,7 +153,9 @@ func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostUsername, 
 		})
 		body += "\n" + dialLine
 	}
-	body += "\n\n" + joinLine
+	// Extra blank line after the join link so the action buttons below are
+	// visually separated and harder to mis-tap on mobile.
+	body += "\n\n" + joinLine + "\n"
 
 	endLabel := i18n.T(locale, i18n.Translatable{
 		DE: "Meeting beenden",
