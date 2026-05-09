@@ -4,20 +4,20 @@ A Mattermost server plugin that deeply integrates the OpenTalk video-conferencin
 
 ## Features
 
-- **Channel-header button** to start a meeting in any channel.
-- **Floating widget** with mic, camera, screen-share, hand-raise, mini, and leave controls. Drag to reposition; resizes by content.
-- **Expanded view** with three layouts: speaker (active speaker + filmstrip), grid (auto-fit), and screen-focus (when someone is sharing). Choice persists per user.
-- **DM ringing** — incoming-call modal with ringtone, accept/decline, 30-second auto-decline. Switch-call prompt when already in another meeting.
-- **Channel toast** — passive banner above the thread when a meeting is live in a public/private channel.
-- **Mute-on-join** option, custom-status integration ("In OpenTalk-Meeting"), and respect for Do-Not-Disturb status (no rings, no pushes).
-- **Mic/camera picker** in the Mattermost user settings panel.
-- **Mobile push** notifications routed via `SubType=calls` so the Mattermost mobile app can render the call-flavoured ring UI.
-- **Native screen picker** in the Mattermost desktop (Electron) app via the `desktopCapturer` IPC bridge.
-- **German + English UI** — chosen automatically from the user's Mattermost locale.
+- Start a meeting from any channel via header button or `/opentalk start`. Floating widget with mic, camera, screen-share, hand-raise, mini, and leave controls — drag to reposition, resizes to its natural content width.
+- Expanded view with three layouts (speaker, grid, screen-focus); choice persists per user.
+- DM ringing — incoming-call modal with ringtone, 30-second auto-decline; switch-call prompt when already in a meeting; push notification per recipient (DND respected).
+- Mobile handoff — meeting posts carry a Slack-style card with a `[Join]` markdown link, dial-in info, and End / Decline action buttons. Mattermost mobile users tap to open the OpenTalk web client in the system browser.
+- Native screen-share in Mattermost Desktop via the platform's `desktopAPI.getDesktopSources()` IPC; standard `getDisplayMedia()` in browsers.
+- End-for-all kicks remaining participants (moderation `debrief`) and revokes the OpenTalk invite.
+- Channel toast above the thread when a meeting is live in a public/private channel.
+- User settings: ringtone toggle, mute-on-join, mic and camera pickers.
+- Custom status "In OpenTalk-Meeting" while connected.
+- German + English UI, auto-selected from the user's Mattermost locale.
 
 ## Architecture
 
-- **Server (Go):** OAuth bridge against Keycloak, calls the OpenTalk Controller REST API on behalf of the user, posts custom posts with a `[Join]` button, sends push notifications for DM ringing, runs a heartbeat-driven reaper that ends orphaned meetings.
+- **Server (Go):** OAuth bridge against Keycloak, calls the OpenTalk Controller REST API on behalf of the user, posts custom posts with a join link and action buttons, sends push notifications for DM ringing, runs a reaper that ends orphaned meetings (heartbeat-based for webapp hosts, 30-minute grace for mobile-only hosts).
 - **Webapp (TS + React):** Channel-header button, custom post renderer, floating widget, expanded view, incoming-call modal, signaling client, and LiveKit client for the in-Mattermost conference UI.
 - **OpenTalk:** Room creation and auth via the Controller REST API, live signaling over Roomserver WebSocket, media over LiveKit.
 - **Auth:** Per-user OIDC authorization-code flow against Keycloak (the same realm that OpenTalk uses).
@@ -55,27 +55,9 @@ Open `https://accounts.<your-opentalk-domain>/auth/admin/`. Select the OpenTalk 
 
 Left nav: **Clients → Create client**.
 
-**General Settings:**
+**General Settings:** Client type **OpenID Connect**, Client ID `mattermost-plugin-opentalk`, Name `Mattermost OpenTalk Plugin`.
 
-| Field | Value |
-|---|---|
-| Client type | **OpenID Connect** |
-| Client ID | `mattermost-plugin-opentalk` |
-| Name | `Mattermost OpenTalk Plugin` |
-| Always display in console | off |
-
-**Capability Config:**
-
-| Field | Value |
-|---|---|
-| Client authentication | **on** (confidential client with client secret) |
-| Authorization | off |
-| Standard flow | **on** (authorization-code flow for user login) |
-| Direct access grants | off |
-| Implicit flow | off |
-| Service accounts roles | **on** _(optional, for bot-model fallback)_ |
-| OAuth 2.0 Device Authorization Grant | off |
-| OIDC CIBA Grant | off |
+**Capability Config:** Enable **Client authentication** (confidential client with client secret) and **Standard flow** (authorization-code flow). Optionally enable **Service accounts roles** for the bot-model fallback. Leave the rest off.
 
 **Login Settings:**
 
@@ -87,7 +69,7 @@ Replace `MM_URL` with your Mattermost server URL (e.g. `http://localhost:8065` f
 | Home URL | `MM_URL` |
 | Valid redirect URIs | `MM_URL/plugins/com.github.morzan1001.mattermost-plugin-opentalk/oauth/callback` |
 | Valid post logout redirect URIs | `MM_URL/*` |
-| Web origins | `MM_URL` |
+| Web origins | `MM_URL` (the exact Mattermost URL — no wildcard `*`) |
 
 Save.
 
@@ -126,10 +108,6 @@ Activate the plugin. An OpenTalk button should appear in the channel header; the
 | Plugin settings save fails with `OIDCAuthority must not be empty` | Issuer URL not entered | See plugin settings table above |
 | Plugin cannot load OIDC discovery | Issuer URL has wrong subpath (`/auth/` missing or extra) | Use exactly the URL shown in Keycloak's Realm Settings as _Issuer_ |
 
-### Production hardening
-
-- **Restrict Web Origins** to the exact Mattermost URL — no wildcard `*`.
-
 ## Slash commands
 
 | Command | What it does |
@@ -158,7 +136,7 @@ make lint       # golangci-lint + eslint
 make watch      # webapp in watch mode
 ```
 
-The webapp test suite is ~370 Jest tests across 50 suites; the server suite covers slash-command handlers, the OIDC flow, the OpenTalk client, the post helpers, the reaper, and the store.
+The webapp suite covers components, store slices, conference signaling, and the LiveKit wrapper; the server suite covers slash-command handlers, the OIDC flow, the OpenTalk client, the post helpers, the reaper, and the store.
 
 ## License
 
