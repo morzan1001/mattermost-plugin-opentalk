@@ -6,8 +6,12 @@ import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;
 
-function initialsOf(name: string): string {
-    const parts = name.trim().split(/\s+/);
+function initialsOf(name: string | undefined): string {
+    const safe = (name ?? '').trim();
+    if (!safe) {
+        return '';
+    }
+    const parts = safe.split(/\s+/);
     if (parts.length >= 2) {
         return (parts[0][0] + parts[1][0]).toUpperCase();
     }

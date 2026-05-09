@@ -47,8 +47,12 @@ const badgeStyle: React.CSSProperties = {
     background: 'rgba(255,255,255,0.16)',
 };
 
-function initialsOf(name: string): string {
-    const parts = name.trim().split(/\s+/);
+function initialsOf(name: string | undefined): string {
+    const safe = (name ?? '').trim();
+    if (!safe) {
+        return '';
+    }
+    const parts = safe.split(/\s+/);
     if (parts.length >= 2) {
         return (parts[0][0] + parts[1][0]).toUpperCase();
     }
