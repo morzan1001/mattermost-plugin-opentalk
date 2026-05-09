@@ -153,7 +153,10 @@ export async function startConferenceConnection(
         // OpenTalk's raise-hands feature is OFF by default per room. Hosts
         // turn it on so participants' raiseHand calls aren't silently dropped.
         if (isHost) {
+            console.log('[opentalk] auto-enabling raise-hands on host-join');
             client.enableRaiseHands();
+        } else {
+            console.log('[opentalk] not host on join, raise-hands stays at server default');
         }
     });
     client.on('livekit_credentials', ({url, token}) => {
@@ -404,7 +407,23 @@ export async function toggleScreenShare(): Promise<void> {
         try {
             // eslint-disable-next-line no-console
             console.warn('[opentalk] toggleScreenShare: isElectron=', isElectron(), 'ua=', navigator.userAgent);
-            if (isElectron()) {
+            let usedGetDisplayMedia = false;
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: false});
+                // eslint-disable-next-line no-console
+                console.warn('[opentalk] screen-share via getDisplayMedia');
+                await lk.enableScreenShareFromStream(stream);
+                usedGetDisplayMedia = true;
+            } catch (gdmErr) {
+                if (!isElectron()) {
+                    throw gdmErr;
+                }
+                // eslint-disable-next-line no-console
+                console.warn('[opentalk] getDisplayMedia failed, trying Electron postMessage bridge', gdmErr);
+            }
+            if (!usedGetDisplayMedia) {
+                // eslint-disable-next-line no-console
+                console.warn('[opentalk] screen-share via Electron desktop_capturer');
                 // eslint-disable-next-line no-console
                 console.warn('[opentalk] electron path: requesting desktop sources via postMessage');
                 const sources = await getDesktopSources().catch((e: Error) => {
@@ -429,8 +448,6 @@ export async function toggleScreenShare(): Promise<void> {
                 // eslint-disable-next-line no-console
                 console.warn('[opentalk] captured stream, video-tracks=', stream.getVideoTracks().length);
                 await lk.enableScreenShareFromStream(stream);
-            } else {
-                await lk.enableScreenShare();
             }
 
             const screenTrack = lk.getLocalScreenTrack();

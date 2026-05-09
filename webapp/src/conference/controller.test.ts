@@ -508,8 +508,13 @@ describe('toggleScreenShare', () => {
         expect(dispatched.find((a) => a.type === 'opentalk/session/set_screen_share_enabled')).toBeUndefined();
     });
 
-    it('calls lk.enableScreenShare() on the non-Electron path', async () => {
+    it('uses getDisplayMedia on the non-Electron path', async () => {
         (isElectron as jest.Mock).mockReturnValue(false);
+        const fakeStream = {getVideoTracks: () => [{kind: 'video'}]};
+        Object.defineProperty(navigator, 'mediaDevices', {
+            value: {getDisplayMedia: jest.fn().mockResolvedValue(fakeStream)},
+            configurable: true,
+        });
 
         const store = makeTestStore();
         startConferenceConnection('room-1', 'ch-1', 'Alice', store);
@@ -528,12 +533,16 @@ describe('toggleScreenShare', () => {
 
         await toggleScreenShare();
 
-        expect(lkRoom().enableScreenShare).toHaveBeenCalled();
+        expect(lkRoom().enableScreenShareFromStream).toHaveBeenCalledWith(fakeStream);
         expect(dispatched.find((a) => a.type === 'opentalk/session/set_screen_share_enabled')?.payload?.value).toBe(true);
     });
 
-    it('uses Electron path: getDesktopSources → pickScreenSource → captureDesktopStream → enableScreenShareFromStream', async () => {
+    it('falls back to Electron postMessage bridge when getDisplayMedia rejects in Electron', async () => {
         (isElectron as jest.Mock).mockReturnValue(true);
+        Object.defineProperty(navigator, 'mediaDevices', {
+            value: {getDisplayMedia: jest.fn().mockRejectedValue(new Error('not supported'))},
+            configurable: true,
+        });
         const fakeStream = {getVideoTracks: () => [{kind: 'video'}]};
         (captureDesktopStream as jest.Mock).mockResolvedValue(fakeStream);
         (pickScreenSource as jest.Mock).mockResolvedValue('src-1');
