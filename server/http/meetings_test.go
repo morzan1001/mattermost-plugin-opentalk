@@ -485,3 +485,28 @@ func TestMeetingsPostActionDismiss_FlipsMissed(t *testing.T) {
 	require.NotNil(t, resp.Update, "last decliner: Update with MISSED post")
 	assert.Equal(t, "MISSED", resp.Update.GetProp("status"))
 }
+
+func TestRouter_PostActionRoutesRegistered(t *testing.T) {
+	api := &plugintest.API{}
+	api.On("KVGet", mock.AnythingOfType("string")).Return([]byte(nil), nil).Maybe()
+	h := &Handlers{Store: store.New(api)}
+
+	router := NewRouter(h)
+
+	for _, path := range []string{
+		"/api/v1/meetings/post-action/end",
+		"/api/v1/meetings/post-action/dismiss",
+	} {
+		body, _ := json.Marshal(model.PostActionIntegrationRequest{
+			Context: map[string]any{
+				"channel_id": "ch-x",
+				"room_id":    "room-x",
+			},
+		})
+		req := httptest.NewRequest(nethttp.MethodPost, path, bytes.NewReader(body))
+		req.Header.Set("Mattermost-User-ID", "any-uid")
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		assert.NotEqual(t, nethttp.StatusNotFound, rr.Code, "route %s must be registered", path)
+	}
+}

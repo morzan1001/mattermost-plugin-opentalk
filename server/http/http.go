@@ -20,5 +20,7 @@ func NewRouter(handlers *Handlers) *mux.Router {
 	r.HandleFunc("/api/v1/meetings/end", handlers.MeetingsEnd).Methods(nethttp.MethodPost)
 	r.HandleFunc("/api/v1/meetings/dismiss", handlers.MeetingsDismiss).Methods(nethttp.MethodPost)
 	r.HandleFunc("/api/v1/meetings/heartbeat", handlers.MeetingsHeartbeat).Methods(nethttp.MethodPost)
+	r.HandleFunc("/api/v1/meetings/post-action/end", handlers.MeetingsPostActionEnd).Methods(nethttp.MethodPost)
+	r.HandleFunc("/api/v1/meetings/post-action/dismiss", handlers.MeetingsPostActionDismiss).Methods(nethttp.MethodPost)
 	return r
 }
