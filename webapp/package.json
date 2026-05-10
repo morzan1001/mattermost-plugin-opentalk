@@ -57,7 +57,7 @@
     "sass-loader": "13.0.0",
     "style-loader": "3.3.1",
     "webpack": "5.106.2",
-    "webpack-cli": "5.1.4"
+    "webpack-cli": "7.0.2"
   },
   "dependencies": {
     "camelcase-keys": "^7.0.2",
