@@ -140,8 +140,14 @@ The webapp suite covers components, store slices, conference signaling, and the 
 
 ## Credits
 
-The incoming-call ringtone is ["Digital Phone Ring" by Perkin](https://freesound.org/people/Perkin/sounds/178377/), released under [CC0 1.0 (Public Domain Dedication)](https://creativecommons.org/publicdomain/zero/1.0/).
+The incoming-call ringtone is ["Digital Phone Ring" by Perkin](https://freesound.org/people/Perkin/sounds/178377/), released under CC0 1.0.
 
 ## License
 
-Apache-2.0 for plugin code authored in this repository. Source files extracted from the OpenTalk web frontend retain their original EUPL-1.2 license; those files carry SPDX headers identifying them individually.
+Three licenses apply, identified per file via SPDX headers; full texts are in [`LICENSES/`](LICENSES/):
+
+- **Apache-2.0** — plugin code authored in this repository (default).
+- **EUPL-1.2** — files under `webapp/src/conference/signaling/` ported from the OpenTalk web frontend; each carries an SPDX header crediting OpenTalk GmbH.
+- **CC0-1.0** — `webapp/src/sounds/incoming_call.ogg`, declared via the adjacent `.license` sidecar.
+
+The top-level [`LICENSE`](LICENSE) file (Apache-2.0) is preserved at the root so GitHub auto-detection works.
