@@ -11,8 +11,21 @@ import {
 } from '../../store/slice_incoming_calls';
 import {useT} from '../../util/i18n';
 import {PLUGIN_STATE_KEY, selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
+import {ringtoneSettingKey} from '../../user_settings';
 
 const stateKey = PLUGIN_STATE_KEY;
+
+// Mirrors plugin.ts ringtoneEnabled(): default ON, false only on explicit opt-out.
+function isRingtoneEnabled(): boolean {
+    if (typeof window === 'undefined') {
+        return true;
+    }
+    try {
+        return window.localStorage.getItem(ringtoneSettingKey) !== 'false';
+    } catch {
+        return true;
+    }
+}
 
 const IncomingCallModal: React.FC = () => {
     const dispatch = useDispatch();
@@ -42,10 +55,14 @@ const IncomingCallModal: React.FC = () => {
 
     // CRITICAL: always mounted as RootComponent — gate effects on isShowingCall
     // so the ringtone doesn't start at app-init when there's no incoming call.
-    const isShowingCall = call !== null && sessionStatus === 'idle';
+    // Hide only when we're already in a connected meeting (SwitchCallModal owns that case).
+    const isShowingCall = call !== null && sessionStatus !== 'connected';
 
     useEffect(() => {
         if (!isShowingCall) {
+            return undefined;
+        }
+        if (!isRingtoneEnabled()) {
             return undefined;
         }
         ringtone.start();

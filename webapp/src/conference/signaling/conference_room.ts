@@ -137,6 +137,9 @@ export class ConferenceRoom {
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'joinSuccess', (payload: any) => {
+                    // eslint-disable-next-line no-console
+                    console.log('[opentalk] joinSuccess raw payload:', JSON.stringify(payload, null, 2));
+
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const others = (payload.participants ?? []).map((p: any) => this.normalizeParticipant(p));
 
@@ -182,6 +185,9 @@ export class ConferenceRoom {
                 // Listen for both joined and participantConnected for forward-compat.
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const onJoinedFrame = (payload: any) => {
+                    // eslint-disable-next-line no-console
+                    console.log('[opentalk] joined event raw payload:', JSON.stringify(payload, null, 2));
+
                     if (this.state !== 'connected') {
                         return;
                     }

@@ -10,6 +10,7 @@ interface PostProps {
     room_id: string;
     invite_code: string;
     host_username: string;
+    host_display_name?: string;
     frontend_url: string;
     status: 'STARTED' | 'ENDED' | 'MISSED';
     started_at: number;
