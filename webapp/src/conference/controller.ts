@@ -392,6 +392,53 @@ export async function toggleCam(): Promise<void> {
     }
 }
 
+// applyMicDeviceChange / applyCamDeviceChange — re-publish the active track
+// against the newly-selected device. Called by the settings panel after
+// writing the preference to localStorage. No-op if not in a live call or if
+// the device isn't currently active.
+export async function applyMicDeviceChange(): Promise<void> {
+    if (!activeLiveKit || !activeStore) {
+        return;
+    }
+    if (!activeLiveKit.isMicEnabled()) {
+        return;
+    }
+    try {
+        await activeLiveKit.disableMic();
+        await activeLiveKit.enableMic();
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[opentalk] applyMicDeviceChange failed:', (err as Error).message);
+    }
+}
+
+export async function applyCamDeviceChange(): Promise<void> {
+    if (!activeLiveKit || !activeStore) {
+        return;
+    }
+    const lk = activeLiveKit;
+    if (!lk.isCamEnabled()) {
+        return;
+    }
+    const localId = lk.getLocalIdentity();
+    const oldTrackId = localTrackId(lk, 'video');
+    try {
+        trackRegistry.unregister(oldTrackId);
+        activeStore.dispatch(trackUnsubscribed({participantId: localId, kind: 'video'}));
+        await lk.disableCam();
+        await lk.enableCam();
+        if (lk.camTrack) {
+            const newTrackId = localTrackId(lk, 'video');
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            trackRegistry.register(newTrackId, lk.camTrack as any);
+            activeStore.dispatch(trackSubscribed({participantId: localId, kind: 'video', trackId: newTrackId}));
+        }
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[opentalk] applyCamDeviceChange failed:', (err as Error).message);
+    }
+}
+
 export async function toggleScreenShare(): Promise<void> {
     if (!activeLiveKit || !activeStore) {
         return;

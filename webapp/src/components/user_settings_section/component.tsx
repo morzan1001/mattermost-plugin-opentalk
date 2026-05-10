@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 
+import {applyMicDeviceChange, applyCamDeviceChange} from '../../conference/controller';
 import {
     getPreferredMicId,
     setPreferredMicId,
@@ -101,12 +102,17 @@ export const OpenTalkSettingsSection: React.FC = () => {
         const v = e.target.value;
         setMicIdState(v);
         setPreferredMicId(v);
+        // If a meeting is live and the mic is on, restart the track so the
+        // new device takes effect immediately without the user having to
+        // toggle the mic off and back on.
+        void applyMicDeviceChange();
     };
 
     const onCamChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const v = e.target.value;
         setCamIdState(v);
         setPreferredCamId(v);
+        void applyCamDeviceChange();
     };
 
     return (
