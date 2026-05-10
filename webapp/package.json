@@ -55,8 +55,8 @@
     "jest-junit": "13.0.0",
     "react-dom": "18.2.0",
     "sass": "1.99.0",
-    "sass-loader": "13.0.0",
-    "style-loader": "3.3.1",
+    "sass-loader": "16.0.8",
+    "style-loader": "4.0.0",
     "webpack": "5.106.2",
     "webpack-cli": "7.0.2"
   },
