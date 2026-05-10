@@ -1,6 +1,6 @@
 {
   "name": "@opentalk/mattermost-plugin-webapp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "scripts": {
     "build": "webpack --mode=production",
