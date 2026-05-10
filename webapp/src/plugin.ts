@@ -190,15 +190,15 @@ export default class Plugin {
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_incoming_call`,
             (msg: IncomingCallMessage) => {
+                // eslint-disable-next-line no-console
+                console.log('[opentalk] incoming_call event:', msg.data);
+
                 const now = Date.now();
                 const createdAt = msg.data.created_at_unix_ms;
                 const ageMs = typeof createdAt === 'number' ? now - createdAt : -1;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const myId: string | undefined = (store.getState() as any)?.entities?.users?.currentUserId;
 
-                if (!ringtoneEnabled()) {
-                    return;
-                }
                 if (myId && msg.data.host_user_id === myId) {
                     return;
                 }

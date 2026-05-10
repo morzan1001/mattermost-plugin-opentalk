@@ -108,10 +108,16 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 	// Build and post the custom-post via the bot. We persist ActiveMeeting
 	// *before* the post so that even if the post call fails we still know
 	// about the live room; the reaper will clean it up.
-	hostName := mmUserID
+	hostUsername := mmUserID
 	if h.HostUsernameOf != nil {
 		if n := h.HostUsernameOf(mmUserID); n != "" {
-			hostName = n
+			hostUsername = n
+		}
+	}
+	hostDisplayName := hostUsername
+	if h.HostDisplayNameOf != nil {
+		if n := h.HostDisplayNameOf(mmUserID); n != "" {
+			hostDisplayName = n
 		}
 	}
 	hostLocale := ""
@@ -122,7 +128,7 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 	if h.IsDMChannel != nil {
 		isDM = h.IsDMChannel(body.ChannelID)
 	}
-	botPost := post.BuildMeetingPost(am, h.FrontendURL, hostName, hostLocale, isDM)
+	botPost := post.BuildMeetingPost(am, h.FrontendURL, hostUsername, hostDisplayName, hostLocale, isDM)
 	botPost.UserId = h.BotUserID
 	created, err := h.CreatePost(botPost)
 	if err != nil {

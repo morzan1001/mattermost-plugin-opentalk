@@ -71,7 +71,8 @@ func TestMeetingsCreate_HappyPath(t *testing.T) {
 			capturedPost = p
 			return p, nil
 		},
-		HostUsernameOf: func(_ string) string { return "alice" },
+		HostUsernameOf:    func(_ string) string { return "alice" },
+		HostDisplayNameOf: func(_ string) string { return "Alice Tester" },
 	}
 
 	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev"}`)
@@ -92,6 +93,7 @@ func TestMeetingsCreate_HappyPath(t *testing.T) {
 	require.NotNil(t, capturedPost, "expected bot-post to be created")
 	assert.Equal(t, "custom_opentalk_meeting", capturedPost.Type)
 	assert.Equal(t, "alice", capturedPost.GetProp("host_username"))
+	assert.Equal(t, "Alice Tester", capturedPost.GetProp("host_display_name"))
 	assert.Equal(t, "OpenTalk meeting", capturedPost.Message)
 	assert.Equal(t, "post-1", resp["post_id"])
 }

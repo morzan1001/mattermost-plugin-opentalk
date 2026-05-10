@@ -247,6 +247,13 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			if err != nil || u == nil {
 				return ""
 			}
+			return u.Username
+		},
+		HostDisplayNameOf: func(mmUserID string) string {
+			u, err := p.API.GetUser(mmUserID)
+			if err != nil || u == nil {
+				return ""
+			}
 			return displayNameOf(u)
 		},
 		LocaleOf: p.localeOf,
@@ -353,10 +360,12 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		return nil, fmt.Errorf("persist meeting: %w", err)
 	}
 
-	hostName := mmUserID
+	hostUsername := mmUserID
+	hostDisplayName := mmUserID
 	hostLocale := ""
 	if u, err := p.API.GetUser(mmUserID); err == nil && u != nil {
-		hostName = displayNameOf(u)
+		hostUsername = u.Username
+		hostDisplayName = displayNameOf(u)
 		hostLocale = u.Locale
 	}
 
@@ -364,7 +373,7 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 	isDM := chErr == nil && ch != nil &&
 		(ch.Type == model.ChannelTypeDirect || ch.Type == model.ChannelTypeGroup)
 
-	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostName, hostLocale, isDM)
+	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostUsername, hostDisplayName, hostLocale, isDM)
 	botPost.UserId = p.botUserID
 	if err := p.client.Post.CreatePost(botPost); err != nil {
 		return nil, fmt.Errorf("post meeting card: %w", err)
@@ -379,7 +388,7 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 			"channel_id":   channelID,
 			"room_id":      room.ID,
 			"host_user_id": mmUserID,
-			"host_name":    hostName,
+			"host_name":    hostDisplayName,
 			"post_id":      botPost.Id,
 
 			// lets the webapp ignore stale broadcasts on WS reconnect
@@ -418,8 +427,8 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 					SenderId:    p.botUserID,
 					ChannelType: ch.Type,
 					Message: i18n.T(p.localeOf(uid), i18n.Translatable{
-						DE: "Anruf von " + hostName,
-						EN: "Incoming call from " + hostName,
+						DE: "Anruf von " + hostDisplayName,
+						EN: "Incoming call from " + hostDisplayName,
 					}),
 					IsIdLoaded: true,
 				}

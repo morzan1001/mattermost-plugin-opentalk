@@ -23,7 +23,7 @@ func TestBuildMeetingPost_Initial(t *testing.T) {
 		DialInPIN:    "4242",
 	}
 
-	post := BuildMeetingPost(am, "https://opentalk.example", "alice", "", false)
+	post := BuildMeetingPost(am, "https://opentalk.example", "alice", "Alice Tester", "", false)
 	assert.Equal(t, MeetingPostType, post.Type)
 	assert.Equal(t, "ch-1", post.ChannelId)
 	assert.Equal(t, "OpenTalk meeting", post.Message)
@@ -31,6 +31,7 @@ func TestBuildMeetingPost_Initial(t *testing.T) {
 	assert.Equal(t, "inv-1", post.GetProp("invite_code"))
 	assert.Equal(t, "host-uid", post.GetProp("host_user_id"))
 	assert.Equal(t, "alice", post.GetProp("host_username"))
+	assert.Equal(t, "Alice Tester", post.GetProp("host_display_name"))
 	assert.Equal(t, "https://opentalk.example", post.GetProp("frontend_url"))
 	assert.Equal(t, "+49 30 555 1234", post.GetProp("dial_in_number"))
 	assert.Equal(t, "4242", post.GetProp("dial_in_pin"))
@@ -43,10 +44,10 @@ func TestBuildMeetingPost_LocaleDE(t *testing.T) {
 		RoomID:     "r",
 		InviteCode: "i",
 	}
-	postDE := BuildMeetingPost(am, "https://o.example", "u", "de", false)
+	postDE := BuildMeetingPost(am, "https://o.example", "u", "u", "de", false)
 	assert.Equal(t, "OpenTalk-Meeting", postDE.Message)
 
-	postEN := BuildMeetingPost(am, "https://o.example", "u", "en", false)
+	postEN := BuildMeetingPost(am, "https://o.example", "u", "u", "en", false)
 	assert.Equal(t, "OpenTalk meeting", postEN.Message)
 }
 
@@ -55,7 +56,7 @@ func TestBuildMeetingPost_NoSIPLeavesDialInProps(t *testing.T) {
 		ChannelID: "ch-1", RoomID: "r", InviteCode: "i",
 		EnableSIP: false,
 	}
-	post := BuildMeetingPost(am, "https://o.example", "u", "", false)
+	post := BuildMeetingPost(am, "https://o.example", "u", "u", "", false)
 	assert.Nil(t, post.GetProp("dial_in_number"))
 	assert.Nil(t, post.GetProp("dial_in_pin"))
 }
@@ -66,7 +67,7 @@ func TestApplyEndedStatus_UpdatesProps(t *testing.T) {
 		RoomID:     "r",
 		InviteCode: "i",
 		CreatedAt:  time.Now().Add(-15 * time.Minute),
-	}, "https://o.example", "u", "", false)
+	}, "https://o.example", "u", "u", "", false)
 
 	ApplyEndedStatus(p, time.Now())
 	assert.Equal(t, "ENDED", p.GetProp("status"))
@@ -79,7 +80,7 @@ func TestApplyMissedStatus_SetsStatus(t *testing.T) {
 		ChannelID:  "ch-1",
 		RoomID:     "r",
 		InviteCode: "i",
-	}, "https://o.example", "u", "", false)
+	}, "https://o.example", "u", "u", "", false)
 	now := time.Now()
 	ApplyMissedStatus(p, now)
 	assert.Equal(t, "MISSED", p.GetProp("status"))
@@ -101,7 +102,7 @@ func TestBuildMeetingPost_AttachmentSTARTED_Channel(t *testing.T) {
 		DialInPIN:    "4242",
 	}
 
-	post := BuildMeetingPost(am, "https://opentalk.example", "alice", "en", false)
+	post := BuildMeetingPost(am, "https://opentalk.example", "alice", "Alice Tester", "en", false)
 	rawAtt := post.GetProp("attachments")
 	require.NotNil(t, rawAtt, "post.props.attachments must be populated")
 
@@ -136,7 +137,7 @@ func TestBuildMeetingPost_AttachmentSTARTED_DM(t *testing.T) {
 		HostUserID: "host-uid",
 	}
 
-	post := BuildMeetingPost(am, "https://opentalk.example", "alice", "en", true)
+	post := BuildMeetingPost(am, "https://opentalk.example", "alice", "Alice Tester", "en", true)
 	rawAtt := post.GetProp("attachments")
 	atts, ok := rawAtt.([]*model.SlackAttachment)
 	require.True(t, ok)

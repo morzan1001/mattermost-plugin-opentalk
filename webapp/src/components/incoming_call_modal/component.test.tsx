@@ -86,7 +86,7 @@ describe('IncomingCallModal', () => {
         expect(container.firstChild).toBeNull();
     });
 
-    it('returns null when user is in a meeting (session.status !== idle)', () => {
+    it('returns null when user is already in a connected meeting', () => {
         const store = makeStore(
             {status: 'connected'},
             {byChannelID: {'ch-1': mockCall}},
@@ -94,6 +94,15 @@ describe('IncomingCallModal', () => {
         const {container} = renderModal(store);
         expect(screen.queryByTestId('incoming-call-modal')).not.toBeInTheDocument();
         expect(container.firstChild).toBeNull();
+    });
+
+    it('renders modal even when session.status is connecting (not just idle)', () => {
+        const store = makeStore(
+            {status: 'connecting'},
+            {byChannelID: {'ch-1': mockCall}},
+        );
+        renderModal(store);
+        expect(screen.getByTestId('incoming-call-modal')).toBeInTheDocument();
     });
 
     it('returns null when all incoming calls are dismissed', () => {
