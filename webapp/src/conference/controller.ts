@@ -73,9 +73,93 @@ function stopHeartbeat(): void {
     }
 }
 
-// While in a meeting, set a custom MM status so the user appears busy.
-// Cleared on any session end. Fire-and-forget — failures are non-blocking.
+const PRIOR_STATUS_KEY = 'opentalk:prior-status:v1';
+
+type CustomStatus = {emoji?: string; text?: string; duration?: string; expires_at?: string};
+
+function readPriorStatus(): CustomStatus | null {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+    try {
+        const raw = window.localStorage.getItem(PRIOR_STATUS_KEY);
+        return raw ? JSON.parse(raw) as CustomStatus : null;
+    } catch {
+        return null;
+    }
+}
+
+function writePriorStatus(status: CustomStatus | null): void {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    try {
+        if (status === null) {
+            window.localStorage.removeItem(PRIOR_STATUS_KEY);
+        } else {
+            window.localStorage.setItem(PRIOR_STATUS_KEY, JSON.stringify(status));
+        }
+    } catch {
+        // quota/private mode — restore degrades gracefully
+    }
+}
+
+async function fetchCurrentStatus(): Promise<CustomStatus | null> {
+    try {
+        const r = await fetch('/api/v4/users/me', {
+            method: 'GET',
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+            credentials: 'include',
+        });
+        if (!r.ok) {
+            return null;
+        }
+        const me = await r.json() as {props?: {customStatus?: string}};
+        const s = me.props?.customStatus;
+        if (typeof s !== 'string' || s === '') {
+            return null;
+        }
+        return JSON.parse(s) as CustomStatus;
+    } catch {
+        return null;
+    }
+}
+
+const OPENTALK_STATUS_EMOJI = 'phone';
+
 function setOpenTalkStatus(): void {
+    void (async () => {
+        const prior = await fetchCurrentStatus();
+        if (prior && prior.emoji !== OPENTALK_STATUS_EMOJI) {
+            writePriorStatus(prior);
+        }
+        await fetch('/api/v4/users/me/status/custom', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                emoji: OPENTALK_STATUS_EMOJI,
+                text: t({de: 'Im OpenTalk-Meeting', en: 'In an OpenTalk meeting'}),
+                duration: 'four_hours',
+            }),
+        }).catch(() => { /* swallow */ });
+    })();
+}
+
+function clearOpenTalkStatus(): void {
+    const prior = readPriorStatus();
+    writePriorStatus(null);
+    if (!prior || !prior.emoji) {
+        fetch('/api/v4/users/me/status/custom', {
+            method: 'DELETE',
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+            credentials: 'include',
+        }).catch(() => { /* swallow */ });
+        return;
+    }
     fetch('/api/v4/users/me/status/custom', {
         method: 'PUT',
         headers: {
@@ -83,19 +167,7 @@ function setOpenTalkStatus(): void {
             'X-Requested-With': 'XMLHttpRequest',
         },
         credentials: 'include',
-        body: JSON.stringify({
-            emoji: 'phone',
-            text: t({de: 'Im OpenTalk-Meeting', en: 'In an OpenTalk meeting'}),
-            duration: 'four_hours',
-        }),
-    }).catch(() => { /* swallow */ });
-}
-
-function clearOpenTalkStatus(): void {
-    fetch('/api/v4/users/me/status/custom', {
-        method: 'DELETE',
-        headers: {'X-Requested-With': 'XMLHttpRequest'},
-        credentials: 'include',
+        body: JSON.stringify(prior),
     }).catch(() => { /* swallow */ });
 }
 
