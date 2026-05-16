@@ -126,9 +126,11 @@ export class ConferenceRoom {
         return this.auth.getTicket(roomID, channelID, deviceSecret, displayName).then(
             (r) => {
                 const ticket = r.ticket;
-                if (r.resumption) {
-                    writeResumption(roomID, r.resumption);
-                }
+                // Prefer a server-confirmed token from a prior joinSuccess
+                // over the fresh ticket-time value, so the first attempt of
+                // a reconnect re-presents the same resumption the server has
+                // already acknowledged.
+                const initialResumption = readResumption(roomID) || r.resumption || '';
                 const roomserverURL = r.roomserverURL || this.defaultRoomserverURL;
 
                 this.state = 'connecting';
@@ -137,6 +139,14 @@ export class ConferenceRoom {
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'joinSuccess', (payload: any) => {
+                    // Server-confirmed resumption: only persist once the join
+                    // has been accepted. Writing the ticket-time value would
+                    // leave a stale token in localStorage if the join itself
+                    // was rejected (joinBlocked, banned, etc.).
+                    if (typeof payload.resumption === 'string' && payload.resumption) {
+                        writeResumption(roomID, payload.resumption);
+                    }
+
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const others = (payload.participants ?? []).map((p: any) => this.normalizeParticipant(p));
 
@@ -254,10 +264,9 @@ export class ConferenceRoom {
                 });
 
                 this.socket.on('open', () => {
-                    const resumption = readResumption(roomID);
                     this.socket?.send(buildFrame(CoreNamespace, 'join', {
                         displayName,
-                        ...(resumption ? {resumption} : {}),
+                        ...(initialResumption ? {resumption: initialResumption} : {}),
                     }));
                 });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
