@@ -49,8 +49,9 @@ const IncomingCallModal: React.FC = () => {
 
     // CRITICAL: always mounted as RootComponent — gate effects on isShowingCall
     // so the ringtone doesn't start at app-init when there's no incoming call.
-    // Hide only when we're already in a connected meeting (SwitchCallModal owns that case).
-    const isShowingCall = call !== null && sessionStatus !== 'connected';
+    // Hand off to SwitchCallModal for every non-idle state ('connecting',
+    // 'connected', 'leaving') so the two modals never overlap.
+    const isShowingCall = call !== null && sessionStatus === 'idle';
 
     useEffect(() => {
         if (!isShowingCall) {

@@ -96,13 +96,14 @@ describe('IncomingCallModal', () => {
         expect(container.firstChild).toBeNull();
     });
 
-    it('renders modal even when session.status is connecting (not just idle)', () => {
+    it('returns null when session.status is connecting (SwitchCallModal handles non-idle states)', () => {
         const store = makeStore(
             {status: 'connecting'},
             {byChannelID: {'ch-1': mockCall}},
         );
-        renderModal(store);
-        expect(screen.getByTestId('incoming-call-modal')).toBeInTheDocument();
+        const {container} = renderModal(store);
+        expect(screen.queryByTestId('incoming-call-modal')).not.toBeInTheDocument();
+        expect(container.firstChild).toBeNull();
     });
 
     it('returns null when all incoming calls are dismissed', () => {
