@@ -335,6 +335,16 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         store.dispatch(speakingChanged({speakers: speakers as string[]}));
     });
 
+    // OS share-controls / dismissed-tab stops the screen track outside our
+    // toggle path; we still need to clear the publication out of Redux and
+    // the track registry.
+    lk.on('local_screen_share_ended', () => {
+        const trackId = localTrackId(lk, 'screen');
+        trackRegistry.unregister(trackId);
+        store.dispatch(trackUnsubscribed({participantId: lk.getLocalIdentity(), kind: 'screen'}));
+        store.dispatch(setScreenShareEnabled(false));
+    });
+
     lk.connect(url, token).catch((err: Error) => {
         // eslint-disable-next-line no-console
         console.warn('[opentalk] LiveKit connect failed:', err.message);
@@ -445,10 +455,8 @@ export function toggleCam(): Promise<void> {
     return camToggleInFlight;
 }
 
-// applyMicDeviceChange / applyCamDeviceChange — re-publish the active track
-// against the newly-selected device. Called by the settings panel after
-// writing the preference to localStorage. No-op if not in a live call or if
-// the device isn't currently active.
+// Re-publish the active track against the newly-selected device. No-op if
+// not in a live call or if the device isn't currently active.
 export async function applyMicDeviceChange(): Promise<void> {
     if (!activeLiveKit || !activeStore) {
         return;
@@ -460,6 +468,10 @@ export async function applyMicDeviceChange(): Promise<void> {
         await activeLiveKit.disableMic();
         await activeLiveKit.enableMic();
     } catch (err) {
+        // Re-enable failed (permission revoked, device unplugged, etc.); the
+        // mic is gone, so Redux must reflect that or the UI will show an
+        // active mic indicator without an actual stream.
+        activeStore.dispatch(setMicEnabled(false));
         // eslint-disable-next-line no-console
         console.warn('[opentalk] applyMicDeviceChange failed:', (err as Error).message);
     }
@@ -487,6 +499,7 @@ export async function applyCamDeviceChange(): Promise<void> {
             activeStore.dispatch(trackSubscribed({participantId: localId, kind: 'video', trackId: newTrackId}));
         }
     } catch (err) {
+        activeStore.dispatch(setCamEnabled(false));
         // eslint-disable-next-line no-console
         console.warn('[opentalk] applyCamDeviceChange failed:', (err as Error).message);
     }

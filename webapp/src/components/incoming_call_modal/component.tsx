@@ -104,6 +104,8 @@ const IncomingCallModal: React.FC = () => {
         } catch (e) {
             // eslint-disable-next-line no-console
             console.warn('[opentalk] dismiss failed:', (e as Error).message);
+            setBusy(false);
+            return;
         }
 
         setTimeout(() => {

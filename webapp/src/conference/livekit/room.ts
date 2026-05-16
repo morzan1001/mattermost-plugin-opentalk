@@ -16,7 +16,8 @@ export type LiveKitEvent =
     | 'disconnected'
     | 'track_subscribed'
     | 'track_unsubscribed'
-    | 'active_speakers_changed';
+    | 'active_speakers_changed'
+    | 'local_screen_share_ended';
 
 export interface TrackSubscribedData {
     track: RemoteTrack;
@@ -38,6 +39,7 @@ export class LiveKitRoom {
         track_subscribed: [],
         track_unsubscribed: [],
         active_speakers_changed: [],
+        local_screen_share_ended: [],
     };
 
     public micTrack?: LocalAudioTrack;
@@ -54,6 +56,11 @@ export class LiveKitRoom {
         });
         this.room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
             this.emit('active_speakers_changed', speakers.map((s) => s.identity));
+        });
+        this.room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
+            if (publication.source === Track.Source.ScreenShare) {
+                this.emit('local_screen_share_ended');
+            }
         });
     }
 
