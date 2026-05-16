@@ -25,7 +25,6 @@ type Configuration struct {
 
 	DefaultEnableSIP      bool
 	DefaultWaitingRoom    bool
-	EnableRinging         bool
 	InviteExpirationHours int
 }
 

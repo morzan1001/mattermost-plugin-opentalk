@@ -76,8 +76,6 @@
                      "display_name": "Enable SIP dial-in by default", "default": false},
                     {"key": "DefaultWaitingRoom", "type": "bool",
                      "display_name": "Enable waiting room by default", "default": false},
-                    {"key": "EnableRinging", "type": "bool",
-                     "display_name": "Ring on DM calls (push notification)", "default": true},
                     {"key": "InviteExpirationHours", "type": "number",
                      "display_name": "Invite expiration (hours)", "default": 24}
                 ]
