@@ -127,26 +127,28 @@ async function fetchCurrentStatus(): Promise<CustomStatus | null> {
 
 const OPENTALK_STATUS_EMOJI = 'phone';
 
+async function setOpenTalkStatusAsync(): Promise<void> {
+    const prior = await fetchCurrentStatus();
+    if (prior && prior.emoji !== OPENTALK_STATUS_EMOJI) {
+        writePriorStatus(prior);
+    }
+    await fetch('/api/v4/users/me/status/custom', {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+            emoji: OPENTALK_STATUS_EMOJI,
+            text: t({de: 'Im OpenTalk-Meeting', en: 'In an OpenTalk meeting'}),
+            duration: 'four_hours',
+        }),
+    }).catch(() => { /* swallow */ });
+}
+
 function setOpenTalkStatus(): void {
-    void (async () => {
-        const prior = await fetchCurrentStatus();
-        if (prior && prior.emoji !== OPENTALK_STATUS_EMOJI) {
-            writePriorStatus(prior);
-        }
-        await fetch('/api/v4/users/me/status/custom', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-                emoji: OPENTALK_STATUS_EMOJI,
-                text: t({de: 'Im OpenTalk-Meeting', en: 'In an OpenTalk meeting'}),
-                duration: 'four_hours',
-            }),
-        }).catch(() => { /* swallow */ });
-    })();
+    setOpenTalkStatusAsync().catch(() => { /* swallow */ });
 }
 
 function clearOpenTalkStatus(): void {
@@ -311,11 +313,11 @@ export async function startConferenceConnection(
     };
 
     client.on('closed', () => {
-        void tearDownActiveConference('closed');
+        tearDownActiveConference('closed').catch(() => { /* swallow */ });
     });
     client.on('error', (err) => {
         dispatchConnectError(err.message);
-        void tearDownActiveConference('error');
+        tearDownActiveConference('error').catch(() => { /* swallow */ });
     });
 
     store.dispatch(connectStarted({channelID, roomID}));
@@ -358,7 +360,7 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
     });
 
     lk.on('disconnected', () => {
-        void tearDownActiveConference('livekit');
+        tearDownActiveConference('livekit').catch(() => { /* swallow */ });
     });
 
     // Differentiate screen-share from camera: both have kind:'video' in LiveKit

@@ -9,9 +9,9 @@ import {
     incomingCallCleared,
     type IncomingCall,
 } from '../../store/slice_incoming_calls';
+import {ringtoneSettingKey} from '../../user_settings';
 import {useT} from '../../util/i18n';
 import {selectCurrentDisplayName, selectSessionStatus, selectIncomingCallsByChannelID} from '../../util/selectors';
-import {ringtoneSettingKey} from '../../user_settings';
 
 // Mirrors plugin.ts ringtoneEnabled(): default ON, false only on explicit opt-out.
 function isRingtoneEnabled(): boolean {
@@ -128,7 +128,9 @@ const IncomingCallModal: React.FC = () => {
     // when the effect re-runs only on channelID change. Without this the
     // 30s timeout captures whichever `call` object was live at mount time.
     const onDeclineRef = useRef(onDecline);
-    onDeclineRef.current = onDecline;
+    useEffect(() => {
+        onDeclineRef.current = onDecline;
+    });
 
     useEffect(() => {
         if (!isShowingCall) {

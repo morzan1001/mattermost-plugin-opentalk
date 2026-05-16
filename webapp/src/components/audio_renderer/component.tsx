@@ -16,7 +16,7 @@ const AudioElement: React.FC<{trackId: string}> = ({trackId}) => {
         const track = trackRegistry.get(trackId);
         const el = elRef.current;
         if (!track || !el) {
-            return;
+            return undefined;
         }
         try {
             track.attach(el);

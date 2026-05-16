@@ -126,6 +126,7 @@ export class ConferenceRoom {
         return this.auth.getTicket(roomID, channelID, deviceSecret, displayName).then(
             (r) => {
                 const ticket = r.ticket;
+
                 // Prefer a server-confirmed token from a prior joinSuccess
                 // over the fresh ticket-time value, so the first attempt of
                 // a reconnect re-presents the same resumption the server has
