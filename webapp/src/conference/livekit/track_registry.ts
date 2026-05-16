@@ -1,12 +1,14 @@
-import type {RemoteTrack} from 'livekit-client';
+import type {LocalTrack, RemoteTrack} from 'livekit-client';
 
-const tracks = new Map<string, RemoteTrack>();
+export type RegisteredTrack = RemoteTrack | LocalTrack;
 
-export function register(trackId: string, track: RemoteTrack): void {
+const tracks = new Map<string, RegisteredTrack>();
+
+export function register(trackId: string, track: RegisteredTrack): void {
     tracks.set(trackId, track);
 }
 
-export function get(trackId: string): RemoteTrack | undefined {
+export function get(trackId: string): RegisteredTrack | undefined {
     return tracks.get(trackId);
 }
 

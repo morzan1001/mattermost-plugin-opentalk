@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useDispatch, useSelector, useStore} from 'react-redux';
 
 import {dismissIncomingCall} from '../../client/rest';
@@ -124,14 +124,18 @@ const IncomingCallModal: React.FC = () => {
         }
     };
 
+    // Keep the auto-decline pointed at the *current* onDecline closure even
+    // when the effect re-runs only on channelID change. Without this the
+    // 30s timeout captures whichever `call` object was live at mount time.
+    const onDeclineRef = useRef(onDecline);
+    onDeclineRef.current = onDecline;
+
     useEffect(() => {
         if (!isShowingCall) {
             return undefined;
         }
-        const id = window.setTimeout(() => onDecline(), 30000);
+        const id = window.setTimeout(() => onDeclineRef.current(), 30000);
         return () => window.clearTimeout(id);
-
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isShowingCall, call?.channelID]);
 
     if (!isShowingCall || call === null) {

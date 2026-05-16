@@ -515,8 +515,7 @@ export function toggleCam(): Promise<void> {
             await lk.enableCam();
             if (lk.camTrack) {
                 const trackId = localTrackId(lk, 'video');
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                trackRegistry.register(trackId, lk.camTrack as any);
+                trackRegistry.register(trackId, lk.camTrack);
                 activeStore.dispatch(trackSubscribed({participantId: localId, kind: 'video', trackId}));
             }
             activeStore.dispatch(setCamEnabled(true));
@@ -566,8 +565,7 @@ export async function applyCamDeviceChange(): Promise<void> {
         await lk.enableCam();
         if (lk.camTrack) {
             const newTrackId = localTrackId(lk, 'video');
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            trackRegistry.register(newTrackId, lk.camTrack as any);
+            trackRegistry.register(newTrackId, lk.camTrack);
             activeStore.dispatch(trackSubscribed({participantId: localId, kind: 'video', trackId: newTrackId}));
         }
     } catch (err) {
@@ -635,8 +633,7 @@ async function doToggleScreenShare(): Promise<void> {
             const screenTrack = lk.getLocalScreenTrack();
             if (screenTrack) {
                 const trackId = localTrackId(lk, 'screen');
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                trackRegistry.register(trackId, screenTrack as any);
+                trackRegistry.register(trackId, screenTrack);
                 activeStore.dispatch(trackSubscribed({participantId: localId, kind: 'screen', trackId}));
             }
             activeStore.dispatch(setScreenShareEnabled(true));
