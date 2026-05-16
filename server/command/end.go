@@ -14,7 +14,7 @@ import (
 func (h *Handler) end(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	locale := h.localeOf(args.UserId)
 
-	am, err := h.Store.LoadActiveMeeting(args.ChannelId)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, args.ChannelId)
 	if err == store.ErrNotFound {
 		return ephemeral(i18n.T(locale, i18n.Translatable{
 			DE: "In diesem Channel läuft kein aktives Meeting.",

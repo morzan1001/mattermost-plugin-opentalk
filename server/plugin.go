@@ -103,8 +103,10 @@ func (p *Plugin) OnActivate() error {
 	p.store = store.New(p.API)
 
 	// Heartbeat-driven reaper: stale meetings (no heartbeat for >5min) are
-	// ended within ~60s.
+	// ended within ~60s. The encryption key is resolved per-tick so a
+	// config rotation propagates without a restart.
 	p.reaper = reaper.New(p.API, p.store, p.endMeetingFromReaper,
+		func() []byte { return []byte(p.getConfiguration().TokenEncryptionKey) },
 		60*time.Second, 5*time.Minute)
 	p.reaper.Start()
 
@@ -357,7 +359,8 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 	release := p.acquireChannelLock(channelID)
 	defer release()
 
-	if existing, lErr := p.store.LoadActiveMeeting(channelID); lErr == nil && existing != nil {
+	encKey := []byte(cfg.TokenEncryptionKey)
+	if existing, lErr := p.store.LoadActiveMeeting(encKey, channelID); lErr == nil && existing != nil {
 		return existing, store.ErrMeetingAlreadyActive
 	}
 
@@ -395,12 +398,12 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		LastHeartbeat: time.Now().UTC(),
 		EnableSIP:     cfg.DefaultEnableSIP,
 	}
-	if err := p.store.CreateActiveMeetingAtomic(am); err != nil {
+	if err := p.store.CreateActiveMeetingAtomic(encKey, am); err != nil {
 		if errors.Is(err, store.ErrMeetingAlreadyActive) {
 			if dErr := ot.DeleteInvite(token, room.ID, invite.InviteCode); dErr != nil {
 				p.API.LogWarn("[opentalk] rollback DeleteInvite failed", "room", room.ID, "err", dErr.Error())
 			}
-			if existing, lErr := p.store.LoadActiveMeeting(channelID); lErr == nil && existing != nil {
+			if existing, lErr := p.store.LoadActiveMeeting(encKey, channelID); lErr == nil && existing != nil {
 				return existing, store.ErrMeetingAlreadyActive
 			}
 			return nil, store.ErrMeetingAlreadyActive
@@ -427,7 +430,7 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		return nil, fmt.Errorf("post meeting card: %w", err)
 	}
 	am.PostID = botPost.Id
-	if err := p.store.SaveActiveMeeting(am); err != nil {
+	if err := p.store.SaveActiveMeeting(encKey, am); err != nil {
 		return nil, fmt.Errorf("persist meeting (with post_id): %w", err)
 	}
 

@@ -77,6 +77,7 @@ func TestRunOnce_EmptyStore(t *testing.T) {
 	s := store.New(api)
 	var ended []*store.ActiveMeeting
 	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		func() []byte { return nil },
 		time.Minute, 5*time.Minute)
 
 	r.RunOnce()
@@ -99,6 +100,7 @@ func TestRunOnce_FreshMeeting_NotEnded(t *testing.T) {
 	s := store.New(api)
 	var ended []*store.ActiveMeeting
 	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		func() []byte { return nil },
 		time.Minute, 5*time.Minute)
 
 	r.RunOnce()
@@ -127,6 +129,7 @@ func TestRunOnce_StaleMeeting_Ended(t *testing.T) {
 	s := store.New(api)
 	var ended []*store.ActiveMeeting
 	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		func() []byte { return nil },
 		time.Minute, 5*time.Minute) // staleness = 5 min
 
 	r.RunOnce()
@@ -163,6 +166,7 @@ func TestRunOnce_MixedMeetings_OnlyStaleEnded(t *testing.T) {
 	s := store.New(api)
 	var ended []*store.ActiveMeeting
 	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		func() []byte { return nil },
 		time.Minute, 5*time.Minute)
 
 	r.RunOnce()
@@ -189,6 +193,7 @@ func TestRunOnce_ListActiveMeetingsError_LogsWarnDoesNotPanic(t *testing.T) {
 	s := store.New(api)
 	var ended []*store.ActiveMeeting
 	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		func() []byte { return nil },
 		time.Minute, 5*time.Minute)
 
 	assert.NotPanics(t, func() { r.RunOnce() })
@@ -207,6 +212,7 @@ func TestStartStop_Idempotent(t *testing.T) {
 
 	s := store.New(api)
 	r := New(api, s, func(*store.ActiveMeeting) {},
+		func() []byte { return nil },
 		50*time.Millisecond, 5*time.Minute)
 
 	// Double Start — second call must be a no-op, not a panic or double launch.
@@ -236,6 +242,7 @@ func TestStartStop_ConcurrentSafe(t *testing.T) {
 
 	s := store.New(api)
 	r := New(api, s, func(*store.ActiveMeeting) {},
+		func() []byte { return nil },
 		50*time.Millisecond, 5*time.Minute)
 
 	var wg sync.WaitGroup
@@ -270,6 +277,7 @@ func TestRunOnce_PreHeartbeat_StaleByOldRule_KeptByGrace(t *testing.T) {
 	s := store.New(api)
 	var ended []*store.ActiveMeeting
 	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		func() []byte { return nil },
 		time.Minute, 5*time.Minute)
 
 	r.RunOnce()
@@ -301,6 +309,7 @@ func TestRunOnce_PreHeartbeat_OldEnough_Ended(t *testing.T) {
 	s := store.New(api)
 	var ended []*store.ActiveMeeting
 	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		func() []byte { return nil },
 		time.Minute, 5*time.Minute)
 
 	r.RunOnce()
@@ -321,6 +330,7 @@ func TestRunOnce_NonLeader_NoReap(t *testing.T) {
 	s := store.New(api)
 	var ended []*store.ActiveMeeting
 	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		func() []byte { return nil },
 		time.Minute, 5*time.Minute)
 
 	r.RunOnce()
@@ -346,6 +356,7 @@ func TestRunOnce_PostHeartbeat_FreshHeartbeat_NotEnded(t *testing.T) {
 	s := store.New(api)
 	var ended []*store.ActiveMeeting
 	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		func() []byte { return nil },
 		time.Minute, 5*time.Minute)
 
 	r.RunOnce()

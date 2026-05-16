@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var testEncKey = []byte("0123456789abcdef0123456789abcdef")
+
 func TestActiveMeeting_RoundTrip(t *testing.T) {
 	api := &plugintest.API{}
 
@@ -34,13 +36,15 @@ func TestActiveMeeting_RoundTrip(t *testing.T) {
 		Run(func(args mock.Arguments) { written = args.Get(1).([]byte) }).
 		Return(nil)
 
-	require.NoError(t, s.SaveActiveMeeting(am))
+	require.NoError(t, s.SaveActiveMeeting(testEncKey, am))
 
 	api.On("KVGet", "meeting_ch-1").Return(written, nil)
-	got, err := s.LoadActiveMeeting("ch-1")
+	got, err := s.LoadActiveMeeting(testEncKey, "ch-1")
 	require.NoError(t, err)
 	assert.Equal(t, am.HostHeartbeatReceived, got.HostHeartbeatReceived,
-		"HostHeartbeatReceived must round-trip through JSON")
+		"HostHeartbeatReceived must round-trip through encryption + JSON")
+	assert.NotContains(t, string(written), am.InviteCode,
+		"invite_code must not be readable in plaintext from KV")
 }
 
 func TestActiveMeeting_LoadMissingReturnsNotFound(t *testing.T) {
@@ -48,7 +52,7 @@ func TestActiveMeeting_LoadMissingReturnsNotFound(t *testing.T) {
 	api.On("KVGet", meetingKey("ch-x")).Return([]byte(nil), nil)
 
 	s := New(api)
-	_, err := s.LoadActiveMeeting("ch-x")
+	_, err := s.LoadActiveMeeting(testEncKey, "ch-x")
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 

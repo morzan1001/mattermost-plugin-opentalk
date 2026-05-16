@@ -69,7 +69,7 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 		defer release()
 	}
 
-	if existing, lErr := h.Store.LoadActiveMeeting(body.ChannelID); lErr == nil && existing != nil {
+	if existing, lErr := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID); lErr == nil && existing != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(nethttp.StatusConflict)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -114,7 +114,7 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 		LastHeartbeat: time.Now().UTC(),
 		EnableSIP:     h.Defaults.EnableSIP,
 	}
-	if err := h.Store.CreateActiveMeetingAtomic(am); err != nil {
+	if err := h.Store.CreateActiveMeetingAtomic(h.EncryptionKey, am); err != nil {
 		if errors.Is(err, store.ErrMeetingAlreadyActive) {
 			// Cross-node race: another caller created the meeting between our
 			// LoadActiveMeeting check and this write. Roll back the orphan room
@@ -164,7 +164,7 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 		return
 	}
 	am.PostID = created.Id
-	if err := h.Store.SaveActiveMeeting(am); err != nil {
+	if err := h.Store.SaveActiveMeeting(h.EncryptionKey, am); err != nil {
 		h.internalError(w, "MeetingsCreate: SaveActiveMeeting (post_id)", err, nethttp.StatusInternalServerError, "persist meeting failed")
 		return
 	}
@@ -224,7 +224,7 @@ func (h *Handlers) MeetingsJoin(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 
-	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID)
 	if err != nil {
 		nethttp.Error(w, "no active meeting in this channel", nethttp.StatusNotFound)
 		return
@@ -300,7 +300,7 @@ func (h *Handlers) MeetingsEnd(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 
-	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID)
 	if err != nil {
 		nethttp.Error(w, "no active meeting in this channel", nethttp.StatusNotFound)
 		return
@@ -370,7 +370,7 @@ func (h *Handlers) MeetingsPostActionEnd(w nethttp.ResponseWriter, r *nethttp.Re
 		return
 	}
 
-	am, err := h.Store.LoadActiveMeeting(channelID)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, channelID)
 	if err != nil {
 		writePostActionResponse(w, h.staleMeetingResponse(body.PostId, "This meeting is no longer active."))
 		return
@@ -421,7 +421,7 @@ func (h *Handlers) MeetingsPostActionDismiss(w nethttp.ResponseWriter, r *nethtt
 		return
 	}
 
-	am, err := h.Store.LoadActiveMeeting(channelID)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, channelID)
 	if err != nil {
 		writePostActionResponse(w, h.staleMeetingResponse(body.PostId, "This meeting is no longer active."))
 		return
@@ -543,7 +543,7 @@ func (h *Handlers) MeetingsDismiss(w nethttp.ResponseWriter, r *nethttp.Request)
 		return
 	}
 
-	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			w.WriteHeader(nethttp.StatusNoContent)
@@ -585,7 +585,7 @@ func (h *Handlers) MeetingsHeartbeat(w nethttp.ResponseWriter, r *nethttp.Reques
 		return
 	}
 
-	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID)
 	if err != nil {
 		w.WriteHeader(nethttp.StatusNoContent)
 		return
@@ -598,7 +598,7 @@ func (h *Handlers) MeetingsHeartbeat(w nethttp.ResponseWriter, r *nethttp.Reques
 
 	am.LastHeartbeat = time.Now().UTC()
 	am.HostHeartbeatReceived = true
-	if sErr := h.Store.SaveActiveMeeting(am); sErr != nil {
+	if sErr := h.Store.SaveActiveMeeting(h.EncryptionKey, am); sErr != nil {
 		nethttp.Error(w, "save heartbeat: "+sErr.Error(), nethttp.StatusInternalServerError)
 		return
 	}

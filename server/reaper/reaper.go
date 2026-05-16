@@ -28,6 +28,7 @@ type Reaper struct {
 	api        plugin.API
 	store      *store.Store
 	endMeeting EndMeetingFunc
+	encKey     func() []byte
 	interval   time.Duration
 	staleness  time.Duration
 	leaderTTL  time.Duration
@@ -47,12 +48,15 @@ func newNodeID() []byte {
 }
 
 // New returns a Reaper. interval is the tick cadence; staleness is the
-// meeting-side timeout for missing heartbeats.
-func New(api plugin.API, s *store.Store, end EndMeetingFunc, interval, staleness time.Duration) *Reaper {
+// meeting-side timeout for missing heartbeats. encKey returns the current
+// token-encryption key so the reaper can read encrypted ActiveMeeting
+// records; the function is evaluated per tick so config changes propagate.
+func New(api plugin.API, s *store.Store, end EndMeetingFunc, encKey func() []byte, interval, staleness time.Duration) *Reaper {
 	return &Reaper{
 		api:        api,
 		store:      s,
 		endMeeting: end,
+		encKey:     encKey,
 		interval:   interval,
 		staleness:  staleness,
 		leaderTTL:  3 * interval,
@@ -138,7 +142,11 @@ func (r *Reaper) tick() {
 	if !r.acquireOrRenewLeader() {
 		return
 	}
-	meetings, err := r.store.ListActiveMeetings()
+	var key []byte
+	if r.encKey != nil {
+		key = r.encKey()
+	}
+	meetings, err := r.store.ListActiveMeetings(key)
 	if err != nil {
 		r.api.LogWarn("[opentalk] reaper: ListActiveMeetings failed", "err", err.Error())
 		return

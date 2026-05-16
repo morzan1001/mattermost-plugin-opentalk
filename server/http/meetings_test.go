@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/crypto"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/opentalk"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
@@ -307,7 +308,8 @@ func TestMeetingsHeartbeat_FlipsHostHeartbeatReceived(t *testing.T) {
 		Run(func(args mock.Arguments) { saved = args.Get(1).([]byte) }).
 		Return(nil)
 
-	h := &Handlers{Store: store.New(api)}
+	encKey := []byte("0123456789abcdef0123456789abcdef")
+	h := &Handlers{Store: store.New(api), EncryptionKey: encKey}
 
 	body, _ := json.Marshal(map[string]string{"channel_id": "ch-1"})
 	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/heartbeat", bytes.NewReader(body))
@@ -317,8 +319,10 @@ func TestMeetingsHeartbeat_FlipsHostHeartbeatReceived(t *testing.T) {
 
 	assert.Equal(t, nethttp.StatusNoContent, rr.Code)
 
+	plain, err := crypto.Decrypt(encKey, saved)
+	require.NoError(t, err, "saved meeting must be encrypted at rest")
 	var got store.ActiveMeeting
-	require.NoError(t, json.Unmarshal(saved, &got))
+	require.NoError(t, json.Unmarshal(plain, &got))
 	assert.True(t, got.HostHeartbeatReceived,
 		"first host heartbeat must flip the flag")
 	assert.False(t, got.LastHeartbeat.IsZero(), "LastHeartbeat must be advanced")

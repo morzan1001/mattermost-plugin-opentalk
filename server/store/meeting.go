@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/mattermost/mattermost/server/public/model"
+
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/crypto"
 )
 
 // ErrMeetingAlreadyActive is returned by callers that detect a live meeting
@@ -42,23 +44,45 @@ func meetingKey(channelID string) string {
 	return "meeting_" + channelID
 }
 
-func (s *Store) SaveActiveMeeting(am *ActiveMeeting) error {
+// decodeActiveMeeting unwraps an at-rest value: it tries AES-GCM first and
+// falls back to plaintext JSON so values written before encryption was added
+// can still be read until the next save re-encrypts them.
+func decodeActiveMeeting(encKey, raw []byte) (*ActiveMeeting, error) {
+	if plain, dErr := crypto.Decrypt(encKey, raw); dErr == nil {
+		raw = plain
+	}
+	var am ActiveMeeting
+	if err := json.Unmarshal(raw, &am); err != nil {
+		return nil, fmt.Errorf("unmarshal ActiveMeeting: %w", err)
+	}
+	return &am, nil
+}
+
+func encodeActiveMeeting(encKey []byte, am *ActiveMeeting) ([]byte, error) {
 	raw, err := json.Marshal(am)
 	if err != nil {
-		return fmt.Errorf("marshal ActiveMeeting: %w", err)
+		return nil, fmt.Errorf("marshal ActiveMeeting: %w", err)
 	}
-	return s.Set(meetingKey(am.ChannelID), raw, 0)
+	return crypto.Encrypt(encKey, raw)
+}
+
+func (s *Store) SaveActiveMeeting(encKey []byte, am *ActiveMeeting) error {
+	value, err := encodeActiveMeeting(encKey, am)
+	if err != nil {
+		return err
+	}
+	return s.Set(meetingKey(am.ChannelID), value, 0)
 }
 
 // CreateActiveMeetingAtomic persists am only if no meeting exists for the
 // same channel. Returns ErrMeetingAlreadyActive when another node won the
 // race. The Mattermost KV CAS guarantees this even across cluster nodes.
-func (s *Store) CreateActiveMeetingAtomic(am *ActiveMeeting) error {
-	raw, err := json.Marshal(am)
+func (s *Store) CreateActiveMeetingAtomic(encKey []byte, am *ActiveMeeting) error {
+	value, err := encodeActiveMeeting(encKey, am)
 	if err != nil {
-		return fmt.Errorf("marshal ActiveMeeting: %w", err)
+		return err
 	}
-	ok, appErr := s.api.KVSetWithOptions(meetingKey(am.ChannelID), raw, model.PluginKVSetOptions{
+	ok, appErr := s.api.KVSetWithOptions(meetingKey(am.ChannelID), value, model.PluginKVSetOptions{
 		Atomic:   true,
 		OldValue: nil,
 	})
@@ -71,16 +95,12 @@ func (s *Store) CreateActiveMeetingAtomic(am *ActiveMeeting) error {
 	return nil
 }
 
-func (s *Store) LoadActiveMeeting(channelID string) (*ActiveMeeting, error) {
+func (s *Store) LoadActiveMeeting(encKey []byte, channelID string) (*ActiveMeeting, error) {
 	raw, err := s.Get(meetingKey(channelID))
 	if err != nil {
 		return nil, err
 	}
-	var am ActiveMeeting
-	if err := json.Unmarshal(raw, &am); err != nil {
-		return nil, fmt.Errorf("unmarshal ActiveMeeting: %w", err)
-	}
-	return &am, nil
+	return decodeActiveMeeting(encKey, raw)
 }
 
 func (s *Store) DeleteActiveMeeting(channelID string) error {
@@ -91,7 +111,7 @@ func (s *Store) DeleteActiveMeeting(channelID string) error {
 // paging through KVList. Used by the reaper to find stale heartbeats.
 // Returns nil + nil on empty, partial result + nil on per-key parse
 // errors (best-effort).
-func (s *Store) ListActiveMeetings() ([]*ActiveMeeting, error) {
+func (s *Store) ListActiveMeetings(encKey []byte) ([]*ActiveMeeting, error) {
 	out := make([]*ActiveMeeting, 0, 8)
 	page := 0
 	const perPage = 200
@@ -111,11 +131,11 @@ func (s *Store) ListActiveMeetings() ([]*ActiveMeeting, error) {
 			if err != nil {
 				continue
 			}
-			var am ActiveMeeting
-			if jErr := json.Unmarshal(raw, &am); jErr != nil {
+			am, dErr := decodeActiveMeeting(encKey, raw)
+			if dErr != nil {
 				continue
 			}
-			out = append(out, &am)
+			out = append(out, am)
 		}
 		if len(keys) < perPage {
 			break
