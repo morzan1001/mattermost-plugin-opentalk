@@ -52,6 +52,30 @@ type Plugin struct {
 	channelLocks sync.Map
 }
 
+// channelMembersOf pages through every member of a channel and returns the
+// flat list of user IDs. A single GetChannelMembers call is capped at 200 by
+// the Mattermost plugin API, so any channel larger than 200 members needs
+// pagination — without it the dismiss-quorum check silently truncated and
+// channel-broadcast loops missed users.
+func (p *Plugin) channelMembersOf(channelID string) []string {
+	const perPage = 200
+	const safetyCap = 10000
+	out := make([]string, 0, perPage)
+	for page := 0; len(out) < safetyCap; page++ {
+		members, err := p.API.GetChannelMembers(channelID, page, perPage)
+		if err != nil || len(members) == 0 {
+			return out
+		}
+		for _, m := range members {
+			out = append(out, m.UserId)
+		}
+		if len(members) < perPage {
+			return out
+		}
+	}
+	return out
+}
+
 // acquireChannelLock serialises in-process operations for a channel so the
 // LoadActiveMeeting -> external-service -> SaveActiveMeeting sequence in
 // MeetingsCreate / CreateMeeting cannot interleave with itself. CAS on
@@ -297,15 +321,7 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 		},
 
 		ChannelMembersOf: func(channelID string) []string {
-			members, err := p.API.GetChannelMembers(channelID, 0, 100)
-			if err != nil || members == nil {
-				return nil
-			}
-			out := make([]string, 0, len(members))
-			for _, m := range members {
-				out = append(out, m.UserId)
-			}
-			return out
+			return p.channelMembersOf(channelID)
 		},
 		IsChannelMember: func(channelID, mmUserID string) bool {
 			if channelID == "" || mmUserID == "" {
@@ -427,14 +443,11 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 			"created_at_unix_ms": time.Now().UnixMilli(),
 		}
 		if isDM {
-			// Resolve recipients (channel members minus host).
-			members, mErr := p.API.GetChannelMembers(channelID, 0, 100)
-			recipients := make([]string, 0, 4)
-			if mErr == nil {
-				for _, m := range members {
-					if m.UserId != mmUserID {
-						recipients = append(recipients, m.UserId)
-					}
+			members := p.channelMembersOf(channelID)
+			recipients := make([]string, 0, len(members))
+			for _, uid := range members {
+				if uid != mmUserID {
+					recipients = append(recipients, uid)
 				}
 			}
 			payload["dm_user_ids"] = recipients
