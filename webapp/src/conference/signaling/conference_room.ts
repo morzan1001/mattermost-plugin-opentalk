@@ -272,6 +272,7 @@ export class ConferenceRoom {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.socket.on('close', (e: any) => {
                     this.state = 'closed';
+                    this.listener?.dispose();
                     if (!this.closedEmitted) {
                         this.closedEmitted = true;
                         this.emit('closed', {code: e?.code ?? 1006});
@@ -363,6 +364,7 @@ export class ConferenceRoom {
             // socket may already be closed; ignore
         }
         this.socket?.disconnect();
+        this.listener?.dispose();
         this.state = 'closed';
         if (this.roomID) {
             clearResumption(this.roomID);

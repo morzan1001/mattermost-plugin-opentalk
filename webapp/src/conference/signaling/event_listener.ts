@@ -85,10 +85,9 @@ export class EventListener {
     }
 
     public dispose(): void {
+        this.socket.off('message', this.onSocketMessage);
         this.emitter.all.clear();
         this.anyListeners.clear();
-
-        // dispose() clears the emitter; the underlying socket listener stays attached (no off() in SignalingSocket).
     }
 }
 
