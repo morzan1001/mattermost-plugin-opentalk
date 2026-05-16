@@ -4,15 +4,11 @@ import {useSelector} from 'react-redux';
 import {GridLayout} from './grid_layout';
 import {ParticipantTile} from './participant_tile';
 
-import {PLUGIN_STATE_KEY} from '../../util/selectors';
-
-const stateKey = PLUGIN_STATE_KEY;
+import {selectParticipantOrder, selectTracksPerParticipant} from '../../util/selectors';
 
 export const ScreenFocusLayout: React.FC = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const order = useSelector((s: any) => s?.[stateKey]?.participants?.order ?? [] as string[]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const perParticipant = useSelector((s: any) => s?.[stateKey]?.tracks?.perParticipant ?? {});
+    const order = useSelector(selectParticipantOrder);
+    const perParticipant = useSelector(selectTracksPerParticipant);
 
     // Find first participant in order with a screenTrackId
     const screenSharerId: string | undefined = order.find(

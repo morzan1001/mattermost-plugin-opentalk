@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {useDispatch, useSelector, useStore} from 'react-redux';
 
 import {dismissIncomingCall} from '../../client/rest';
@@ -10,10 +10,8 @@ import {
     type IncomingCall,
 } from '../../store/slice_incoming_calls';
 import {useT} from '../../util/i18n';
-import {PLUGIN_STATE_KEY, selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
+import {selectCurrentDisplayName, selectSessionStatus, selectIncomingCallsByChannelID} from '../../util/selectors';
 import {ringtoneSettingKey} from '../../user_settings';
-
-const stateKey = PLUGIN_STATE_KEY;
 
 // Mirrors plugin.ts ringtoneEnabled(): default ON, false only on explicit opt-out.
 function isRingtoneEnabled(): boolean {
@@ -36,18 +34,14 @@ const IncomingCallModal: React.FC = () => {
     const sessionStatus = useSelector(selectSessionStatus);
     const currentDisplayName = useSelector(selectCurrentDisplayName);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const call = useSelector((s: any): IncomingCall | null => {
-        const byChannelID = s?.[stateKey]?.incomingCalls?.byChannelID as Record<string, IncomingCall> | undefined;
-        if (!byChannelID) {
-            return null;
-        }
+    const byChannelID = useSelector(selectIncomingCallsByChannelID);
+    const call = useMemo<IncomingCall | null>(() => {
         const nonDismissed = Object.values(byChannelID).filter((c) => !c.dismissed);
         if (nonDismissed.length === 0) {
             return null;
         }
         return nonDismissed.reduce((latest, c) => (c.receivedAt > latest.receivedAt ? c : latest));
-    });
+    }, [byChannelID]);
 
     const [busy, setBusy] = useState(false);
     const [avatarError, setAvatarError] = useState(false);

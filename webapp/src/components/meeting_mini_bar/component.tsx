@@ -1,4 +1,4 @@
-import React, {useLayoutEffect, useRef, useState} from 'react';
+import React, {useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {useSelector, useDispatch} from 'react-redux';
 
 import {SelfPreview} from './self_preview';
@@ -10,17 +10,14 @@ import {useMeetingDuration} from '../../hooks/use_meeting_duration';
 import {useResizable} from '../../hooks/use_resizable';
 import {setMinimized} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {PLUGIN_STATE_KEY, selectIsHost, selectIsMinimized, selectLocalParticipantId} from '../../util/selectors';
+import {selectIsHost, selectIsMinimized, selectLocalParticipantId, selectSession, selectParticipantOrder} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 import {LeaveCallModal} from '../leave_call_modal';
-
-const stateKey = PLUGIN_STATE_KEY;
 
 const MeetingMiniBar: React.FC = () => {
     const dispatch = useDispatch();
     const t = useT();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = useSelector((s: any) => s?.[stateKey]?.session ?? {status: 'idle', participantCount: 0});
+    const session = useSelector(selectSession);
     const isHost = useSelector(selectIsHost);
     const isMinimized = useSelector(selectIsMinimized);
     const [showLeavePrompt, setShowLeavePrompt] = useState(false);
@@ -34,11 +31,11 @@ const MeetingMiniBar: React.FC = () => {
     });
 
     const localId = useSelector(selectLocalParticipantId);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const remoteCount: number = useSelector((s: any) => {
-        const order = s?.[stateKey]?.participants?.order ?? [];
-        return localId ? order.filter((id: string) => id !== localId).length : order.length;
-    });
+    const order = useSelector(selectParticipantOrder);
+    const remoteCount = useMemo(
+        () => (localId ? order.filter((id) => id !== localId).length : order.length),
+        [order, localId],
+    );
 
     // The minimum width is the row's natural scrollWidth, measured after
     // layout. Anything smaller squishes buttons; anything larger creates an

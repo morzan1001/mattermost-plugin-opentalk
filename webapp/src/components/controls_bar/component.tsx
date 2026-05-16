@@ -4,7 +4,7 @@ import {useSelector, useDispatch} from 'react-redux';
 import {toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand} from '../../conference/controller';
 import {setExpanded} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {PLUGIN_STATE_KEY, selectIsHost, selectLocalParticipantId} from '../../util/selectors';
+import {selectIsHost, selectLocalParticipantId, selectMicEnabled, selectCamEnabled, selectScreenShareEnabled, selectParticipantsById} from '../../util/selectors';
 import {
     MicIcon,
     MicOffIcon,
@@ -17,8 +17,6 @@ import {
     MinimizeIcon,
     ExpandIcon,
 } from '../icons';
-
-const stateKey = PLUGIN_STATE_KEY;
 
 export const baseButtonStyle: React.CSSProperties = {
     display: 'inline-flex',
@@ -75,21 +73,13 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
     const dispatch = useDispatch();
     const t = useT();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const micEnabled = useSelector((s: any) => s?.[stateKey]?.session?.micEnabled ?? false);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const camEnabled = useSelector((s: any) => s?.[stateKey]?.session?.camEnabled ?? false);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const screenShareEnabled = useSelector((s: any) => s?.[stateKey]?.session?.screenShareEnabled ?? false);
+    const micEnabled = useSelector(selectMicEnabled);
+    const camEnabled = useSelector(selectCamEnabled);
+    const screenShareEnabled = useSelector(selectScreenShareEnabled);
     const isHost = useSelector(selectIsHost);
     const localId = useSelector(selectLocalParticipantId);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isRaised = useSelector((s: any) => {
-        if (!localId) {
-            return false;
-        }
-        return Boolean(s?.[stateKey]?.participants?.byId?.[localId]?.handRaised);
-    });
+    const byId = useSelector(selectParticipantsById);
+    const isRaised = localId ? Boolean(byId[localId]?.handRaised) : false;
 
     return (
         <>

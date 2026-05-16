@@ -2,9 +2,7 @@ import React, {useEffect, useRef} from 'react';
 import {useSelector} from 'react-redux';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
-import {PLUGIN_STATE_KEY} from '../../util/selectors';
-
-const stateKey = PLUGIN_STATE_KEY;
+import {selectLocalParticipantId, selectCamEnabled, selectTracksPerParticipant} from '../../util/selectors';
 
 const SelfPreviewInner: React.FC<{trackId: string}> = ({trackId}) => {
     const elRef = useRef<HTMLVideoElement | null>(null);
@@ -47,16 +45,10 @@ const SelfPreviewInner: React.FC<{trackId: string}> = ({trackId}) => {
 };
 
 export const SelfPreview: React.FC = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const localId: string | undefined = useSelector((s: any) => s[stateKey]?.session?.localParticipantId);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const camEnabled: boolean = useSelector((s: any) => s[stateKey]?.session?.camEnabled === true);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const trackId: string | undefined = useSelector((s: any) =>
-        (localId ? s[stateKey]?.tracks?.perParticipant?.[localId]?.videoTrackId : undefined),
-    );
+    const localId = useSelector(selectLocalParticipantId);
+    const camEnabled = useSelector(selectCamEnabled);
+    const perParticipant = useSelector(selectTracksPerParticipant);
+    const trackId: string | undefined = localId ? perParticipant[localId]?.videoTrackId : undefined;
 
     if (!camEnabled || !trackId) {
         return null;

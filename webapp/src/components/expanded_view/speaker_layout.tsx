@@ -4,18 +4,13 @@ import {useSelector} from 'react-redux';
 import {ParticipantTile} from './participant_tile';
 
 import {useT} from '../../util/i18n';
-import {PLUGIN_STATE_KEY} from '../../util/selectors';
-
-const stateKey = PLUGIN_STATE_KEY;
+import {selectParticipantOrder, selectParticipantsById, selectActiveSpeakers} from '../../util/selectors';
 
 export const SpeakerLayout: React.FC = () => {
     const t = useT();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const order = useSelector((s: any) => s?.[stateKey]?.participants?.order ?? [] as string[]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const byId = useSelector((s: any) => s?.[stateKey]?.participants?.byId ?? {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const activeSpeakers = useSelector((s: any) => s?.[stateKey]?.tracks?.activeSpeakers ?? [] as string[]);
+    const order = useSelector(selectParticipantOrder);
+    const byId = useSelector(selectParticipantsById);
+    const activeSpeakers = useSelector(selectActiveSpeakers);
 
     if (order.length === 0) {
         return (

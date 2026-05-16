@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useMemo, useState} from 'react';
 import {useDispatch, useSelector} from 'react-redux';
 
 import {GridLayout} from './grid_layout';
@@ -13,12 +13,10 @@ import type {ParticipantInfo} from '../../store/slice_participants';
 import type {SessionStatus} from '../../store/slice_session';
 import {setExpanded} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {PLUGIN_STATE_KEY, selectIsExpanded, selectIsHost, selectJoinedAt, selectSessionStatus} from '../../util/selectors';
+import {selectIsExpanded, selectIsHost, selectJoinedAt, selectSessionStatus, selectParticipantOrder, selectParticipantsById} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 import {HandIcon} from '../icons';
 import {LeaveCallModal} from '../leave_call_modal';
-
-const stateKey = PLUGIN_STATE_KEY;
 
 const ExpandedView: React.FC = () => {
     const t = useT();
@@ -27,12 +25,12 @@ const ExpandedView: React.FC = () => {
     const isHost = useSelector(selectIsHost);
     const joinedAt = useSelector(selectJoinedAt);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raisedParticipants = useSelector((s: any): ParticipantInfo[] => {
-        const order = s?.[stateKey]?.participants?.order ?? [];
-        const byId = s?.[stateKey]?.participants?.byId ?? {};
-        return order.map((id: string) => byId[id]).filter((p: ParticipantInfo) => p && p.handRaised);
-    });
+    const order = useSelector(selectParticipantOrder);
+    const byId = useSelector(selectParticipantsById);
+    const raisedParticipants = useMemo<ParticipantInfo[]>(
+        () => order.map((id) => byId[id]).filter((p): p is ParticipantInfo => Boolean(p) && p.handRaised === true),
+        [order, byId],
+    );
 
     const [mode, setMode] = useLayoutMode();
     const duration = useMeetingDuration(joinedAt);

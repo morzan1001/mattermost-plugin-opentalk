@@ -2,9 +2,7 @@ import React, {useEffect, useMemo, useRef} from 'react';
 import {useSelector} from 'react-redux';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
-import {PLUGIN_STATE_KEY, selectSessionStatus} from '../../util/selectors';
-
-const stateKey = PLUGIN_STATE_KEY;
+import {selectSessionStatus, selectTracksPerParticipant} from '../../util/selectors';
 
 interface RemoteAudio {
     participantId: string;
@@ -42,8 +40,7 @@ const AudioElement: React.FC<{trackId: string}> = ({trackId}) => {
 };
 
 const AudioRenderer: React.FC = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tracksByParticipant = useSelector((s: any) => s[stateKey]?.tracks?.perParticipant ?? {});
+    const tracksByParticipant = useSelector(selectTracksPerParticipant);
     const sessionStatus = useSelector(selectSessionStatus);
 
     const audioTracks = useMemo<RemoteAudio[]>(() => {

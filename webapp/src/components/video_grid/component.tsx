@@ -2,9 +2,7 @@ import React, {useEffect, useMemo, useRef} from 'react';
 import {useSelector} from 'react-redux';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
-import {PLUGIN_STATE_KEY} from '../../util/selectors';
-
-const stateKey = PLUGIN_STATE_KEY;
+import {selectTracksPerParticipant, selectActiveSpeakers, selectSessionStatus} from '../../util/selectors';
 
 interface VideoTile {
     participantId: string;
@@ -48,14 +46,9 @@ const VideoElement: React.FC<{trackId: string}> = ({trackId}) => {
 };
 
 const VideoGrid: React.FC = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tracksByParticipant = useSelector((s: any) => s[stateKey]?.tracks?.perParticipant ?? {});
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const activeSpeakers = useSelector((s: any) => s[stateKey]?.tracks?.activeSpeakers ?? []);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sessionStatus = useSelector((s: any) => s[stateKey]?.session?.status ?? 'idle');
+    const tracksByParticipant = useSelector(selectTracksPerParticipant);
+    const activeSpeakers = useSelector(selectActiveSpeakers);
+    const sessionStatus = useSelector(selectSessionStatus);
 
     const tiles = useMemo<VideoTile[]>(() => {
         const list: VideoTile[] = [];

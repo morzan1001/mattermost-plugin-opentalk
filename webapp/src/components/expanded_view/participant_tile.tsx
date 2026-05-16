@@ -2,9 +2,7 @@ import React, {useEffect, useRef} from 'react';
 import {useSelector} from 'react-redux';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
-import {PLUGIN_STATE_KEY} from '../../util/selectors';
-
-const stateKey = PLUGIN_STATE_KEY;
+import {selectParticipantsById, selectTracksPerParticipant} from '../../util/selectors';
 
 function initialsOf(name: string | undefined): string {
     const safe = (name ?? '').trim();
@@ -65,10 +63,9 @@ export interface ParticipantTileProps {
 }
 
 export const ParticipantTile: React.FC<ParticipantTileProps> = ({participantId, overrideTrackId, width, height}) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const participant = useSelector((s: any) => s?.[stateKey]?.participants?.byId?.[participantId]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const perParticipant = useSelector((s: any) => s?.[stateKey]?.tracks?.perParticipant ?? {});
+    const byId = useSelector(selectParticipantsById);
+    const participant = byId[participantId];
+    const perParticipant = useSelector(selectTracksPerParticipant);
 
     const sliceTrackId: string | undefined = perParticipant[participantId]?.videoTrackId;
     const trackId = overrideTrackId ?? sliceTrackId;
