@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	nethttp "net/http"
 	"strings"
@@ -47,6 +48,19 @@ type Plugin struct {
 	otClient *opentalk.Client
 
 	reaper *reaper.Reaper
+
+	channelLocks sync.Map
+}
+
+// acquireChannelLock serialises in-process operations for a channel so the
+// LoadActiveMeeting -> external-service -> SaveActiveMeeting sequence in
+// MeetingsCreate / CreateMeeting cannot interleave with itself. CAS on
+// SaveActiveMeeting still protects cross-node races.
+func (p *Plugin) acquireChannelLock(channelID string) func() {
+	mu, _ := p.channelLocks.LoadOrStore(channelID, &sync.Mutex{})
+	m := mu.(*sync.Mutex)
+	m.Lock()
+	return m.Unlock
 }
 
 func (p *Plugin) OnActivate() error {
@@ -300,6 +314,7 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			m, err := p.API.GetChannelMember(channelID, mmUserID)
 			return err == nil && m != nil
 		},
+		AcquireChannelLock: p.acquireChannelLock,
 		IsDMChannel: func(channelID string) bool {
 			ch, err := p.API.GetChannel(channelID)
 			if err != nil || ch == nil {
@@ -315,7 +330,6 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 }
 
 // CreateMeeting provisions an OpenTalk room + bot post for channelID on behalf of mmUserID.
-// Used by the slash-command path (HTTP handler has its own equivalent in MeetingsCreate).
 func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting, error) {
 	cfg := p.getConfiguration()
 
@@ -324,7 +338,9 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		return nil, fmt.Errorf("access token: %w", err)
 	}
 
-	// Guard: callers can branch with errors.Is(err, store.ErrMeetingAlreadyActive).
+	release := p.acquireChannelLock(channelID)
+	defer release()
+
 	if existing, lErr := p.store.LoadActiveMeeting(channelID); lErr == nil && existing != nil {
 		return existing, store.ErrMeetingAlreadyActive
 	}
@@ -363,7 +379,16 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		LastHeartbeat: time.Now().UTC(),
 		EnableSIP:     cfg.DefaultEnableSIP,
 	}
-	if err := p.store.SaveActiveMeeting(am); err != nil {
+	if err := p.store.CreateActiveMeetingAtomic(am); err != nil {
+		if errors.Is(err, store.ErrMeetingAlreadyActive) {
+			if dErr := ot.DeleteInvite(token, room.ID, invite.InviteCode); dErr != nil {
+				p.API.LogWarn("[opentalk] rollback DeleteInvite failed", "room", room.ID, "err", dErr.Error())
+			}
+			if existing, lErr := p.store.LoadActiveMeeting(channelID); lErr == nil && existing != nil {
+				return existing, store.ErrMeetingAlreadyActive
+			}
+			return nil, store.ErrMeetingAlreadyActive
+		}
 		return nil, fmt.Errorf("persist meeting: %w", err)
 	}
 

@@ -53,6 +53,10 @@ type Handlers struct {
 	// closed.
 	IsChannelMember func(channelID, mmUserID string) bool
 
+	// AcquireChannelLock serialises in-process operations on the same
+	// channel; the returned release func must be deferred by the caller.
+	AcquireChannelLock func(channelID string) (release func())
+
 	// IsDMChannel returns true if the given channel is a direct or group channel.
 	IsDMChannel func(channelID string) bool
 

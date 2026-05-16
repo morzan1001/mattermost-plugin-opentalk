@@ -64,7 +64,11 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 		return
 	}
 
-	// Guard: reject a second concurrent meeting in the same channel.
+	if h.AcquireChannelLock != nil {
+		release := h.AcquireChannelLock(body.ChannelID)
+		defer release()
+	}
+
 	if existing, lErr := h.Store.LoadActiveMeeting(body.ChannelID); lErr == nil && existing != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(nethttp.StatusConflict)
@@ -110,8 +114,22 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 		LastHeartbeat: time.Now().UTC(),
 		EnableSIP:     h.Defaults.EnableSIP,
 	}
-	if err := h.Store.SaveActiveMeeting(am); err != nil {
-		h.internalError(w, "MeetingsCreate: SaveActiveMeeting", err, nethttp.StatusInternalServerError, "persist meeting failed")
+	if err := h.Store.CreateActiveMeetingAtomic(am); err != nil {
+		if errors.Is(err, store.ErrMeetingAlreadyActive) {
+			// Cross-node race: another caller created the meeting between our
+			// LoadActiveMeeting check and this write. Roll back the orphan room
+			// on the OpenTalk controller so it does not zombie.
+			if dErr := h.OpenTalk.DeleteInvite(token, room.ID, invite.InviteCode); dErr != nil && h.LogWarn != nil {
+				h.LogWarn("[opentalk] rollback DeleteInvite failed", "room", room.ID, "err", dErr.Error())
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(nethttp.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": "meeting already active in this channel",
+			})
+			return
+		}
+		h.internalError(w, "MeetingsCreate: CreateActiveMeetingAtomic", err, nethttp.StatusInternalServerError, "persist meeting failed")
 		return
 	}
 

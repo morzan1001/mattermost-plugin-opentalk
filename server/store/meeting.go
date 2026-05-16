@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 // ErrMeetingAlreadyActive is returned by callers that detect a live meeting
@@ -46,6 +48,27 @@ func (s *Store) SaveActiveMeeting(am *ActiveMeeting) error {
 		return fmt.Errorf("marshal ActiveMeeting: %w", err)
 	}
 	return s.Set(meetingKey(am.ChannelID), raw, 0)
+}
+
+// CreateActiveMeetingAtomic persists am only if no meeting exists for the
+// same channel. Returns ErrMeetingAlreadyActive when another node won the
+// race. The Mattermost KV CAS guarantees this even across cluster nodes.
+func (s *Store) CreateActiveMeetingAtomic(am *ActiveMeeting) error {
+	raw, err := json.Marshal(am)
+	if err != nil {
+		return fmt.Errorf("marshal ActiveMeeting: %w", err)
+	}
+	ok, appErr := s.api.KVSetWithOptions(meetingKey(am.ChannelID), raw, model.PluginKVSetOptions{
+		Atomic:   true,
+		OldValue: nil,
+	})
+	if appErr != nil {
+		return appErr
+	}
+	if !ok {
+		return ErrMeetingAlreadyActive
+	}
+	return nil
 }
 
 func (s *Store) LoadActiveMeeting(channelID string) (*ActiveMeeting, error) {
