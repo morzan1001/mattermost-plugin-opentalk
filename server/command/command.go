@@ -25,27 +25,16 @@ type Handler struct {
 	PluginID      string
 	FrontendURL   string
 
-	// MeetingCreator orchestrates room creation, invite generation, KV
-	// persistence, and the bot-authored custom-post. Provided by the host
-	// plugin so that /opentalk start re-uses the same pipeline as the HTTP
-	// MeetingsCreate handler. Returns the persisted ActiveMeeting.
 	MeetingCreator func(channelID, mmUserID string) (*store.ActiveMeeting, error)
 
-	// PostGetter looks up an existing post by ID. Used by /opentalk end to
-	// load the bot-authored meeting card so its status can be flipped.
 	PostGetter func(postID string) (*model.Post, error)
 
-	// PostUpdater persists a mutated post. Used by /opentalk end after
-	// applying ENDED status to the meeting card.
 	PostUpdater func(p *model.Post) error
 
-	// Broadcaster publishes a plugin WebSocket event to all clients. Used by
-	// /opentalk end to notify webapps that a meeting has ended.
-	Broadcaster func(event string, payload map[string]any)
+	Broadcaster func(event string, payload map[string]any, broadcast *model.WebsocketBroadcast)
 
-	// LocaleOf returns the MM locale string for a given user ID (e.g. "de",
-	// "en-US"). Used by subcommands to select the correct i18n variant.
-	// Returns "" on any error, which i18n.T treats as English.
+	// LocaleOf returns the MM locale string for a given user ID. Empty string
+	// is treated as English by i18n.T.
 	LocaleOf func(mmUserID string) string
 }
 

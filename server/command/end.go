@@ -55,7 +55,11 @@ func (h *Handler) end(args *model.CommandArgs) (*model.CommandResponse, *model.A
 		h.Broadcaster("meeting_ended", map[string]any{
 			"channel_id": args.ChannelId,
 			"room_id":    am.RoomID,
-		})
+		}, &model.WebsocketBroadcast{ChannelId: args.ChannelId})
+	}
+
+	if delErr := h.Store.DeleteDismissals(args.ChannelId, am.RoomID); delErr != nil {
+		h.API.LogWarn("end: dismissals delete failed", "err", delErr.Error())
 	}
 
 	return ephemeral(i18n.T(locale, i18n.Translatable{

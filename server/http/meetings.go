@@ -313,7 +313,7 @@ func (h *Handlers) endMeetingFor(am *store.ActiveMeeting) (*model.Post, error) {
 		h.BroadcastFunc("meeting_ended", map[string]any{
 			"channel_id": am.ChannelID,
 			"room_id":    am.RoomID,
-		})
+		}, &model.WebsocketBroadcast{ChannelId: am.ChannelID})
 	}
 	return updated, nil
 }
@@ -447,7 +447,7 @@ func (h *Handlers) dismissFor(am *store.ActiveMeeting, mmUserID string) (*model.
 			"channel_id": am.ChannelID,
 			"room_id":    am.RoomID,
 			"mm_user_id": mmUserID,
-		})
+		}, &model.WebsocketBroadcast{ChannelId: am.ChannelID})
 	}
 	if h.ChannelMembersOf == nil {
 		return nil, nil
@@ -478,7 +478,7 @@ func (h *Handlers) dismissFor(am *store.ActiveMeeting, mmUserID string) (*model.
 		h.BroadcastFunc("meeting_ended", map[string]any{
 			"channel_id": am.ChannelID,
 			"room_id":    am.RoomID,
-		})
+		}, &model.WebsocketBroadcast{ChannelId: am.ChannelID})
 	}
 	return updated, nil
 }

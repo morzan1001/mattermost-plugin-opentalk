@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest/mock"
 	"github.com/stretchr/testify/assert"
@@ -149,13 +150,15 @@ func TestOAuthCallback_ExchangesAndStoresUserInfo(t *testing.T) {
 
 	var broadcastedEvent string
 	var broadcastedPayload map[string]any
+	var broadcastedScope *model.WebsocketBroadcast
 	h := &Handlers{
 		Store:         store.New(api),
 		OIDC:          stubOIDCFullClient(t),
 		EncryptionKey: []byte("0123456789abcdef0123456789abcdef"),
-		BroadcastFunc: func(event string, payload map[string]any) {
+		BroadcastFunc: func(event string, payload map[string]any, b *model.WebsocketBroadcast) {
 			broadcastedEvent = event
 			broadcastedPayload = payload
+			broadcastedScope = b
 		},
 	}
 
@@ -173,6 +176,8 @@ func TestOAuthCallback_ExchangesAndStoresUserInfo(t *testing.T) {
 	assert.Equal(t, "mm-user-1", broadcastedPayload["mm_user_id"])
 	assert.Equal(t, true, broadcastedPayload["connected"])
 	assert.Equal(t, "alice@example.com", broadcastedPayload["email"])
+	require.NotNil(t, broadcastedScope, "broadcast scope must be set")
+	assert.Equal(t, "mm-user-1", broadcastedScope.UserId, "user_connected_state must be user-scoped")
 	_ = time.Second // keep import
 }
 

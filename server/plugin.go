@@ -104,8 +104,8 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		PostUpdater: func(mp *model.Post) error {
 			return p.client.Post.UpdatePost(mp)
 		},
-		Broadcaster: func(event string, payload map[string]any) {
-			p.API.PublishWebSocketEvent(event, payload, &model.WebsocketBroadcast{})
+		Broadcaster: func(event string, payload map[string]any, b *model.WebsocketBroadcast) {
+			p.API.PublishWebSocketEvent(event, payload, b)
 		},
 		LocaleOf: p.localeOf,
 	}
@@ -220,8 +220,8 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 		Store:         p.store,
 		OIDC:          oidcClient,
 		EncryptionKey: []byte(cfg.TokenEncryptionKey),
-		BroadcastFunc: func(event string, payload map[string]any) {
-			p.API.PublishWebSocketEvent(event, payload, &model.WebsocketBroadcast{})
+		BroadcastFunc: func(event string, payload map[string]any, b *model.WebsocketBroadcast) {
+			p.API.PublishWebSocketEvent(event, payload, b)
 		},
 
 		OpenTalk:      p.getOTClient(),

@@ -326,8 +326,10 @@ func TestMeetingsPostActionEnd_Host(t *testing.T) {
 			}}, nil
 		},
 		PostUpdater: func(p *model.Post) error { return nil },
-		BroadcastFunc: func(event string, _ map[string]any) {
+		BroadcastFunc: func(event string, _ map[string]any, b *model.WebsocketBroadcast) {
 			broadcasts = append(broadcasts, event)
+			require.NotNil(t, b, "broadcast scope must be set")
+			require.Equal(t, "ch-1", b.ChannelId, "meeting_ended must be channel-scoped")
 		},
 	}
 
@@ -407,7 +409,7 @@ func TestMeetingsPostActionDismiss_StillLive(t *testing.T) {
 
 	h := &Handlers{
 		Store:         store.New(api),
-		BroadcastFunc: func(string, map[string]any) {},
+		BroadcastFunc: func(string, map[string]any, *model.WebsocketBroadcast) {},
 		ChannelMembersOf: func(string) []string {
 			return []string{"host-uid", "alice", "bob"}
 		},
@@ -455,7 +457,7 @@ func TestMeetingsPostActionDismiss_FlipsMissed(t *testing.T) {
 
 	h := &Handlers{
 		Store:         store.New(api),
-		BroadcastFunc: func(string, map[string]any) {},
+		BroadcastFunc: func(string, map[string]any, *model.WebsocketBroadcast) {},
 		ChannelMembersOf: func(string) []string {
 			return []string{"host-uid", "alice"}
 		},
@@ -516,7 +518,7 @@ func TestEndMeetingFor_DeleteInviteFailureIsNonFatal(t *testing.T) {
 		Store:          store.New(api),
 		OpenTalk:       opentalk.NewClient(otSrv.URL),
 		AccessTokenFor: func(_ string) (string, error) { return "tok", nil },
-		BroadcastFunc: func(event string, _ map[string]any) {
+		BroadcastFunc: func(event string, _ map[string]any, _ *model.WebsocketBroadcast) {
 			broadcasts = append(broadcasts, event)
 		},
 	}

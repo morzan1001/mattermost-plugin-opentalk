@@ -65,9 +65,11 @@ func TestEnd_HostUpdatesPostAndDeletesMeeting(t *testing.T) {
 		updated = p
 		return nil
 	}
-	h.Broadcaster = func(event string, payload map[string]any) {
+	var brBroadcast *model.WebsocketBroadcast
+	h.Broadcaster = func(event string, payload map[string]any, b *model.WebsocketBroadcast) {
 		brEvent = event
 		brPayload = payload
+		brBroadcast = b
 	}
 
 	resp, _ := h.Execute(&model.CommandArgs{UserId: "host-u", ChannelId: "ch", Command: "/opentalk end"})
@@ -77,6 +79,7 @@ func TestEnd_HostUpdatesPostAndDeletesMeeting(t *testing.T) {
 	assert.Equal(t, "meeting_ended", brEvent)
 	assert.Equal(t, "ch", brPayload["channel_id"])
 	assert.Equal(t, "room-1", brPayload["room_id"])
+	assert.Equal(t, "ch", brBroadcast.ChannelId, "meeting_ended must be channel-scoped")
 	api.AssertExpectations(t)
 }
 

@@ -19,7 +19,7 @@ type Handlers struct {
 	Store         *store.Store
 	OIDC          *oidc.Client
 	EncryptionKey []byte
-	BroadcastFunc func(event string, payload map[string]any)
+	BroadcastFunc func(event string, payload map[string]any, broadcast *model.WebsocketBroadcast)
 
 	OpenTalk       *opentalk.Client
 	RoomserverURL  string
@@ -131,7 +131,7 @@ func (h *Handlers) OAuthCallback(w nethttp.ResponseWriter, r *nethttp.Request) {
 			"mm_user_id": mmUserID,
 			"connected":  true,
 			"email":      info.Email,
-		})
+		}, &model.WebsocketBroadcast{UserId: mmUserID})
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
