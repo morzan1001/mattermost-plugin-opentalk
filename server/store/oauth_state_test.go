@@ -20,12 +20,23 @@ func TestOAuthState_StoreAndConsume(t *testing.T) {
 	require.NoError(t, s.SaveOAuthState("uuid-1", "mm-user-1"))
 
 	api.On("KVGet", oauthStateKey("uuid-1")).Return(stored, nil)
-	api.On("KVDelete", oauthStateKey("uuid-1")).Return(nil)
+	api.On("KVCompareAndDelete", oauthStateKey("uuid-1"), mock.Anything).Return(true, nil)
 
 	mmUserID, err := s.ConsumeOAuthState("uuid-1")
 	require.NoError(t, err)
 	assert.Equal(t, "mm-user-1", mmUserID)
 	api.AssertExpectations(t)
+}
+
+func TestOAuthState_ConcurrentConsumeLosesCAS(t *testing.T) {
+	api := &plugintest.API{}
+	stored := []byte(`{"mm_user_id":"mm-user-1"}`)
+	api.On("KVGet", oauthStateKey("uuid-2")).Return(stored, nil)
+	api.On("KVCompareAndDelete", oauthStateKey("uuid-2"), mock.Anything).Return(false, nil)
+
+	s := New(api)
+	_, err := s.ConsumeOAuthState("uuid-2")
+	assert.ErrorIs(t, err, ErrNotFound, "concurrent replay must be rejected as invalid")
 }
 
 func TestOAuthState_ConsumeMissingErrors(t *testing.T) {

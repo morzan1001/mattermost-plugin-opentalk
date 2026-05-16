@@ -133,9 +133,9 @@ func TestOAuthCallback_ExchangesAndStoresUserInfo(t *testing.T) {
 	api.On("KVGet", mock.MatchedBy(func(k string) bool {
 		return strings.HasPrefix(k, "oauth_state_")
 	})).Return(statePayload, nil)
-	api.On("KVDelete", mock.MatchedBy(func(k string) bool {
+	api.On("KVCompareAndDelete", mock.MatchedBy(func(k string) bool {
 		return strings.HasPrefix(k, "oauth_state_")
-	})).Return(nil)
+	}), mock.Anything).Return(true, (*model.AppError)(nil))
 
 	var savedKey string
 	var savedValue []byte

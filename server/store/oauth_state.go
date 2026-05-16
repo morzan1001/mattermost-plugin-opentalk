@@ -28,10 +28,12 @@ func (s *Store) SaveOAuthState(state, mmUserID string) error {
 	return s.Set(oauthStateKey(state), payload, oauthStateTTLSeconds)
 }
 
-// ConsumeOAuthState returns the stored MM-User-ID and deletes the state record
-// in a single call. State is one-shot: a replayed callback won't authenticate.
+// ConsumeOAuthState returns the stored MM-User-ID and atomically deletes the
+// state record. State is one-shot: only the first caller wins; a concurrent
+// replay loses the CAS-delete and is rejected as invalid.
 func (s *Store) ConsumeOAuthState(state string) (string, error) {
-	raw, err := s.Get(oauthStateKey(state))
+	key := oauthStateKey(state)
+	raw, err := s.Get(key)
 	if err != nil {
 		return "", err
 	}
@@ -39,8 +41,12 @@ func (s *Store) ConsumeOAuthState(state string) (string, error) {
 	if err := json.Unmarshal(raw, &os); err != nil {
 		return "", fmt.Errorf("unmarshal OAuthState: %w", err)
 	}
-	if err := s.Delete(oauthStateKey(state)); err != nil {
-		return os.MattermostUserID, fmt.Errorf("delete OAuthState: %w", err)
+	ok, appErr := s.api.KVCompareAndDelete(key, raw)
+	if appErr != nil {
+		return "", appErr
+	}
+	if !ok {
+		return "", ErrNotFound
 	}
 	return os.MattermostUserID, nil
 }
