@@ -157,9 +157,8 @@ func (p *Plugin) OnDeactivate() error {
 	return nil
 }
 
-// endMeetingFromReaper mirrors the MeetingsEnd HTTP handler (minus the
-// host-permission check). Status is ENDED, not MISSED — MISSED is reserved
-// for the "all DM recipients declined before joining" path.
+// endMeetingFromReaper transitions a stale meeting to ENDED status. MISSED is
+// reserved for the "all DM recipients declined before joining" path.
 func (p *Plugin) endMeetingFromReaper(am *store.ActiveMeeting) {
 	if am.PostID != "" {
 		if pp, appErr := p.API.GetPost(am.PostID); appErr == nil && pp != nil {
@@ -229,8 +228,6 @@ func splitScopes(s string) []string {
 
 // displayNameOf returns the user's preferred display name in this priority:
 // nickname > first+last > username. Falls back to username on any nil/empty.
-// Used wherever the plugin shows a human-readable participant name (bot-
-// post host attribution, OpenTalk join displayName, etc.).
 func displayNameOf(u *model.User) string {
 	if u == nil {
 		return ""
@@ -347,7 +344,8 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 	pluginhttp.NewRouter(handlers).ServeHTTP(w, r)
 }
 
-// CreateMeeting provisions an OpenTalk room + bot post for channelID on behalf of mmUserID.
+// CreateMeeting provisions an OpenTalk room + bot post for channelID on
+// behalf of mmUserID.
 func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting, error) {
 	cfg := p.getConfiguration()
 

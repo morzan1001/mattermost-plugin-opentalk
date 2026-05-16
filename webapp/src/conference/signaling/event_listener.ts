@@ -35,7 +35,8 @@ function normalize(raw: unknown): NormalizedFrame | null {
     }
     const actionValue = snakeToCamel(rawAction);
 
-    // Rebuild payload without the legacy `message` key.
+    // Some incoming frames carry the action under `message` (livekit
+    // namespace) instead of `action`; rebuild a normalised payload either way.
     const normalizedPayload: {action: string; [k: string]: unknown} = {action: actionValue};
     for (const [key, value] of Object.entries(p)) {
         if (key === 'action' || key === 'message') {

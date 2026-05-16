@@ -28,18 +28,18 @@ type Handlers struct {
 	BotUserID   string
 	FrontendURL string
 	CreatePost  func(*model.Post) (*model.Post, error)
-	// HostUsernameOf returns the actual MM Username (drives @-mentions in the webapp).
+	// HostUsernameOf returns the actual MM Username (drives @-mentions).
 	HostUsernameOf func(mmUserID string) string
-	// HostDisplayNameOf returns the human-readable display name (nickname > first+last > username).
+	// HostDisplayNameOf returns the human-readable display name
+	// (nickname > first+last > username).
 	HostDisplayNameOf func(mmUserID string) string
-	// LocaleOf returns the MM locale string for a given user ID. Used to
-	// select the language of the bot-post fallback message in BuildMeetingPost.
-	// Returns "" on any error, which i18n.T treats as English.
+	// LocaleOf returns the MM locale string for a user. Empty string is
+	// treated as English by i18n.T.
 	LocaleOf func(mmUserID string) string
 
-	// IsConnected / UsernameOf: join endpoint dispatches between StartRoom
-	// (registered user) and StartInvited (guest) based on KV store presence.
-	// UsernameOf here returns the OpenTalk display_name to show in the room.
+	// IsConnected gates the join endpoint between StartRoom (registered) and
+	// StartInvited (guest) based on KV store presence. UsernameOf returns the
+	// OpenTalk display_name shown in the room.
 	IsConnected func(mmUserID string) bool
 	UsernameOf  func(mmUserID string) string
 

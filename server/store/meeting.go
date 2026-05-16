@@ -107,10 +107,8 @@ func (s *Store) DeleteActiveMeeting(channelID string) error {
 	return s.Delete(meetingKey(channelID))
 }
 
-// ListActiveMeetings enumerates every meeting_<channelID> KV entry by
-// paging through KVList. Used by the reaper to find stale heartbeats.
-// Returns nil + nil on empty, partial result + nil on per-key parse
-// errors (best-effort).
+// ListActiveMeetings enumerates every meeting_<channelID> KV entry by paging
+// through KVList. Returns the partial list on per-key parse errors.
 func (s *Store) ListActiveMeetings(encKey []byte) ([]*ActiveMeeting, error) {
 	out := make([]*ActiveMeeting, 0, 8)
 	page := 0
@@ -149,8 +147,8 @@ func dismissalKey(channelID, roomID string) string {
 	return "dismiss_" + channelID + "_" + roomID
 }
 
-// AddDismissal records that mmUserID has dismissed the call in (channelID, roomID).
-// Returns the full updated set of dismissing user-IDs.
+// AddDismissal records that mmUserID has dismissed the call in
+// (channelID, roomID) and returns the full updated set.
 func (s *Store) AddDismissal(channelID, roomID, mmUserID string) ([]string, error) {
 	set, _ := s.LoadDismissals(channelID, roomID)
 	seen := make(map[string]bool, len(set))

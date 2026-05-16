@@ -31,9 +31,8 @@ export interface SessionState {
     joinedAt?: number;
     raiseHandsEnabled: boolean;
 
-    /** OpenTalk-Roomserver participant id of the local user. Set on CONNECTED,
-     * cleared on DISCONNECTED. Used by the tile-strip to filter self out
-     * (self gets a dedicated SelfPreview instead). */
+    // OpenTalk-Roomserver participant id of the local user. Set on CONNECTED,
+    // cleared on DISCONNECTED.
     localParticipantId?: string;
 }
 

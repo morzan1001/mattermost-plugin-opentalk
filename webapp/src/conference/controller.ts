@@ -171,8 +171,8 @@ function clearOpenTalkStatus(): void {
     }).catch(() => { /* swallow */ });
 }
 
-// MM RootComponents do not have a Redux Provider in scope, so useStore()
-// returns null. The store is captured at plugin bootstrap and reused here.
+// Captured at plugin bootstrap so root-component side effects (which run
+// outside a Redux Provider) can dispatch through the same store.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let activeStore: Store<any, Action> | null = null;
 
@@ -528,7 +528,7 @@ export function toggleCam(): Promise<void> {
 }
 
 // Re-publish the active track against the newly-selected device. No-op if
-// not in a live call or if the device isn't currently active.
+// not in a live call or if the device is not currently active.
 export async function applyMicDeviceChange(): Promise<void> {
     if (!activeLiveKit || !activeStore) {
         return;

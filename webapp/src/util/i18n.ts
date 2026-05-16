@@ -10,12 +10,8 @@ export interface Translatable {
     en: string;
 }
 
-/**
- * Module-level locale cache, set once at plugin-init from the Redux store.
- * Used by the imperative t() form (alerts, error messages, anything outside
- * a React render). React components should prefer useT() so they re-render
- * if the locale changes.
- */
+// Module-level locale cache, set once at plugin-init from the Redux store.
+// React components should prefer useT() so they re-render on locale changes.
 let _moduleLocale: 'de' | 'en' = 'en';
 
 export function setModuleLocale(locale: string | undefined): void {
