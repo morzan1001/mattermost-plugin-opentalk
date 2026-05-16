@@ -190,9 +190,6 @@ export default class Plugin {
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_incoming_call`,
             (msg: IncomingCallMessage) => {
-                // eslint-disable-next-line no-console
-                console.log('[opentalk] incoming_call event:', msg.data);
-
                 const now = Date.now();
                 const createdAt = msg.data.created_at_unix_ms;
                 const ageMs = typeof createdAt === 'number' ? now - createdAt : -1;
