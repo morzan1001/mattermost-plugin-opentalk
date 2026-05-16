@@ -33,25 +33,30 @@ func meetingKVKey(channelID string) string {
 	return "meeting_" + channelID
 }
 
+// mockLeaderAcquire wires the API so the reaper's leader-election always wins.
+func mockLeaderAcquire(api *plugintest.API) {
+	api.On("KVGet", leaderKey).Return([]byte(nil), (*model.AppError)(nil))
+	api.On("KVSetWithOptions", leaderKey, mock.Anything, mock.AnythingOfType("model.PluginKVSetOptions")).
+		Return(true, (*model.AppError)(nil))
+}
+
 // setupAPIWithMeetings wires a plugintest.API to return the given meetings
 // from KVList + KVGet, simulating how store.Store.ListActiveMeetings works.
 // Non-meeting keys returned by KVList are ignored by the store.
 func setupAPIWithMeetings(t *testing.T, meetings []*store.ActiveMeeting) *plugintest.API {
 	t.Helper()
 	api := &plugintest.API{}
+	mockLeaderAcquire(api)
 
-	// KVList page 0: return meeting keys + an empty page sentinel.
 	keys := make([]string, 0, len(meetings))
 	for _, am := range meetings {
 		keys = append(keys, meetingKVKey(am.ChannelID))
 	}
-	// First KVList call → keys; second call (page 1) → empty to stop iteration.
 	api.On("KVList", 0, 200).Return(keys, nil).Once()
 	api.On("KVList", 1, 200).Return([]string{}, nil).Maybe()
 
-	// KVGet for each meeting key.
 	for _, am := range meetings {
-		am := am // capture loop var
+		am := am
 		api.On("KVGet", meetingKVKey(am.ChannelID)).Return(meetingBytes(t, am), nil)
 	}
 
@@ -66,6 +71,7 @@ func setupAPIWithMeetings(t *testing.T, meetings []*store.ActiveMeeting) *plugin
 // list, RunOnce does nothing (no call to the end callback).
 func TestRunOnce_EmptyStore(t *testing.T) {
 	api := &plugintest.API{}
+	mockLeaderAcquire(api)
 	api.On("KVList", 0, 200).Return([]string{}, nil)
 
 	s := store.New(api)
@@ -170,7 +176,7 @@ func TestRunOnce_MixedMeetings_OnlyStaleEnded(t *testing.T) {
 // a warning via API.LogWarn and does not panic or call the end callback.
 func TestRunOnce_ListActiveMeetingsError_LogsWarnDoesNotPanic(t *testing.T) {
 	api := &plugintest.API{}
-	// Make KVList return an AppError.
+	mockLeaderAcquire(api)
 	api.On("KVList", 0, 200).Return(
 		[]string(nil),
 		&model.AppError{Message: "kv list failed"},
@@ -194,8 +200,9 @@ func TestRunOnce_ListActiveMeetingsError_LogsWarnDoesNotPanic(t *testing.T) {
 // does not panic and that the mutex state is consistent.
 func TestStartStop_Idempotent(t *testing.T) {
 	api := &plugintest.API{}
-	// The goroutine started by Start() calls tick() immediately; that calls
-	// KVList. Allow it, but it may or may not fire before Stop() — hence Maybe().
+	api.On("KVGet", leaderKey).Return([]byte(nil), (*model.AppError)(nil)).Maybe()
+	api.On("KVSetWithOptions", leaderKey, mock.Anything, mock.AnythingOfType("model.PluginKVSetOptions")).
+		Return(true, (*model.AppError)(nil)).Maybe()
 	api.On("KVList", 0, 200).Return([]string{}, nil).Maybe()
 
 	s := store.New(api)
@@ -222,6 +229,9 @@ func TestStartStop_Idempotent(t *testing.T) {
 // Run with: go test -race ./server/reaper/...
 func TestStartStop_ConcurrentSafe(t *testing.T) {
 	api := &plugintest.API{}
+	api.On("KVGet", leaderKey).Return([]byte(nil), (*model.AppError)(nil)).Maybe()
+	api.On("KVSetWithOptions", leaderKey, mock.Anything, mock.AnythingOfType("model.PluginKVSetOptions")).
+		Return(true, (*model.AppError)(nil)).Maybe()
 	api.On("KVList", 0, 200).Return([]string{}, nil).Maybe()
 
 	s := store.New(api)
@@ -297,6 +307,26 @@ func TestRunOnce_PreHeartbeat_OldEnough_Ended(t *testing.T) {
 
 	require.Len(t, ended, 1)
 	assert.Equal(t, "ch-old", ended[0].ChannelID)
+}
+
+// TestRunOnce_NonLeader_NoReap verifies that a node which loses the
+// leader-election CAS does not touch ActiveMeetings, so only one cluster node
+// runs the mutation pass per tick.
+func TestRunOnce_NonLeader_NoReap(t *testing.T) {
+	api := &plugintest.API{}
+	api.On("KVGet", leaderKey).Return([]byte("other-node"), (*model.AppError)(nil))
+	api.On("KVSetWithOptions", leaderKey, mock.Anything, mock.AnythingOfType("model.PluginKVSetOptions")).
+		Return(false, (*model.AppError)(nil))
+
+	s := store.New(api)
+	var ended []*store.ActiveMeeting
+	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		time.Minute, 5*time.Minute)
+
+	r.RunOnce()
+
+	assert.Empty(t, ended)
+	api.AssertNotCalled(t, "KVList", mock.Anything, mock.Anything)
 }
 
 // TestRunOnce_PostHeartbeat_FreshHeartbeat_NotEnded covers a meeting where

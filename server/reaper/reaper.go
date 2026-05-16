@@ -6,9 +6,12 @@ package reaper
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"sync"
 	"time"
 
+	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
@@ -17,19 +20,34 @@ import (
 // EndMeetingFunc ends a stale meeting detected by the reaper.
 type EndMeetingFunc func(am *store.ActiveMeeting)
 
+const (
+	leaderKey = "reaper_leader"
+)
+
 type Reaper struct {
 	api        plugin.API
 	store      *store.Store
 	endMeeting EndMeetingFunc
 	interval   time.Duration
 	staleness  time.Duration
+	leaderTTL  time.Duration
+	nodeID     []byte
 	mu         sync.Mutex
 	cancel     context.CancelFunc
 }
 
-// New returns a Reaper. interval is how often the goroutine checks;
-// staleness is how long a meeting can go without a heartbeat before
-// it's considered dead.
+func newNodeID() []byte {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return []byte(time.Now().UTC().Format(time.RFC3339Nano))
+	}
+	id := make([]byte, hex.EncodedLen(len(b)))
+	hex.Encode(id, b)
+	return id
+}
+
+// New returns a Reaper. interval is the tick cadence; staleness is the
+// meeting-side timeout for missing heartbeats.
 func New(api plugin.API, s *store.Store, end EndMeetingFunc, interval, staleness time.Duration) *Reaper {
 	return &Reaper{
 		api:        api,
@@ -37,6 +55,8 @@ func New(api plugin.API, s *store.Store, end EndMeetingFunc, interval, staleness
 		endMeeting: end,
 		interval:   interval,
 		staleness:  staleness,
+		leaderTTL:  3 * interval,
+		nodeID:     newNodeID(),
 	}
 }
 
@@ -70,6 +90,31 @@ func (r *Reaper) RunOnce() {
 	r.tick()
 }
 
+// acquireOrRenewLeader is a best-effort Mattermost-cluster leader election.
+// Returns true when this node holds the (time-bound) lease. Only the leader
+// runs the reaper's mutations, so each stale meeting is ended once cluster-
+// wide instead of once per node.
+func (r *Reaper) acquireOrRenewLeader() bool {
+	raw, appErr := r.api.KVGet(leaderKey)
+	if appErr != nil {
+		return false
+	}
+	ttlSeconds := int64(r.leaderTTL.Seconds())
+	if ttlSeconds < 1 {
+		ttlSeconds = 1
+	}
+	opts := model.PluginKVSetOptions{
+		Atomic:          true,
+		OldValue:        raw,
+		ExpireInSeconds: ttlSeconds,
+	}
+	ok, sErr := r.api.KVSetWithOptions(leaderKey, r.nodeID, opts)
+	if sErr != nil {
+		return false
+	}
+	return ok
+}
+
 func (r *Reaper) loop(ctx context.Context) {
 	t := time.NewTicker(r.interval)
 	defer t.Stop()
@@ -90,6 +135,9 @@ func (r *Reaper) loop(ctx context.Context) {
 const preHeartbeatGrace = 30 * time.Minute
 
 func (r *Reaper) tick() {
+	if !r.acquireOrRenewLeader() {
+		return
+	}
 	meetings, err := r.store.ListActiveMeetings()
 	if err != nil {
 		r.api.LogWarn("[opentalk] reaper: ListActiveMeetings failed", "err", err.Error())
