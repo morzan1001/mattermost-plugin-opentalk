@@ -293,6 +293,13 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			}
 			return out
 		},
+		IsChannelMember: func(channelID, mmUserID string) bool {
+			if channelID == "" || mmUserID == "" {
+				return false
+			}
+			m, err := p.API.GetChannelMember(channelID, mmUserID)
+			return err == nil && m != nil
+		},
 		IsDMChannel: func(channelID string) bool {
 			ch, err := p.API.GetChannel(channelID)
 			if err != nil || ch == nil {

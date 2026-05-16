@@ -149,12 +149,13 @@ func TestMeetingsJoin_RegisteredUserPath(t *testing.T) {
 	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
 
 	h := &Handlers{
-		Store:          store.New(api),
-		OpenTalk:       opentalk.NewClient(otSrv.URL),
-		RoomserverURL:  "wss://rs.example",
-		AccessTokenFor: func(_ string) (string, error) { return "tok-xyz", nil },
-		IsConnected:    func(_ string) bool { return true },
-		UsernameOf:     func(_ string) string { return "alice" },
+		Store:           store.New(api),
+		OpenTalk:        opentalk.NewClient(otSrv.URL),
+		RoomserverURL:   "wss://rs.example",
+		AccessTokenFor:  func(_ string) (string, error) { return "tok-xyz", nil },
+		IsConnected:     func(_ string) bool { return true },
+		UsernameOf:      func(_ string) string { return "alice" },
+		IsChannelMember: func(_, _ string) bool { return true },
 	}
 
 	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev-1"}`)
@@ -195,11 +196,12 @@ func TestMeetingsJoin_GuestPathUsesInvite(t *testing.T) {
 	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
 
 	h := &Handlers{
-		Store:         store.New(api),
-		OpenTalk:      opentalk.NewClient(otSrv.URL),
-		RoomserverURL: "wss://rs.example",
-		IsConnected:   func(_ string) bool { return false },
-		UsernameOf:    func(_ string) string { return "bob" },
+		Store:           store.New(api),
+		OpenTalk:        opentalk.NewClient(otSrv.URL),
+		RoomserverURL:   "wss://rs.example",
+		IsConnected:     func(_ string) bool { return false },
+		UsernameOf:      func(_ string) string { return "bob" },
+		IsChannelMember: func(_, _ string) bool { return true },
 	}
 
 	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev-2"}`)
@@ -221,7 +223,10 @@ func TestMeetingsJoin_NoActiveMeeting(t *testing.T) {
 	api := &plugintest.API{}
 	api.On("KVGet", "meeting_ch-x").Return([]byte(nil), nil)
 
-	h := &Handlers{Store: store.New(api)}
+	h := &Handlers{
+		Store:           store.New(api),
+		IsChannelMember: func(_, _ string) bool { return true },
+	}
 	body := strings.NewReader(`{"channel_id":"ch-x","device_secret":"dev"}`)
 	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-x/join", body)
 	req.Header.Set("Mattermost-User-ID", "u1")
@@ -238,7 +243,10 @@ func TestMeetingsJoin_RoomMismatch(t *testing.T) {
 	raw, _ := json.Marshal(am)
 	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
 
-	h := &Handlers{Store: store.New(api)}
+	h := &Handlers{
+		Store:           store.New(api),
+		IsChannelMember: func(_, _ string) bool { return true },
+	}
 	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev"}`)
 	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-WRONG/join", body)
 	req.Header.Set("Mattermost-User-ID", "u1")
@@ -247,6 +255,21 @@ func TestMeetingsJoin_RoomMismatch(t *testing.T) {
 	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
 	router.ServeHTTP(rr, req)
 	assert.Equal(t, nethttp.StatusBadRequest, rr.Code)
+}
+
+func TestMeetingsJoin_RejectsNonMember(t *testing.T) {
+	h := &Handlers{
+		IsChannelMember: func(_, _ string) bool { return false },
+	}
+	body := strings.NewReader(`{"channel_id":"ch-priv","device_secret":"dev"}`)
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-1/join", body)
+	req.Header.Set("Mattermost-User-ID", "outsider")
+	rr := httptest.NewRecorder()
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
+	router.ServeHTTP(rr, req)
+	assert.Equal(t, nethttp.StatusForbidden, rr.Code,
+		"non-members must not receive a guest ticket for a channel they cannot see")
 }
 
 func TestMeetingsJoin_RejectsMissingUserHeader(t *testing.T) {
@@ -408,8 +431,9 @@ func TestMeetingsPostActionDismiss_StillLive(t *testing.T) {
 	}), mock.Anything, mock.AnythingOfType("int64")).Return(nil)
 
 	h := &Handlers{
-		Store:         store.New(api),
-		BroadcastFunc: func(string, map[string]any, *model.WebsocketBroadcast) {},
+		Store:           store.New(api),
+		BroadcastFunc:   func(string, map[string]any, *model.WebsocketBroadcast) {},
+		IsChannelMember: func(_, _ string) bool { return true },
 		ChannelMembersOf: func(string) []string {
 			return []string{"host-uid", "alice", "bob"}
 		},
@@ -456,8 +480,9 @@ func TestMeetingsPostActionDismiss_FlipsMissed(t *testing.T) {
 	})).Return(nil)
 
 	h := &Handlers{
-		Store:         store.New(api),
-		BroadcastFunc: func(string, map[string]any, *model.WebsocketBroadcast) {},
+		Store:           store.New(api),
+		BroadcastFunc:   func(string, map[string]any, *model.WebsocketBroadcast) {},
+		IsChannelMember: func(_, _ string) bool { return true },
 		ChannelMembersOf: func(string) []string {
 			return []string{"host-uid", "alice"}
 		},

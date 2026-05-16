@@ -47,9 +47,12 @@ type Handlers struct {
 	PostGetter  func(postID string) (*model.Post, error)
 	PostUpdater func(p *model.Post) error
 
-	// Dismiss endpoint uses ChannelMembersOf to detect when all DM recipients
-	// have declined and auto-transitions the meeting to MISSED.
 	ChannelMembersOf func(channelID string) []string
+
+	// IsChannelMember gates access to endpoints that expose channel-private
+	// data (join ticket, dismiss). Returns false on any error so callers fail
+	// closed.
+	IsChannelMember func(channelID, mmUserID string) bool
 
 	// IsDMChannel returns true if the given channel is a direct or group channel.
 	IsDMChannel func(channelID string) bool

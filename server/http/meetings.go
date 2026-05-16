@@ -191,6 +191,11 @@ func (h *Handlers) MeetingsJoin(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 
+	if h.IsChannelMember == nil || !h.IsChannelMember(body.ChannelID, mmUserID) {
+		nethttp.Error(w, "forbidden", nethttp.StatusForbidden)
+		return
+	}
+
 	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
 	if err != nil {
 		nethttp.Error(w, "no active meeting in this channel", nethttp.StatusNotFound)
@@ -383,6 +388,10 @@ func (h *Handlers) MeetingsPostActionDismiss(w nethttp.ResponseWriter, r *nethtt
 		nethttp.Error(w, "channel_id and room_id required in context", nethttp.StatusBadRequest)
 		return
 	}
+	if h.IsChannelMember == nil || !h.IsChannelMember(channelID, mmUserID) {
+		nethttp.Error(w, "forbidden", nethttp.StatusForbidden)
+		return
+	}
 
 	am, err := h.Store.LoadActiveMeeting(channelID)
 	if err != nil {
@@ -499,6 +508,10 @@ func (h *Handlers) MeetingsDismiss(w nethttp.ResponseWriter, r *nethttp.Request)
 	}
 	if body.ChannelID == "" || body.RoomID == "" {
 		nethttp.Error(w, "channel_id and room_id required", nethttp.StatusBadRequest)
+		return
+	}
+	if h.IsChannelMember == nil || !h.IsChannelMember(body.ChannelID, mmUserID) {
+		nethttp.Error(w, "forbidden", nethttp.StatusForbidden)
 		return
 	}
 
