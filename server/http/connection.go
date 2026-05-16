@@ -35,7 +35,7 @@ func (h *Handlers) Me(w nethttp.ResponseWriter, r *nethttp.Request) {
 	case err == store.ErrNotFound:
 		// stay disconnected
 	default:
-		nethttp.Error(w, "lookup failed: "+err.Error(), nethttp.StatusInternalServerError)
+		h.internalError(w, "Me: LoadUserInfo", err, nethttp.StatusInternalServerError, "lookup failed")
 		return
 	}
 

@@ -1,7 +1,6 @@
 package http
 
 import (
-	"fmt"
 	nethttp "net/http"
 	"time"
 
@@ -77,7 +76,7 @@ func (h *Handlers) OAuthStart(w nethttp.ResponseWriter, r *nethttp.Request) {
 	}
 	state := uuid.New().String()
 	if err := h.Store.SaveOAuthState(state, mmUserID); err != nil {
-		nethttp.Error(w, fmt.Sprintf("save state: %v", err), nethttp.StatusInternalServerError)
+		h.internalError(w, "OAuthStart: SaveOAuthState", err, nethttp.StatusInternalServerError, "save state failed")
 		return
 	}
 	nethttp.Redirect(w, r, h.OIDC.AuthCodeURL(state), nethttp.StatusFound)
@@ -111,7 +110,7 @@ func (h *Handlers) OAuthCallback(w nethttp.ResponseWriter, r *nethttp.Request) {
 
 	tok, info, err := h.OIDC.Exchange(r.Context(), code)
 	if err != nil {
-		nethttp.Error(w, "code exchange failed: "+err.Error(), nethttp.StatusBadGateway)
+		h.internalError(w, "OAuthCallback: code exchange", err, nethttp.StatusBadGateway, "code exchange failed")
 		return
 	}
 
@@ -125,7 +124,7 @@ func (h *Handlers) OAuthCallback(w nethttp.ResponseWriter, r *nethttp.Request) {
 		ConnectedAt:      time.Now().UTC(),
 	})
 	if saveErr != nil {
-		nethttp.Error(w, "store user info: "+saveErr.Error(), nethttp.StatusInternalServerError)
+		h.internalError(w, "OAuthCallback: SaveUserInfo", saveErr, nethttp.StatusInternalServerError, "store user info failed")
 		return
 	}
 
