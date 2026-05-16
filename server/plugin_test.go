@@ -86,7 +86,7 @@ func TestPlugin_AccessTokenFor_ReturnsCachedTokenIfStillValid(t *testing.T) {
 	p.SetAPI(api)
 	p.client = pluginapi.NewClient(api, nil)
 	p.store = store.New(api)
-	p.setConfiguration(&Configuration{TokenEncryptionKey: string(testEncKey)})
+	p.setConfigurationAndClient(&Configuration{TokenEncryptionKey: string(testEncKey)}, nil)
 
 	tok, err := p.accessTokenFor("u1")
 	require.NoError(t, err)
@@ -101,7 +101,7 @@ func TestPlugin_AccessTokenFor_PropagatesNotFound(t *testing.T) {
 	p.SetAPI(api)
 	p.client = pluginapi.NewClient(api, nil)
 	p.store = store.New(api)
-	p.setConfiguration(&Configuration{TokenEncryptionKey: string(testEncKey)})
+	p.setConfigurationAndClient(&Configuration{TokenEncryptionKey: string(testEncKey)}, nil)
 
 	_, err := p.accessTokenFor("absent-user")
 	require.Error(t, err)
