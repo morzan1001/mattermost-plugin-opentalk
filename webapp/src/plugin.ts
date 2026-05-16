@@ -196,10 +196,21 @@ export default class Plugin {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const myId: string | undefined = (store.getState() as any)?.entities?.users?.currentUserId;
 
-                if (myId && msg.data.host_user_id === myId) {
-                    return;
-                }
-                if (typeof createdAt !== 'number' || ageMs > incomingCallFreshnessMs) {
+                const ownCall = Boolean(myId && msg.data.host_user_id === myId);
+                const stale = typeof createdAt !== 'number' || ageMs > incomingCallFreshnessMs;
+                // Verbose-level only; visible when devtools is set to Verbose.
+                // eslint-disable-next-line no-console
+                console.debug('[opentalk] incoming_call received', {
+                    channel_id: msg.data.channel_id,
+                    host_user_id: msg.data.host_user_id,
+                    my_id: myId,
+                    age_ms: ageMs,
+                    own_call: ownCall,
+                    stale,
+                    will_dispatch: !ownCall && !stale,
+                });
+
+                if (ownCall || stale) {
                     return;
                 }
 

@@ -453,10 +453,22 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 			}
 			payload["dm_user_ids"] = recipients
 
-			p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{
-				ChannelId: channelID,
-				OmitUsers: map[string]bool{mmUserID: true},
-			})
+			// User-scoped per recipient: a channel-scoped broadcast relies on
+			// the receiving WS-connection having the DM channel in its
+			// in-memory channel-member cache, which can be stale across a
+			// cluster, a fresh group-DM, or a recent WS-reconnect. UserId
+			// scope sidesteps that filter and goes straight to every session
+			// of the user.
+			for _, uid := range recipients {
+				p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{
+					UserId: uid,
+				})
+			}
+			p.API.LogInfo("[opentalk] incoming_call broadcast",
+				"channel_id", channelID,
+				"room_id", room.ID,
+				"recipients", strings.Join(recipients, ","),
+			)
 
 			// Best-effort push notification per recipient; skip DND users.
 			for _, uid := range recipients {
