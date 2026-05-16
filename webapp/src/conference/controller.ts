@@ -51,6 +51,7 @@ function toParticipantInfo(p: Participant): ParticipantInfo {
 let activeClient: OpenTalkConferenceClient | null = null;
 let activeLiveKit: LiveKitRoom | null = null;
 let heartbeatIntervalId: number | null = null;
+let tearingDown = false;
 
 function startHeartbeat(channelID: string): void {
     stopHeartbeat();
@@ -98,10 +99,57 @@ function clearOpenTalkStatus(): void {
     }).catch(() => { /* swallow */ });
 }
 
-// useStore() returns null in MM RootComponents, so we stash the store at
-// plugin-initialize time and dispatch through it directly.
+// MM RootComponents do not have a Redux Provider in scope, so useStore()
+// returns null. The store is captured at plugin bootstrap and reused here.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let activeStore: Store<any, Action> | null = null;
+
+type TearDownReason = 'leave' | 'closed' | 'error' | 'livekit';
+
+async function tearDownActiveConference(reason: TearDownReason): Promise<void> {
+    if (tearingDown) {
+        return;
+    }
+    tearingDown = true;
+    try {
+        const lk = activeLiveKit;
+        const c = activeClient;
+        activeLiveKit = null;
+        activeClient = null;
+
+        // UI must observe disconnect synchronously; the actual socket teardown
+        // happens after.
+        stopHeartbeat();
+        clearOpenTalkStatus();
+        trackRegistry.clear();
+        if (activeStore) {
+            activeStore.dispatch(tracksReset());
+            activeStore.dispatch(participantsReset());
+            activeStore.dispatch(setMicEnabled(false));
+            activeStore.dispatch(setCamEnabled(false));
+            activeStore.dispatch(setScreenShareEnabled(false));
+            activeStore.dispatch(setLivekitConnected(false));
+            activeStore.dispatch(disconnected());
+        }
+
+        if (lk) {
+            try {
+                await lk.disconnect();
+            } catch {
+                // already disconnecting
+            }
+        }
+        if (reason === 'leave' && c) {
+            try {
+                await c.leave();
+            } catch {
+                // socket may already be closed
+            }
+        }
+    } finally {
+        tearingDown = false;
+    }
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function setActiveStore(store: Store<any, Action>): void {
@@ -120,6 +168,7 @@ export async function startConferenceConnection(
         // Already connected/connecting; ignore duplicate clicks.
         return;
     }
+    setActiveStore(store);
     const client = new OpenTalkConferenceClient('');
     activeClient = client;
 
@@ -180,19 +229,21 @@ export async function startConferenceConnection(
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
         store.dispatch(participantRemoved({id}));
     });
+    let connectErrorDispatched = false;
+    const dispatchConnectError = (message: string) => {
+        if (connectErrorDispatched) {
+            return;
+        }
+        connectErrorDispatched = true;
+        store.dispatch(connectError({error: message}));
+    };
+
     client.on('closed', () => {
-        store.dispatch(disconnected());
-        store.dispatch(participantsReset());
-        stopHeartbeat();
-        clearOpenTalkStatus();
-        activeClient = null;
+        void tearDownActiveConference('closed');
     });
     client.on('error', (err) => {
-        store.dispatch(connectError({error: err.message}));
-        store.dispatch(participantsReset());
-        stopHeartbeat();
-        clearOpenTalkStatus();
-        activeClient = null;
+        dispatchConnectError(err.message);
+        void tearDownActiveConference('error');
     });
 
     store.dispatch(connectStarted({channelID, roomID}));
@@ -202,8 +253,8 @@ export async function startConferenceConnection(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-        store.dispatch(connectError({error: e?.message ?? String(e)}));
-        activeClient = null;
+        dispatchConnectError(e?.message ?? String(e));
+        await tearDownActiveConference('error');
     }
 }
 
@@ -213,31 +264,29 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
     activeLiveKit = lk;
 
     lk.on('connected', () => {
-        store.dispatch(setLivekitConnected(true));
-
         if (getMuteOnJoin()) {
+            store.dispatch(setLivekitConnected(true));
             return;
         }
 
-        // Default-on mic; user can toggle off via UI.
+        // Publish the mic before we surface "livekit connected" so a user
+        // toggle racing this path cannot trigger a parallel publish.
         lk.enableMic().
             then(() => {
                 store.dispatch(setMicEnabled(true));
             }).
             catch((err: Error) => {
-                // Don't crash the session on mic-permission denial; user just stays muted.
+                // Mic-permission denial just leaves us muted; no need to crash.
                 // eslint-disable-next-line no-console
                 console.warn('[opentalk] enableMic failed:', err.message);
+            }).
+            finally(() => {
+                store.dispatch(setLivekitConnected(true));
             });
     });
 
     lk.on('disconnected', () => {
-        store.dispatch(setLivekitConnected(false));
-        store.dispatch(setMicEnabled(false));
-        store.dispatch(setCamEnabled(false));
-        store.dispatch(tracksReset());
-        trackRegistry.clear();
-        activeLiveKit = null;
+        void tearDownActiveConference('livekit');
     });
 
     // Differentiate screen-share from camera: both have kind:'video' in LiveKit
@@ -295,23 +344,7 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
 }
 
 export async function leaveActiveConference(): Promise<void> {
-    if (activeLiveKit) {
-        const lk = activeLiveKit;
-        activeLiveKit = null;
-        try {
-            await lk.disconnect();
-        } catch {
-            // Ignore — we're tearing down anyway.
-        }
-    }
-    if (!activeClient) {
-        return;
-    }
-    const c = activeClient;
-    activeClient = null;
-    await c.leave();
-    stopHeartbeat();
-    clearOpenTalkStatus();
+    await tearDownActiveConference('leave');
 }
 
 // endActiveMeeting terminates the meeting for everyone. Sends a server-side
