@@ -382,17 +382,29 @@ export async function endActiveMeeting(): Promise<void> {
     }
 }
 
-export async function toggleMic(): Promise<void> {
-    if (!activeLiveKit || !activeStore) {
-        return;
+let micToggleInFlight: Promise<void> | null = null;
+let camToggleInFlight: Promise<void> | null = null;
+let screenToggleInFlight: Promise<void> | null = null;
+
+export function toggleMic(): Promise<void> {
+    if (micToggleInFlight) {
+        return micToggleInFlight;
     }
-    if (activeLiveKit.isMicEnabled()) {
-        await activeLiveKit.disableMic();
-        activeStore.dispatch(setMicEnabled(false));
-    } else {
-        await activeLiveKit.enableMic();
-        activeStore.dispatch(setMicEnabled(true));
-    }
+    micToggleInFlight = (async () => {
+        if (!activeLiveKit || !activeStore) {
+            return;
+        }
+        if (activeLiveKit.isMicEnabled()) {
+            await activeLiveKit.disableMic();
+            activeStore.dispatch(setMicEnabled(false));
+        } else {
+            await activeLiveKit.enableMic();
+            activeStore.dispatch(setMicEnabled(true));
+        }
+    })().finally(() => {
+        micToggleInFlight = null;
+    });
+    return micToggleInFlight;
 }
 
 // Stable synthetic id for a local track: LiveKit's LocalTrack.sid is
@@ -401,28 +413,36 @@ function localTrackId(lk: LiveKitRoom, kind: 'video' | 'screen'): string {
     return `local:${lk.getLocalIdentity()}:${kind}`;
 }
 
-export async function toggleCam(): Promise<void> {
-    if (!activeLiveKit || !activeStore) {
-        return;
+export function toggleCam(): Promise<void> {
+    if (camToggleInFlight) {
+        return camToggleInFlight;
     }
-    const lk = activeLiveKit;
-    const localId = lk.getLocalIdentity();
-    if (lk.isCamEnabled()) {
-        const trackId = localTrackId(lk, 'video');
-        trackRegistry.unregister(trackId);
-        activeStore.dispatch(trackUnsubscribed({participantId: localId, kind: 'video'}));
-        await lk.disableCam();
-        activeStore.dispatch(setCamEnabled(false));
-    } else {
-        await lk.enableCam();
-        if (lk.camTrack) {
-            const trackId = localTrackId(lk, 'video');
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            trackRegistry.register(trackId, lk.camTrack as any);
-            activeStore.dispatch(trackSubscribed({participantId: localId, kind: 'video', trackId}));
+    camToggleInFlight = (async () => {
+        if (!activeLiveKit || !activeStore) {
+            return;
         }
-        activeStore.dispatch(setCamEnabled(true));
-    }
+        const lk = activeLiveKit;
+        const localId = lk.getLocalIdentity();
+        if (lk.isCamEnabled()) {
+            const trackId = localTrackId(lk, 'video');
+            trackRegistry.unregister(trackId);
+            activeStore.dispatch(trackUnsubscribed({participantId: localId, kind: 'video'}));
+            await lk.disableCam();
+            activeStore.dispatch(setCamEnabled(false));
+        } else {
+            await lk.enableCam();
+            if (lk.camTrack) {
+                const trackId = localTrackId(lk, 'video');
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                trackRegistry.register(trackId, lk.camTrack as any);
+                activeStore.dispatch(trackSubscribed({participantId: localId, kind: 'video', trackId}));
+            }
+            activeStore.dispatch(setCamEnabled(true));
+        }
+    })().finally(() => {
+        camToggleInFlight = null;
+    });
+    return camToggleInFlight;
 }
 
 // applyMicDeviceChange / applyCamDeviceChange — re-publish the active track
@@ -472,7 +492,17 @@ export async function applyCamDeviceChange(): Promise<void> {
     }
 }
 
-export async function toggleScreenShare(): Promise<void> {
+export function toggleScreenShare(): Promise<void> {
+    if (screenToggleInFlight) {
+        return screenToggleInFlight;
+    }
+    screenToggleInFlight = doToggleScreenShare().finally(() => {
+        screenToggleInFlight = null;
+    });
+    return screenToggleInFlight;
+}
+
+async function doToggleScreenShare(): Promise<void> {
     if (!activeLiveKit || !activeStore) {
         return;
     }
