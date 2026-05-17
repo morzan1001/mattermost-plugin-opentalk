@@ -87,6 +87,15 @@ const IncomingCallModal: React.FC = () => {
         setAvatarError(false);
     }, [call?.hostUserID]);
 
+    // Persistent root component: busy/avatarError carry over between mounts
+    // of the same component instance. Reset them whenever a fresh call lands
+    // or the modal hides, otherwise the Accept/Decline buttons stay disabled
+    // for the next ring after the user accepted an earlier one.
+    useEffect(() => {
+        setBusy(false);
+        setAvatarError(false);
+    }, [isShowingCall, call?.channelID, call?.roomID]);
+
     const onDecline = async () => {
         if (!call) {
             return;
