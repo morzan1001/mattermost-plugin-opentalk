@@ -11,7 +11,8 @@ import OpenTalkIcon from './components/channel_header_button/icon';
 import ExpandedView from './components/expanded_view/component';
 import MeetingMiniBar from './components/meeting_mini_bar/component';
 import PostTypeMeeting from './components/post_type_meeting/component';
-import {id as pluginId} from './manifest';
+import manifest from './manifest';
+const pluginId: string = manifest.id;
 import reducer from './store/reducer';
 import {PluginRegistry} from './types/mattermost-webapp';
 import {setConnected} from './store/slice_oauth';
@@ -155,18 +156,9 @@ export default class Plugin {
         };
 
         registry.registerReducer?.(reducer);
-
-        // [opentalk diag] -- short-lived. Confirms registerWebSocketEventHandler
-        // exists and our handlers run. Remove once routing is verified.
-        const hasWS = typeof registry.registerWebSocketEventHandler === 'function';
-        // eslint-disable-next-line no-console
-        console.warn('[opentalk diag] plugin-init', {pluginId, hasWS, myId});
-
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_user_connected_state`,
             (msg: ConnectedStateMessage) => {
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk diag] WS user_connected_state', msg);
                 store.dispatch(setConnected(msg.data.connected === true, msg.data.email));
             },
         );
@@ -174,8 +166,6 @@ export default class Plugin {
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_meeting_ended`,
             (msg: MeetingEndedMessage) => {
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk diag] WS meeting_ended', msg);
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const session: any = (store.getState() as any)?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk']?.session;
                 if (session?.status !== 'idle' && session?.channelID === msg.data.channel_id) {
@@ -188,8 +178,6 @@ export default class Plugin {
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_meeting_started`,
             (msg: MeetingStartedMessage) => {
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk diag] WS meeting_started', msg);
                 store.dispatch(activeMeetingStarted({
                     channelID: msg.data.channel_id,
                     roomID: msg.data.room_id,
@@ -203,8 +191,6 @@ export default class Plugin {
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_incoming_call`,
             (msg: IncomingCallMessage) => {
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk diag] WS incoming_call', msg);
                 const now = Date.now();
                 const createdAt = msg.data.created_at_unix_ms;
                 const ageMs = typeof createdAt === 'number' ? now - createdAt : -1;
@@ -243,8 +229,6 @@ export default class Plugin {
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_ring_setting_changed`,
             (msg: RingSettingChangedMessage) => {
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk diag] WS ring_setting_changed', msg);
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const myId = (store.getState() as any)?.entities?.users?.currentUserId;
                 if (msg.data.mm_user_id !== myId) {
@@ -262,8 +246,6 @@ export default class Plugin {
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_incoming_call_dismissed`,
             (msg: IncomingCallDismissedMessage) => {
-                // eslint-disable-next-line no-console
-                console.warn('[opentalk diag] WS incoming_call_dismissed', msg);
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const myId = (store.getState() as any)?.entities?.users?.currentUserId;
                 if (msg.data.mm_user_id === myId) {

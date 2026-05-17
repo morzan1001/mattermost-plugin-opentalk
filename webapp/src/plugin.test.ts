@@ -1,4 +1,5 @@
-import {id as pluginId} from './manifest';
+import manifest from './manifest';
+const pluginId: string = manifest.id;
 import Plugin from './plugin';
 
 describe('Plugin', () => {
