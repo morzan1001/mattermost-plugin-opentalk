@@ -132,6 +132,9 @@ async function setOpenTalkStatusAsync(): Promise<void> {
     if (prior && prior.emoji !== OPENTALK_STATUS_EMOJI) {
         writePriorStatus(prior);
     }
+    // MM 6+ rejects custom-status PUTs with a duration but no expires_at
+    // (400 Bad Request). Send both.
+    const expiresAt = new Date(Date.now() + (4 * 60 * 60 * 1000)).toISOString();
     await fetch('/api/v4/users/me/status/custom', {
         method: 'PUT',
         headers: {
@@ -143,6 +146,7 @@ async function setOpenTalkStatusAsync(): Promise<void> {
             emoji: OPENTALK_STATUS_EMOJI,
             text: t({de: 'Im OpenTalk-Meeting', en: 'In an OpenTalk meeting'}),
             duration: 'four_hours',
+            expires_at: expiresAt,
         }),
     }).catch(() => { /* swallow */ });
 }
