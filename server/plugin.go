@@ -329,7 +329,8 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			m, err := p.API.GetChannelMember(channelID, mmUserID)
 			return err == nil && m != nil
 		},
-		AcquireChannelLock: p.acquireChannelLock,
+		AcquireChannelLock:   p.acquireChannelLock,
+		NotifyMeetingStarted: p.notifyMeetingStarted,
 		IsDMChannel: func(channelID string) bool {
 			ch, err := p.API.GetChannel(channelID)
 			if err != nil || ch == nil {
@@ -432,79 +433,99 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		return nil, fmt.Errorf("persist meeting (with post_id): %w", err)
 	}
 
-	if chErr == nil && ch != nil {
-		payload := map[string]any{
-			"channel_id":   channelID,
-			"room_id":      room.ID,
-			"host_user_id": mmUserID,
-			"host_name":    hostDisplayName,
-			"post_id":      botPost.Id,
-
-			// lets the webapp ignore stale broadcasts on WS reconnect
-			"created_at_unix_ms": time.Now().UnixMilli(),
-		}
-		if isDM {
-			members := p.channelMembersOf(channelID)
-			recipients := make([]string, 0, len(members))
-			for _, uid := range members {
-				if uid != mmUserID {
-					recipients = append(recipients, uid)
-				}
-			}
-			payload["dm_user_ids"] = recipients
-
-			// User-scoped per recipient: a channel-scoped broadcast relies on
-			// the receiving WS-connection having the DM channel in its
-			// in-memory channel-member cache, which can be stale across a
-			// cluster, a fresh group-DM, or a recent WS-reconnect. UserId
-			// scope sidesteps that filter and goes straight to every session
-			// of the user.
-			for _, uid := range recipients {
-				p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{
-					UserId: uid,
-				})
-			}
-			p.API.LogInfo("[opentalk] incoming_call broadcast",
-				"channel_id", channelID,
-				"room_id", room.ID,
-				"recipients", strings.Join(recipients, ","),
-			)
-
-			// Best-effort push notification per recipient; skip DND users.
-			for _, uid := range recipients {
-				status, _ := p.API.GetUserStatus(uid)
-				if status != nil && status.Status == model.StatusDnd {
-					continue
-				}
-				push := &model.PushNotification{
-					Version:     model.PushMessageV2,
-					Type:        model.PushTypeMessage,
-					TeamId:      ch.TeamId,
-					ChannelId:   channelID,
-					PostId:      botPost.Id,
-					SenderId:    p.botUserID,
-					ChannelType: ch.Type,
-					Message: i18n.T(p.localeOf(uid), i18n.Translatable{
-						DE: "Anruf von " + hostDisplayName,
-						EN: "Incoming call from " + hostDisplayName,
-					}),
-					IsIdLoaded: true,
-				}
-				if pErr := p.API.SendPushNotification(push, uid); pErr != nil {
-					p.API.LogWarn("[opentalk] push failed", "user", uid, "err", pErr.Error())
-				}
-			}
-		} else {
-			// Channel meeting: broadcast so others see the ChannelCallToast.
-			// Host is omitted — no need to notify yourself.
-			p.API.PublishWebSocketEvent("meeting_started", payload, &model.WebsocketBroadcast{
-				ChannelId: channelID,
-				OmitUsers: map[string]bool{mmUserID: true},
-			})
-		}
-	}
+	p.notifyMeetingStarted(am)
 
 	return am, nil
+}
+
+// notifyMeetingStarted is the single entry point for "a meeting just became
+// joinable" notifications. Both the HTTP MeetingsCreate path and the
+// slash-command path funnel through here so DMs always ring the recipients,
+// not only when the meeting is started via /opentalk start. Safe to call
+// more than once for the same meeting (e.g. on a header-button click while
+// a stale meeting is still in KV) — the receiving webapp reduces to the
+// newest ring per channel.
+func (p *Plugin) notifyMeetingStarted(am *store.ActiveMeeting) {
+	if am == nil {
+		return
+	}
+	ch, chErr := p.API.GetChannel(am.ChannelID)
+	if chErr != nil || ch == nil {
+		return
+	}
+
+	hostName := am.HostUserID
+	if u, uErr := p.API.GetUser(am.HostUserID); uErr == nil && u != nil {
+		hostName = displayNameOf(u)
+	}
+
+	payload := map[string]any{
+		"channel_id":   am.ChannelID,
+		"room_id":      am.RoomID,
+		"host_user_id": am.HostUserID,
+		"host_name":    hostName,
+		"post_id":      am.PostID,
+		// lets the webapp ignore stale broadcasts on WS reconnect
+		"created_at_unix_ms": time.Now().UnixMilli(),
+	}
+
+	isDM := ch.Type == model.ChannelTypeDirect || ch.Type == model.ChannelTypeGroup
+	if !isDM {
+		// Channel meeting: passive toast for everyone else.
+		p.API.PublishWebSocketEvent("meeting_started", payload, &model.WebsocketBroadcast{
+			ChannelId: am.ChannelID,
+			OmitUsers: map[string]bool{am.HostUserID: true},
+		})
+		return
+	}
+
+	members := p.channelMembersOf(am.ChannelID)
+	recipients := make([]string, 0, len(members))
+	for _, uid := range members {
+		if uid != am.HostUserID {
+			recipients = append(recipients, uid)
+		}
+	}
+	payload["dm_user_ids"] = recipients
+
+	// User-scoped per recipient: a channel-scoped broadcast relies on the
+	// receiving WS-connection's in-memory channel-member cache, which can
+	// be stale across a cluster, a fresh group-DM, or a recent reconnect.
+	for _, uid := range recipients {
+		p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{
+			UserId: uid,
+		})
+	}
+	p.API.LogInfo("[opentalk] incoming_call broadcast",
+		"channel_id", am.ChannelID,
+		"room_id", am.RoomID,
+		"recipients", strings.Join(recipients, ","),
+	)
+
+	// Best-effort push notification per recipient; skip DND users.
+	for _, uid := range recipients {
+		status, _ := p.API.GetUserStatus(uid)
+		if status != nil && status.Status == model.StatusDnd {
+			continue
+		}
+		push := &model.PushNotification{
+			Version:     model.PushMessageV2,
+			Type:        model.PushTypeMessage,
+			TeamId:      ch.TeamId,
+			ChannelId:   am.ChannelID,
+			PostId:      am.PostID,
+			SenderId:    p.botUserID,
+			ChannelType: ch.Type,
+			Message: i18n.T(p.localeOf(uid), i18n.Translatable{
+				DE: "Anruf von " + hostName,
+				EN: "Incoming call from " + hostName,
+			}),
+			IsIdLoaded: true,
+		}
+		if pErr := p.API.SendPushNotification(push, uid); pErr != nil {
+			p.API.LogWarn("[opentalk] push failed", "user", uid, "err", pErr.Error())
+		}
+	}
 }
 
 func generateDeviceSecret() (string, error) {

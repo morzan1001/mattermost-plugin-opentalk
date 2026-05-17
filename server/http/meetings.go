@@ -70,6 +70,12 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 	}
 
 	if existing, lErr := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID); lErr == nil && existing != nil {
+		// Header-button click on a DM where a stale meeting is still in KV
+		// (host hung up but didn't end it). Re-ring the other recipients so
+		// they get a fresh modal before the webapp auto-joins.
+		if h.NotifyMeetingStarted != nil {
+			h.NotifyMeetingStarted(existing)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(nethttp.StatusConflict)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -167,6 +173,10 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 	if err := h.Store.SaveActiveMeeting(h.EncryptionKey, am); err != nil {
 		h.internalError(w, "MeetingsCreate: SaveActiveMeeting (post_id)", err, nethttp.StatusInternalServerError, "persist meeting failed")
 		return
+	}
+
+	if h.NotifyMeetingStarted != nil {
+		h.NotifyMeetingStarted(am)
 	}
 
 	resp := createMeetingResponse{

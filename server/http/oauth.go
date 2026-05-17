@@ -57,6 +57,12 @@ type Handlers struct {
 	// channel; the returned release func must be deferred by the caller.
 	AcquireChannelLock func(channelID string) (release func())
 
+	// NotifyMeetingStarted broadcasts the per-channel notification a freshly
+	// created (or re-joined) meeting needs: incoming_call + push for DMs,
+	// meeting_started for channels. Implemented by the Plugin because the
+	// payload needs access to GetUser/GetChannel and the push API.
+	NotifyMeetingStarted func(am *store.ActiveMeeting)
+
 	// IsDMChannel returns true if the given channel is a direct or group channel.
 	IsDMChannel func(channelID string) bool
 
