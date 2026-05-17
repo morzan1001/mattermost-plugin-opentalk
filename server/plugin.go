@@ -487,9 +487,15 @@ func (p *Plugin) notifyMeetingStarted(am *store.ActiveMeeting) {
 	}
 	payload["dm_user_ids"] = recipients
 
-	// User-scoped per recipient: a channel-scoped broadcast relies on the
-	// receiving WS-connection's in-memory channel-member cache, which can
-	// be stale across a cluster, a fresh group-DM, or a recent reconnect.
+	// Defense-in-depth: fire both ChannelId- and UserId-scoped broadcasts.
+	// Either path on its own has cluster / cache edge cases under which MM
+	// silently drops the event; sending via both gives us two independent
+	// delivery routes. The webapp reducer is idempotent on channelID so a
+	// double-delivery is harmless.
+	p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{
+		ChannelId: am.ChannelID,
+		OmitUsers: map[string]bool{am.HostUserID: true},
+	})
 	for _, uid := range recipients {
 		p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{
 			UserId: uid,

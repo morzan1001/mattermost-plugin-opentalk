@@ -26,8 +26,13 @@ func TestPlugin_OnActivate(t *testing.T) {
 			return cmd.Trigger == "opentalk"
 		})).Return(nil)
 
-		// Reaper.Start() ticks immediately, which calls Store.ListActiveMeetings
-		// → api.KVList. Empty result means "no stale meetings".
+		// Reaper.Start() ticks immediately. The leader-election runs first
+		// (KVGet/KVSetWithOptions), then ListActiveMeetings (KVList). All
+		// .Maybe() because the goroutine may not have ticked before
+		// OnDeactivate cancels it.
+		api.On("KVGet", "reaper_leader").Return([]byte(nil), (*model.AppError)(nil)).Maybe()
+		api.On("KVSetWithOptions", "reaper_leader", mock.Anything, mock.AnythingOfType("model.PluginKVSetOptions")).
+			Return(true, (*model.AppError)(nil)).Maybe()
 		api.On("KVList", 0, 200).Return([]string{}, nil).Maybe()
 
 		p := &Plugin{}
