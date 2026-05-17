@@ -4,10 +4,8 @@ import {useDispatch, useSelector, useStore} from 'react-redux';
 import {startConferenceConnection} from '../../conference/controller';
 import {activeMeetingDismissed, type ActiveMeeting} from '../../store/slice_active_meetings';
 import {useT} from '../../util/i18n';
-import {PLUGIN_STATE_KEY, selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
+import {selectCurrentDisplayName, selectSessionStatus, selectCurrentChannelId, selectChannelType, selectActiveMeetingsByChannelID, selectChannelID} from '../../util/selectors';
 import {PhoneIcon} from '../icons';
-
-const stateKey = PLUGIN_STATE_KEY;
 
 const toastStyle: React.CSSProperties = {
     position: 'fixed',
@@ -56,21 +54,14 @@ const ChannelCallToast: React.FC = () => {
     const store = useStore();
     const t = useT();
 
+    const currentChannelID = useSelector(selectCurrentChannelId);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const currentChannelID = useSelector((s: any) => s?.entities?.channels?.currentChannelId as string | undefined);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const channelType = useSelector((s: any) => s?.entities?.channels?.channels?.[currentChannelID ?? '']?.type as string | undefined);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const meeting = useSelector((s: any): ActiveMeeting | null => {
-        if (!currentChannelID) {
-            return null;
-        }
-        return s?.[stateKey]?.activeMeetings?.byChannelID?.[currentChannelID] ?? null;
-    });
+    const channelType = useSelector((s: any) => selectChannelType(s, currentChannelID));
+    const activeMeetings = useSelector(selectActiveMeetingsByChannelID);
+    const meeting: ActiveMeeting | null = currentChannelID ? (activeMeetings[currentChannelID] ?? null) : null;
 
     const sessionStatus = useSelector(selectSessionStatus);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sessionChannelID = useSelector((s: any) => s?.[stateKey]?.session?.channelID as string | undefined);
+    const sessionChannelID = useSelector(selectChannelID);
 
     if (!meeting || meeting.dismissed) {
         return null;

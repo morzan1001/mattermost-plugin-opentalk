@@ -11,7 +11,8 @@ import OpenTalkIcon from './components/channel_header_button/icon';
 import ExpandedView from './components/expanded_view/component';
 import MeetingMiniBar from './components/meeting_mini_bar/component';
 import PostTypeMeeting from './components/post_type_meeting/component';
-import {id as pluginId} from './manifest';
+import manifest from './manifest';
+const pluginId: string = manifest.id;
 import reducer from './store/reducer';
 import {PluginRegistry} from './types/mattermost-webapp';
 import {setConnected} from './store/slice_oauth';
@@ -79,12 +80,8 @@ const incomingCallFreshnessMs = 30000;
 // Default ON. User can opt out via the Settings modal, /opentalk ring off,
 // or window.opentalk.ringtone(false).
 function ringtoneEnabled(): boolean {
-    if (typeof window === 'undefined') {
-        return true;
-    }
     try {
-        const v = window.localStorage.getItem(ringtoneSettingKey);
-        return v !== 'false';
+        return window.localStorage.getItem(ringtoneSettingKey) !== 'false';
     } catch {
         return true;
     }
@@ -119,7 +116,6 @@ export default class Plugin {
         initDeviceCache();
 
         // Browser-devtools handle: window.opentalk.state() / toggleMic() etc.
-        // Kept in production builds — read-only-ish, same APIs as the React tree.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).opentalk = {
             state: debugState,
@@ -129,7 +125,6 @@ export default class Plugin {
             leave: leaveActiveConference,
             end: endActiveMeeting,
 
-            // Persists to localStorage. Returns the new state.
             ringtone: (enabled: boolean): boolean => {
                 try {
                     window.localStorage.setItem(ringtoneSettingKey, enabled ? 'true' : 'false');
@@ -196,13 +191,21 @@ export default class Plugin {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const myId: string | undefined = (store.getState() as any)?.entities?.users?.currentUserId;
 
-                if (!ringtoneEnabled()) {
-                    return;
-                }
-                if (myId && msg.data.host_user_id === myId) {
-                    return;
-                }
-                if (typeof createdAt !== 'number' || ageMs > incomingCallFreshnessMs) {
+                const ownCall = Boolean(myId && msg.data.host_user_id === myId);
+                const stale = typeof createdAt !== 'number' || ageMs > incomingCallFreshnessMs;
+                // Verbose-level only; visible when devtools is set to Verbose.
+                // eslint-disable-next-line no-console
+                console.debug('[opentalk] incoming_call received', {
+                    channel_id: msg.data.channel_id,
+                    host_user_id: msg.data.host_user_id,
+                    my_id: myId,
+                    age_ms: ageMs,
+                    own_call: ownCall,
+                    stale,
+                    will_dispatch: !ownCall && !stale,
+                });
+
+                if (ownCall || stale) {
                     return;
                 }
 

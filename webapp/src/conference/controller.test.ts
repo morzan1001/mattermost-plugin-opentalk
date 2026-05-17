@@ -274,7 +274,12 @@ describe('"connected" client event', () => {
         // Heartbeat timer started
         expect(jest.getTimerCount()).toBeGreaterThan(0);
 
-        // setOpenTalkStatus PUT
+        // setOpenTalkStatus first GETs /api/v4/users/me to snapshot the
+        // user's prior status, then PUTs the OpenTalk one — flush both
+        // microtasks before asserting.
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
         expect(mockFetch).toHaveBeenCalledWith(
             '/api/v4/users/me/status/custom',
             expect.objectContaining({method: 'PUT'}),

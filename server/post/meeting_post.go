@@ -73,21 +73,24 @@ const (
 )
 
 // BuildMeetingPost returns the initial bot post for a freshly-created meeting.
+// hostUsername is the actual MM username (drives @-mentions in the webapp);
+// hostDisplayName is the human-readable name (shown in attachments and missed-call text).
 // isDM controls whether the Decline action button is included on the attachment.
-func BuildMeetingPost(am *store.ActiveMeeting, frontendURL, hostUsername, locale string, isDM bool) *model.Post {
+func BuildMeetingPost(am *store.ActiveMeeting, frontendURL, hostUsername, hostDisplayName, locale string, isDM bool) *model.Post {
 	msg := i18n.T(locale, i18n.Translatable{
 		DE: "OpenTalk-Meeting",
 		EN: "OpenTalk meeting",
 	})
 
 	props := model.StringInterface{
-		"room_id":       am.RoomID,
-		"invite_code":   am.InviteCode,
-		"host_user_id":  am.HostUserID,
-		"host_username": hostUsername,
-		"frontend_url":  frontendURL,
-		"status":        "STARTED",
-		"started_at":    am.CreatedAt.Unix(),
+		"room_id":           am.RoomID,
+		"invite_code":       am.InviteCode,
+		"host_user_id":      am.HostUserID,
+		"host_username":     hostUsername,
+		"host_display_name": hostDisplayName,
+		"frontend_url":      frontendURL,
+		"status":            "STARTED",
+		"started_at":        am.CreatedAt.Unix(),
 	}
 	if am.EnableSIP {
 		if am.DialInNumber != "" {
@@ -97,7 +100,7 @@ func BuildMeetingPost(am *store.ActiveMeeting, frontendURL, hostUsername, locale
 			props["dial_in_pin"] = am.DialInPIN
 		}
 	}
-	props["attachments"] = buildStartedAttachment(am, frontendURL, hostUsername, locale, isDM)
+	props["attachments"] = buildStartedAttachment(am, frontendURL, hostDisplayName, locale, isDM)
 
 	return &model.Post{
 		ChannelId: am.ChannelID,
@@ -108,7 +111,8 @@ func BuildMeetingPost(am *store.ActiveMeeting, frontendURL, hostUsername, locale
 }
 
 // buildStartedAttachment returns the Slack-style card for the initial meeting post.
-func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostUsername, locale string, isDM bool) []*model.SlackAttachment {
+// hostDisplayName is used here because attachments are visual fallbacks (mattermost-mobile).
+func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostDisplayName, locale string, isDM bool) []*model.SlackAttachment {
 	inviteURL := fmt.Sprintf("%s/invite/%s", frontendURL, am.InviteCode)
 	startedAt := am.CreatedAt
 
@@ -117,7 +121,7 @@ func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostUsername, 
 		EN: "OpenTalk meeting",
 	})
 
-	hostLine := fmt.Sprintf("Host: %s", hostUsername)
+	hostLine := fmt.Sprintf("Host: %s", hostDisplayName)
 	startedLine := i18n.T(locale, i18n.Translatable{
 		DE: "Gestartet " + formatRelativeAge(startedAt, locale),
 		EN: "Started " + formatRelativeAge(startedAt, locale),
@@ -218,7 +222,10 @@ func ApplyMissedStatus(p *model.Post, when time.Time) {
 
 // rebuildAttachmentForStatus rewrites props.attachments; rebuilt attachments are always English (caller-locale unknown at update time).
 func rebuildAttachmentForStatus(p *model.Post, status string, when time.Time, durationSeconds int64) {
-	hostUsername, _ := p.GetProp("host_username").(string)
+	hostName, _ := p.GetProp("host_display_name").(string)
+	if hostName == "" {
+		hostName, _ = p.GetProp("host_username").(string)
+	}
 
 	if status == "ENDED" {
 		text := "Ended " + formatRelativeAge(when, "en") + "."
@@ -235,7 +242,7 @@ func rebuildAttachmentForStatus(p *model.Post, status string, when time.Time, du
 
 	p.AddProp("attachments", []*model.SlackAttachment{{
 		Title: "OpenTalk meeting (missed)",
-		Text:  fmt.Sprintf("Missed call from %s.", hostUsername),
+		Text:  fmt.Sprintf("Missed call from %s.", hostName),
 		Color: "#9e9e9e",
 	}})
 }

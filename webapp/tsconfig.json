@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     "target": "esnext",
-    "baseUrl": "./src",
     "lib": [
       "dom",
       "dom.iterable",
@@ -14,8 +13,8 @@
     "strict": true,
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,

@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useDispatch, useSelector, useStore} from 'react-redux';
 
 import {dismissIncomingCall} from '../../client/rest';
@@ -9,10 +9,17 @@ import {
     incomingCallCleared,
     type IncomingCall,
 } from '../../store/slice_incoming_calls';
+import {ringtoneSettingKey} from '../../user_settings';
 import {useT} from '../../util/i18n';
-import {PLUGIN_STATE_KEY, selectCurrentDisplayName, selectSessionStatus} from '../../util/selectors';
+import {selectCurrentDisplayName, selectSessionStatus, selectIncomingCallsByChannelID} from '../../util/selectors';
 
-const stateKey = PLUGIN_STATE_KEY;
+function isRingtoneEnabled(): boolean {
+    try {
+        return window.localStorage.getItem(ringtoneSettingKey) !== 'false';
+    } catch {
+        return true;
+    }
+}
 
 const IncomingCallModal: React.FC = () => {
     const dispatch = useDispatch();
@@ -23,18 +30,14 @@ const IncomingCallModal: React.FC = () => {
     const sessionStatus = useSelector(selectSessionStatus);
     const currentDisplayName = useSelector(selectCurrentDisplayName);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const call = useSelector((s: any): IncomingCall | null => {
-        const byChannelID = s?.[stateKey]?.incomingCalls?.byChannelID as Record<string, IncomingCall> | undefined;
-        if (!byChannelID) {
-            return null;
-        }
+    const byChannelID = useSelector(selectIncomingCallsByChannelID);
+    const call = useMemo<IncomingCall | null>(() => {
         const nonDismissed = Object.values(byChannelID).filter((c) => !c.dismissed);
         if (nonDismissed.length === 0) {
             return null;
         }
         return nonDismissed.reduce((latest, c) => (c.receivedAt > latest.receivedAt ? c : latest));
-    });
+    }, [byChannelID]);
 
     const [busy, setBusy] = useState(false);
     const [avatarError, setAvatarError] = useState(false);
@@ -42,10 +45,15 @@ const IncomingCallModal: React.FC = () => {
 
     // CRITICAL: always mounted as RootComponent — gate effects on isShowingCall
     // so the ringtone doesn't start at app-init when there's no incoming call.
+    // Hand off to SwitchCallModal for every non-idle state ('connecting',
+    // 'connected', 'leaving') so the two modals never overlap.
     const isShowingCall = call !== null && sessionStatus === 'idle';
 
     useEffect(() => {
         if (!isShowingCall) {
+            return undefined;
+        }
+        if (!isRingtoneEnabled()) {
             return undefined;
         }
         ringtone.start();
@@ -75,6 +83,15 @@ const IncomingCallModal: React.FC = () => {
         setAvatarError(false);
     }, [call?.hostUserID]);
 
+    // Persistent root component: busy/avatarError carry over between mounts
+    // of the same component instance. Reset them whenever a fresh call lands
+    // or the modal hides, otherwise the Accept/Decline buttons stay disabled
+    // for the next ring after the user accepted an earlier one.
+    useEffect(() => {
+        setBusy(false);
+        setAvatarError(false);
+    }, [isShowingCall, call?.channelID, call?.roomID]);
+
     const onDecline = async () => {
         if (!call) {
             return;
@@ -87,6 +104,8 @@ const IncomingCallModal: React.FC = () => {
         } catch (e) {
             // eslint-disable-next-line no-console
             console.warn('[opentalk] dismiss failed:', (e as Error).message);
+            setBusy(false);
+            return;
         }
 
         setTimeout(() => {
@@ -111,14 +130,20 @@ const IncomingCallModal: React.FC = () => {
         }
     };
 
+    // Keep the auto-decline pointed at the *current* onDecline closure even
+    // when the effect re-runs only on channelID change. Without this the
+    // 30s timeout captures whichever `call` object was live at mount time.
+    const onDeclineRef = useRef(onDecline);
+    useEffect(() => {
+        onDeclineRef.current = onDecline;
+    });
+
     useEffect(() => {
         if (!isShowingCall) {
             return undefined;
         }
-        const id = window.setTimeout(() => onDecline(), 30000);
+        const id = window.setTimeout(() => onDeclineRef.current(), 30000);
         return () => window.clearTimeout(id);
-
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isShowingCall, call?.channelID]);
 
     if (!isShowingCall || call === null) {

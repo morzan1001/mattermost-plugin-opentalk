@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/mattermost/mattermost/server/public/model"
+
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/crypto"
 )
 
 // ErrMeetingAlreadyActive is returned by callers that detect a live meeting
@@ -40,18 +44,12 @@ func meetingKey(channelID string) string {
 	return "meeting_" + channelID
 }
 
-func (s *Store) SaveActiveMeeting(am *ActiveMeeting) error {
-	raw, err := json.Marshal(am)
-	if err != nil {
-		return fmt.Errorf("marshal ActiveMeeting: %w", err)
-	}
-	return s.Set(meetingKey(am.ChannelID), raw, 0)
-}
-
-func (s *Store) LoadActiveMeeting(channelID string) (*ActiveMeeting, error) {
-	raw, err := s.Get(meetingKey(channelID))
-	if err != nil {
-		return nil, err
+// decodeActiveMeeting tries AES-GCM first and falls through to raw JSON, so
+// a key rotation or a wiped TokenEncryptionKey does not mask the meeting --
+// the reaper can still see and end it.
+func decodeActiveMeeting(encKey, raw []byte) (*ActiveMeeting, error) {
+	if plain, dErr := crypto.Decrypt(encKey, raw); dErr == nil {
+		raw = plain
 	}
 	var am ActiveMeeting
 	if err := json.Unmarshal(raw, &am); err != nil {
@@ -60,15 +58,58 @@ func (s *Store) LoadActiveMeeting(channelID string) (*ActiveMeeting, error) {
 	return &am, nil
 }
 
+func encodeActiveMeeting(encKey []byte, am *ActiveMeeting) ([]byte, error) {
+	raw, err := json.Marshal(am)
+	if err != nil {
+		return nil, fmt.Errorf("marshal ActiveMeeting: %w", err)
+	}
+	return crypto.Encrypt(encKey, raw)
+}
+
+func (s *Store) SaveActiveMeeting(encKey []byte, am *ActiveMeeting) error {
+	value, err := encodeActiveMeeting(encKey, am)
+	if err != nil {
+		return err
+	}
+	return s.Set(meetingKey(am.ChannelID), value, 0)
+}
+
+// CreateActiveMeetingAtomic persists am only if no meeting exists for the
+// same channel. Returns ErrMeetingAlreadyActive when another node won the
+// race. The Mattermost KV CAS guarantees this even across cluster nodes.
+func (s *Store) CreateActiveMeetingAtomic(encKey []byte, am *ActiveMeeting) error {
+	value, err := encodeActiveMeeting(encKey, am)
+	if err != nil {
+		return err
+	}
+	ok, appErr := s.api.KVSetWithOptions(meetingKey(am.ChannelID), value, model.PluginKVSetOptions{
+		Atomic:   true,
+		OldValue: nil,
+	})
+	if appErr != nil {
+		return appErr
+	}
+	if !ok {
+		return ErrMeetingAlreadyActive
+	}
+	return nil
+}
+
+func (s *Store) LoadActiveMeeting(encKey []byte, channelID string) (*ActiveMeeting, error) {
+	raw, err := s.Get(meetingKey(channelID))
+	if err != nil {
+		return nil, err
+	}
+	return decodeActiveMeeting(encKey, raw)
+}
+
 func (s *Store) DeleteActiveMeeting(channelID string) error {
 	return s.Delete(meetingKey(channelID))
 }
 
-// ListActiveMeetings enumerates every meeting_<channelID> KV entry by
-// paging through KVList. Used by the reaper to find stale heartbeats.
-// Returns nil + nil on empty, partial result + nil on per-key parse
-// errors (best-effort).
-func (s *Store) ListActiveMeetings() ([]*ActiveMeeting, error) {
+// ListActiveMeetings enumerates every meeting_<channelID> KV entry by paging
+// through KVList. Returns the partial list on per-key parse errors.
+func (s *Store) ListActiveMeetings(encKey []byte) ([]*ActiveMeeting, error) {
 	out := make([]*ActiveMeeting, 0, 8)
 	page := 0
 	const perPage = 200
@@ -88,11 +129,11 @@ func (s *Store) ListActiveMeetings() ([]*ActiveMeeting, error) {
 			if err != nil {
 				continue
 			}
-			var am ActiveMeeting
-			if jErr := json.Unmarshal(raw, &am); jErr != nil {
+			am, dErr := decodeActiveMeeting(encKey, raw)
+			if dErr != nil {
 				continue
 			}
-			out = append(out, &am)
+			out = append(out, am)
 		}
 		if len(keys) < perPage {
 			break
@@ -106,8 +147,8 @@ func dismissalKey(channelID, roomID string) string {
 	return "dismiss_" + channelID + "_" + roomID
 }
 
-// AddDismissal records that mmUserID has dismissed the call in (channelID, roomID).
-// Returns the full updated set of dismissing user-IDs.
+// AddDismissal records that mmUserID has dismissed the call in
+// (channelID, roomID) and returns the full updated set.
 func (s *Store) AddDismissal(channelID, roomID, mmUserID string) ([]string, error) {
 	set, _ := s.LoadDismissals(channelID, roomID)
 	seen := make(map[string]bool, len(set))

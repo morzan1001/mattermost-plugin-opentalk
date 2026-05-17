@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/crypto"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/opentalk"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
@@ -43,11 +44,12 @@ func TestMeetingsCreate_HappyPath(t *testing.T) {
 	defer otSrv.Close()
 
 	api := &plugintest.API{}
-	// Multi-call guard: MeetingsCreate now LoadActiveMeeting()s up front.
-	// Return nil ([]byte, nil-AppError) to signal "no existing meeting".
 	api.On("KVGet", mock.MatchedBy(func(k string) bool { return strings.HasPrefix(k, "meeting_") })).
 		Return([]byte(nil), (*model.AppError)(nil))
-	// SaveActiveMeeting fires twice (before + after bot-post id is set).
+	// CreateActiveMeetingAtomic uses KVSetWithOptions (atomic CAS); the
+	// follow-up SaveActiveMeeting after the bot post uses KVSetWithExpiry.
+	api.On("KVSetWithOptions", mock.MatchedBy(func(k string) bool { return strings.HasPrefix(k, "meeting_") }),
+		mock.Anything, mock.AnythingOfType("model.PluginKVSetOptions")).Return(true, (*model.AppError)(nil))
 	api.On("KVSetWithExpiry", mock.MatchedBy(func(k string) bool { return strings.HasPrefix(k, "meeting_") }),
 		mock.Anything, int64(0)).Return(nil)
 
@@ -71,7 +73,8 @@ func TestMeetingsCreate_HappyPath(t *testing.T) {
 			capturedPost = p
 			return p, nil
 		},
-		HostUsernameOf: func(_ string) string { return "alice" },
+		HostUsernameOf:    func(_ string) string { return "alice" },
+		HostDisplayNameOf: func(_ string) string { return "Alice Tester" },
 	}
 
 	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev"}`)
@@ -92,6 +95,7 @@ func TestMeetingsCreate_HappyPath(t *testing.T) {
 	require.NotNil(t, capturedPost, "expected bot-post to be created")
 	assert.Equal(t, "custom_opentalk_meeting", capturedPost.Type)
 	assert.Equal(t, "alice", capturedPost.GetProp("host_username"))
+	assert.Equal(t, "Alice Tester", capturedPost.GetProp("host_display_name"))
 	assert.Equal(t, "OpenTalk meeting", capturedPost.Message)
 	assert.Equal(t, "post-1", resp["post_id"])
 }
@@ -127,7 +131,8 @@ func TestMeetingsCreate_PropagatesAccessTokenError(t *testing.T) {
 	assert.Equal(t, nethttp.StatusUnauthorized, rr.Code)
 }
 
-func TestMeetingsJoin_RegisteredUserPath(t *testing.T) {
+// The host of the meeting takes the owner-only StartRoom endpoint.
+func TestMeetingsJoin_HostUsesStartRoom(t *testing.T) {
 	var receivedAuth, receivedPath string
 	otSrv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -142,17 +147,18 @@ func TestMeetingsJoin_RegisteredUserPath(t *testing.T) {
 	defer otSrv.Close()
 
 	api := &plugintest.API{}
-	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1"}
+	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1", HostUserID: "u1"}
 	raw, _ := json.Marshal(am)
 	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
 
 	h := &Handlers{
-		Store:          store.New(api),
-		OpenTalk:       opentalk.NewClient(otSrv.URL),
-		RoomserverURL:  "wss://rs.example",
-		AccessTokenFor: func(_ string) (string, error) { return "tok-xyz", nil },
-		IsConnected:    func(_ string) bool { return true },
-		UsernameOf:     func(_ string) string { return "alice" },
+		Store:           store.New(api),
+		OpenTalk:        opentalk.NewClient(otSrv.URL),
+		RoomserverURL:   "wss://rs.example",
+		AccessTokenFor:  func(_ string) (string, error) { return "tok-xyz", nil },
+		IsConnected:     func(_ string) bool { return true },
+		UsernameOf:      func(_ string) string { return "alice" },
+		IsChannelMember: func(_, _ string) bool { return true },
 	}
 
 	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev-1"}`)
@@ -171,6 +177,50 @@ func TestMeetingsJoin_RegisteredUserPath(t *testing.T) {
 	assert.Equal(t, "wss://rs.example", resp["roomserver_url"])
 	assert.Equal(t, "Bearer tok-xyz", receivedAuth)
 	assert.Equal(t, "/v1/rooms/room-1/start", receivedPath)
+}
+
+// A connected non-host takes StartInvited with the invite code -- StartRoom is
+// owner-only and would answer 403.
+func TestMeetingsJoin_ConnectedNonHostUsesStartInvited(t *testing.T) {
+	var receivedPath string
+	var receivedBody map[string]any
+	otSrv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == nethttp.MethodPost && r.URL.Path == "/v1/rooms/room-1/start_invited" {
+			receivedPath = r.URL.Path
+			json.NewDecoder(r.Body).Decode(&receivedBody)
+			w.Write([]byte(`{"ticket":"room-1#abc","resumption":"res-1"}`))
+			return
+		}
+		w.WriteHeader(nethttp.StatusNotFound)
+	}))
+	defer otSrv.Close()
+
+	api := &plugintest.API{}
+	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1", HostUserID: "u-host"}
+	raw, _ := json.Marshal(am)
+	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
+
+	h := &Handlers{
+		Store:           store.New(api),
+		OpenTalk:        opentalk.NewClient(otSrv.URL),
+		RoomserverURL:   "wss://rs.example",
+		IsConnected:     func(_ string) bool { return true },
+		UsernameOf:      func(_ string) string { return "alice" },
+		IsChannelMember: func(_, _ string) bool { return true },
+	}
+
+	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev-1"}`)
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-1/join", body)
+	req.Header.Set("Mattermost-User-ID", "u-other")
+	rr := httptest.NewRecorder()
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
+	router.ServeHTTP(rr, req)
+
+	require.Equal(t, nethttp.StatusOK, rr.Code, rr.Body.String())
+	assert.Equal(t, "/v1/rooms/room-1/start_invited", receivedPath)
+	assert.Equal(t, "inv-1", receivedBody["invite_code"])
 }
 
 func TestMeetingsJoin_GuestPathUsesInvite(t *testing.T) {
@@ -193,11 +243,12 @@ func TestMeetingsJoin_GuestPathUsesInvite(t *testing.T) {
 	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
 
 	h := &Handlers{
-		Store:         store.New(api),
-		OpenTalk:      opentalk.NewClient(otSrv.URL),
-		RoomserverURL: "wss://rs.example",
-		IsConnected:   func(_ string) bool { return false },
-		UsernameOf:    func(_ string) string { return "bob" },
+		Store:           store.New(api),
+		OpenTalk:        opentalk.NewClient(otSrv.URL),
+		RoomserverURL:   "wss://rs.example",
+		IsConnected:     func(_ string) bool { return false },
+		UsernameOf:      func(_ string) string { return "bob" },
+		IsChannelMember: func(_, _ string) bool { return true },
 	}
 
 	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev-2"}`)
@@ -219,7 +270,10 @@ func TestMeetingsJoin_NoActiveMeeting(t *testing.T) {
 	api := &plugintest.API{}
 	api.On("KVGet", "meeting_ch-x").Return([]byte(nil), nil)
 
-	h := &Handlers{Store: store.New(api)}
+	h := &Handlers{
+		Store:           store.New(api),
+		IsChannelMember: func(_, _ string) bool { return true },
+	}
 	body := strings.NewReader(`{"channel_id":"ch-x","device_secret":"dev"}`)
 	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-x/join", body)
 	req.Header.Set("Mattermost-User-ID", "u1")
@@ -236,7 +290,10 @@ func TestMeetingsJoin_RoomMismatch(t *testing.T) {
 	raw, _ := json.Marshal(am)
 	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
 
-	h := &Handlers{Store: store.New(api)}
+	h := &Handlers{
+		Store:           store.New(api),
+		IsChannelMember: func(_, _ string) bool { return true },
+	}
 	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev"}`)
 	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-WRONG/join", body)
 	req.Header.Set("Mattermost-User-ID", "u1")
@@ -245,6 +302,21 @@ func TestMeetingsJoin_RoomMismatch(t *testing.T) {
 	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
 	router.ServeHTTP(rr, req)
 	assert.Equal(t, nethttp.StatusBadRequest, rr.Code)
+}
+
+func TestMeetingsJoin_RejectsNonMember(t *testing.T) {
+	h := &Handlers{
+		IsChannelMember: func(_, _ string) bool { return false },
+	}
+	body := strings.NewReader(`{"channel_id":"ch-priv","device_secret":"dev"}`)
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-1/join", body)
+	req.Header.Set("Mattermost-User-ID", "outsider")
+	rr := httptest.NewRecorder()
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
+	router.ServeHTTP(rr, req)
+	assert.Equal(t, nethttp.StatusForbidden, rr.Code,
+		"non-members must not receive a guest ticket for a channel they cannot see")
 }
 
 func TestMeetingsJoin_RejectsMissingUserHeader(t *testing.T) {
@@ -281,7 +353,8 @@ func TestMeetingsHeartbeat_FlipsHostHeartbeatReceived(t *testing.T) {
 		Run(func(args mock.Arguments) { saved = args.Get(1).([]byte) }).
 		Return(nil)
 
-	h := &Handlers{Store: store.New(api)}
+	encKey := []byte("0123456789abcdef0123456789abcdef")
+	h := &Handlers{Store: store.New(api), EncryptionKey: encKey}
 
 	body, _ := json.Marshal(map[string]string{"channel_id": "ch-1"})
 	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/heartbeat", bytes.NewReader(body))
@@ -291,8 +364,10 @@ func TestMeetingsHeartbeat_FlipsHostHeartbeatReceived(t *testing.T) {
 
 	assert.Equal(t, nethttp.StatusNoContent, rr.Code)
 
+	plain, err := crypto.Decrypt(encKey, saved)
+	require.NoError(t, err, "saved meeting must be encrypted at rest")
 	var got store.ActiveMeeting
-	require.NoError(t, json.Unmarshal(saved, &got))
+	require.NoError(t, json.Unmarshal(plain, &got))
 	assert.True(t, got.HostHeartbeatReceived,
 		"first host heartbeat must flip the flag")
 	assert.False(t, got.LastHeartbeat.IsZero(), "LastHeartbeat must be advanced")
@@ -324,8 +399,10 @@ func TestMeetingsPostActionEnd_Host(t *testing.T) {
 			}}, nil
 		},
 		PostUpdater: func(p *model.Post) error { return nil },
-		BroadcastFunc: func(event string, _ map[string]any) {
+		BroadcastFunc: func(event string, _ map[string]any, b *model.WebsocketBroadcast) {
 			broadcasts = append(broadcasts, event)
+			require.NotNil(t, b, "broadcast scope must be set")
+			require.Equal(t, "ch-1", b.ChannelId, "meeting_ended must be channel-scoped")
 		},
 	}
 
@@ -404,8 +481,9 @@ func TestMeetingsPostActionDismiss_StillLive(t *testing.T) {
 	}), mock.Anything, mock.AnythingOfType("int64")).Return(nil)
 
 	h := &Handlers{
-		Store:         store.New(api),
-		BroadcastFunc: func(string, map[string]any) {},
+		Store:           store.New(api),
+		BroadcastFunc:   func(string, map[string]any, *model.WebsocketBroadcast) {},
+		IsChannelMember: func(_, _ string) bool { return true },
 		ChannelMembersOf: func(string) []string {
 			return []string{"host-uid", "alice", "bob"}
 		},
@@ -452,8 +530,9 @@ func TestMeetingsPostActionDismiss_FlipsMissed(t *testing.T) {
 	})).Return(nil)
 
 	h := &Handlers{
-		Store:         store.New(api),
-		BroadcastFunc: func(string, map[string]any) {},
+		Store:           store.New(api),
+		BroadcastFunc:   func(string, map[string]any, *model.WebsocketBroadcast) {},
+		IsChannelMember: func(_, _ string) bool { return true },
 		ChannelMembersOf: func(string) []string {
 			return []string{"host-uid", "alice"}
 		},
@@ -514,7 +593,7 @@ func TestEndMeetingFor_DeleteInviteFailureIsNonFatal(t *testing.T) {
 		Store:          store.New(api),
 		OpenTalk:       opentalk.NewClient(otSrv.URL),
 		AccessTokenFor: func(_ string) (string, error) { return "tok", nil },
-		BroadcastFunc: func(event string, _ map[string]any) {
+		BroadcastFunc: func(event string, _ map[string]any, _ *model.WebsocketBroadcast) {
 			broadcasts = append(broadcasts, event)
 		},
 	}

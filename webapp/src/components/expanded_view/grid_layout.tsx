@@ -4,14 +4,11 @@ import {useSelector} from 'react-redux';
 import {ParticipantTile} from './participant_tile';
 
 import {useT} from '../../util/i18n';
-import {PLUGIN_STATE_KEY} from '../../util/selectors';
-
-const stateKey = PLUGIN_STATE_KEY;
+import {selectParticipantOrder} from '../../util/selectors';
 
 export const GridLayout: React.FC = () => {
     const t = useT();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const order = useSelector((s: any) => s?.[stateKey]?.participants?.order ?? [] as string[]);
+    const order = useSelector(selectParticipantOrder);
 
     if (order.length === 0) {
         return (

@@ -3,9 +3,7 @@ import {useSelector} from 'react-redux';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
 import type {ParticipantInfo} from '../../store/slice_participants';
-import {PLUGIN_STATE_KEY} from '../../util/selectors';
-
-const stateKey = PLUGIN_STATE_KEY;
+import {selectParticipantOrder, selectParticipantsById, selectTracksPerParticipant, selectLocalParticipantId} from '../../util/selectors';
 
 const MAX_VISIBLE = 4;
 
@@ -123,17 +121,10 @@ const Tile: React.FC<{participant: ParticipantInfo; videoTrackId?: string}> = ({
 };
 
 export const TileStrip: React.FC = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allOrder = useSelector((s: any) => s[stateKey]?.participants?.order ?? [] as string[]);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const byId = useSelector((s: any) => s[stateKey]?.participants?.byId ?? {});
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const perParticipant = useSelector((s: any) => s[stateKey]?.tracks?.perParticipant ?? {});
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const localId: string | undefined = useSelector((s: any) => s[stateKey]?.session?.localParticipantId);
+    const allOrder = useSelector(selectParticipantOrder);
+    const byId = useSelector(selectParticipantsById);
+    const perParticipant = useSelector(selectTracksPerParticipant);
+    const localId = useSelector(selectLocalParticipantId);
 
     const order: string[] = localId ? allOrder.filter((id: string) => id !== localId) : allOrder;
     const total = order.length;

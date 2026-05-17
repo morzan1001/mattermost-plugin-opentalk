@@ -10,12 +10,12 @@ export interface ConnectedEvent {
     isHost: boolean;
 }
 
-export interface LiveKitCredentialsEvent {
+interface LiveKitCredentialsEvent {
     url: string;
     token: string;
 }
 
-export type ConferenceEvent =
+type ConferenceEvent =
     | 'connected'
     | 'participant_joined'
     | 'participant_left'
@@ -27,7 +27,7 @@ export type ConferenceEvent =
     | 'error';
 
 const restAuth: AuthProvider = {
-    async getTicket(roomID, channelID, deviceSecret, _displayName) {
+    async getTicket(roomID, channelID, deviceSecret) {
         const r = await joinMeeting(roomID, channelID, deviceSecret);
         return {
             ticket: r.ticket,

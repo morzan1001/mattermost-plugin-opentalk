@@ -5,7 +5,7 @@
     "homepage_url": "https://gitlab.opencode.de/opentalk",
     "support_url": "https://gitlab.opencode.de/opentalk",
     "icon_path": "assets/icon.svg",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "min_server_version": "9.0.0",
     "server": {
         "executables": {
@@ -38,10 +38,6 @@
                     {"key": "OpenTalkRoomserverURL", "type": "text",
                      "display_name": "Roomserver URL (WebSocket)",
                      "help_text": "Base WebSocket URL of the OpenTalk Roomserver, e.g. wss://controller.opentalk.example. The plugin appends /v1/signaling/<ticket>.",
-                     "default": ""},
-                    {"key": "LiveKitURL", "type": "text",
-                     "display_name": "LiveKit URL (optional override)",
-                     "help_text": "Override LiveKit endpoint. Leave empty to use what the Roomserver returns via the livekit signaling module.",
                      "default": ""}
                 ]
             },
@@ -76,8 +72,6 @@
                      "display_name": "Enable SIP dial-in by default", "default": false},
                     {"key": "DefaultWaitingRoom", "type": "bool",
                      "display_name": "Enable waiting room by default", "default": false},
-                    {"key": "EnableRinging", "type": "bool",
-                     "display_name": "Ring on DM calls (push notification)", "default": true},
                     {"key": "InviteExpirationHours", "type": "number",
                      "display_name": "Invite expiration (hours)", "default": 24}
                 ]

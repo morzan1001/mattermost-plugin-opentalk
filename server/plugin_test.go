@@ -26,8 +26,13 @@ func TestPlugin_OnActivate(t *testing.T) {
 			return cmd.Trigger == "opentalk"
 		})).Return(nil)
 
-		// Reaper.Start() ticks immediately, which calls Store.ListActiveMeetings
-		// → api.KVList. Empty result means "no stale meetings".
+		// Reaper.Start() ticks immediately. The leader-election runs first
+		// (KVGet/KVSetWithOptions), then ListActiveMeetings (KVList). All
+		// .Maybe() because the goroutine may not have ticked before
+		// OnDeactivate cancels it.
+		api.On("KVGet", "reaper_leader").Return([]byte(nil), (*model.AppError)(nil)).Maybe()
+		api.On("KVSetWithOptions", "reaper_leader", mock.Anything, mock.AnythingOfType("model.PluginKVSetOptions")).
+			Return(true, (*model.AppError)(nil)).Maybe()
 		api.On("KVList", 0, 200).Return([]string{}, nil).Maybe()
 
 		p := &Plugin{}
@@ -86,7 +91,7 @@ func TestPlugin_AccessTokenFor_ReturnsCachedTokenIfStillValid(t *testing.T) {
 	p.SetAPI(api)
 	p.client = pluginapi.NewClient(api, nil)
 	p.store = store.New(api)
-	p.setConfiguration(&Configuration{TokenEncryptionKey: string(testEncKey)})
+	p.setConfigurationAndClient(&Configuration{TokenEncryptionKey: string(testEncKey)}, nil)
 
 	tok, err := p.accessTokenFor("u1")
 	require.NoError(t, err)
@@ -101,7 +106,7 @@ func TestPlugin_AccessTokenFor_PropagatesNotFound(t *testing.T) {
 	p.SetAPI(api)
 	p.client = pluginapi.NewClient(api, nil)
 	p.store = store.New(api)
-	p.setConfiguration(&Configuration{TokenEncryptionKey: string(testEncKey)})
+	p.setConfigurationAndClient(&Configuration{TokenEncryptionKey: string(testEncKey)}, nil)
 
 	_, err := p.accessTokenFor("absent-user")
 	require.Error(t, err)

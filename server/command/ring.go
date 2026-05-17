@@ -28,7 +28,7 @@ func (h *Handler) ring(args *model.CommandArgs) (*model.CommandResponse, *model.
 			h.Broadcaster("ring_setting_changed", map[string]any{
 				"mm_user_id": args.UserId,
 				"enabled":    true,
-			})
+			}, &model.WebsocketBroadcast{UserId: args.UserId})
 		}
 		return ephemeral(i18n.T(locale, i18n.Translatable{
 			DE: "Klingelton eingeschaltet.",
@@ -40,7 +40,7 @@ func (h *Handler) ring(args *model.CommandArgs) (*model.CommandResponse, *model.
 			h.Broadcaster("ring_setting_changed", map[string]any{
 				"mm_user_id": args.UserId,
 				"enabled":    false,
-			})
+			}, &model.WebsocketBroadcast{UserId: args.UserId})
 		}
 		return ephemeral(i18n.T(locale, i18n.Translatable{
 			DE: "Klingelton ausgeschaltet.",

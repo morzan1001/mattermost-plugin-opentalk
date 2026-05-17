@@ -14,7 +14,6 @@ type Configuration struct {
 	OpenTalkControllerURL string
 	OpenTalkFrontendURL   string
 	OpenTalkRoomserverURL string
-	LiveKitURL            string
 
 	OIDCAuthority    string
 	OIDCClientID     string
@@ -25,7 +24,6 @@ type Configuration struct {
 
 	DefaultEnableSIP      bool
 	DefaultWaitingRoom    bool
-	EnableRinging         bool
 	InviteExpirationHours int
 }
 
@@ -71,7 +69,10 @@ func (p *Plugin) getConfiguration() *Configuration {
 	return p.configuration
 }
 
-func (p *Plugin) setConfiguration(configuration *Configuration) {
+// setConfigurationAndClient publishes the new configuration and the matching
+// OpenTalk client under a single lock acquisition so concurrent readers never
+// observe a (new config, old client) or (old config, new client) pair.
+func (p *Plugin) setConfigurationAndClient(configuration *Configuration, ot *opentalk.Client) {
 	p.configurationLock.Lock()
 	defer p.configurationLock.Unlock()
 	if configuration != nil && p.configuration == configuration {
@@ -81,6 +82,7 @@ func (p *Plugin) setConfiguration(configuration *Configuration) {
 		panic("setConfiguration called with the existing configuration")
 	}
 	p.configuration = configuration
+	p.otClient = ot
 }
 
 func (p *Plugin) OnConfigurationChange() error {
@@ -94,14 +96,8 @@ func (p *Plugin) OnConfigurationChange() error {
 		return fmt.Errorf("invalid plugin configuration: %w", err)
 	}
 
-	p.setConfiguration(configuration)
-
-	// Hoist the OpenTalk client so both ServeHTTP and CreateMeeting share one
-	// instance. The client is stateless so a hot swap on config change is safe;
-	// guard the write behind the existing configurationLock.
-	p.configurationLock.Lock()
-	p.otClient = opentalk.NewClient(configuration.OpenTalkControllerURL)
-	p.configurationLock.Unlock()
+	ot := opentalk.NewClient(configuration.OpenTalkControllerURL)
+	p.setConfigurationAndClient(configuration, ot)
 
 	redirectURL := fmt.Sprintf("%s/plugins/%s/oauth/callback", p.getSiteURL(), pluginID)
 	client, err := oidc.NewClient(context.Background(), oidc.Config{

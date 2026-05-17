@@ -7,6 +7,10 @@ import incomingCallURL from '../sounds/incoming_call.ogg';
 export function useRingtone(): {start: () => void; stop: () => void} {
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
+    // Fully dispose the audio element on stop. Just calling pause() leaves
+    // the element in the browser's Media Session stack -- a later play-key
+    // press on the keyboard or headset then routes to our ringtone instead
+    // of resuming whatever the user had playing (Spotify, YouTube, ...).
     const stop = () => {
         const a = audioRef.current;
         if (!a) {
@@ -14,10 +18,18 @@ export function useRingtone(): {start: () => void; stop: () => void} {
         }
         a.pause();
         a.currentTime = 0;
+        a.removeAttribute('src');
+        try {
+            a.load();
+        } catch {
+            // older browsers throw when load() is called on a sourceless
+            // element; the goal (dropping the media source) is already met.
+        }
+        audioRef.current = null;
     };
 
     const start = () => {
-        if (typeof window === 'undefined' || typeof Audio === 'undefined') {
+        if (typeof Audio === 'undefined') {
             return;
         }
         if (!audioRef.current) {
@@ -29,15 +41,14 @@ export function useRingtone(): {start: () => void; stop: () => void} {
         const a = audioRef.current;
         a.currentTime = 0;
         a.play().catch(() => {
-            // autoplay denied (no user gesture); silent failure is fine —
-            // the visual modal still alerts the user.
+            // autoplay denied (no user gesture); the visual modal still
+            // alerts the user.
         });
     };
 
     useEffect(() => {
         return () => {
             stop();
-            audioRef.current = null;
         };
     }, []);
 

@@ -1,7 +1,6 @@
 package http
 
 import (
-	"fmt"
 	nethttp "net/http"
 	"time"
 
@@ -19,33 +18,48 @@ type Handlers struct {
 	Store         *store.Store
 	OIDC          *oidc.Client
 	EncryptionKey []byte
-	BroadcastFunc func(event string, payload map[string]any)
+	BroadcastFunc func(event string, payload map[string]any, broadcast *model.WebsocketBroadcast)
 
 	OpenTalk       *opentalk.Client
 	RoomserverURL  string
 	Defaults       MeetingDefaults
 	AccessTokenFor func(mmUserID string) (string, error)
 
-	BotUserID      string
-	FrontendURL    string
-	CreatePost     func(*model.Post) (*model.Post, error)
+	BotUserID   string
+	FrontendURL string
+	CreatePost  func(*model.Post) (*model.Post, error)
+	// HostUsernameOf returns the actual MM Username (drives @-mentions).
 	HostUsernameOf func(mmUserID string) string
-	// LocaleOf returns the MM locale string for a given user ID. Used to
-	// select the language of the bot-post fallback message in BuildMeetingPost.
-	// Returns "" on any error, which i18n.T treats as English.
+	// HostDisplayNameOf returns the human-readable display name
+	// (nickname > first+last > username).
+	HostDisplayNameOf func(mmUserID string) string
+	// LocaleOf returns the MM locale string for a user. Empty string is
+	// treated as English by i18n.T.
 	LocaleOf func(mmUserID string) string
 
-	// IsConnected / UsernameOf: join endpoint dispatches between StartRoom
-	// (registered user) and StartInvited (guest) based on KV store presence.
+	// IsConnected distinguishes registered users from guests.
 	IsConnected func(mmUserID string) bool
 	UsernameOf  func(mmUserID string) string
 
 	PostGetter  func(postID string) (*model.Post, error)
 	PostUpdater func(p *model.Post) error
 
-	// Dismiss endpoint uses ChannelMembersOf to detect when all DM recipients
-	// have declined and auto-transitions the meeting to MISSED.
 	ChannelMembersOf func(channelID string) []string
+
+	// IsChannelMember gates access to endpoints that expose channel-private
+	// data (join ticket, dismiss). Returns false on any error so callers fail
+	// closed.
+	IsChannelMember func(channelID, mmUserID string) bool
+
+	// AcquireChannelLock serialises in-process operations on the same
+	// channel; the returned release func must be deferred by the caller.
+	AcquireChannelLock func(channelID string) (release func())
+
+	// NotifyMeetingStarted broadcasts the per-channel notification a freshly
+	// created (or re-joined) meeting needs: incoming_call + push for DMs,
+	// meeting_started for channels. Implemented by the Plugin because the
+	// payload needs access to GetUser/GetChannel and the push API.
+	NotifyMeetingStarted func(am *store.ActiveMeeting)
 
 	// IsDMChannel returns true if the given channel is a direct or group channel.
 	IsDMChannel func(channelID string) bool
@@ -70,7 +84,7 @@ func (h *Handlers) OAuthStart(w nethttp.ResponseWriter, r *nethttp.Request) {
 	}
 	state := uuid.New().String()
 	if err := h.Store.SaveOAuthState(state, mmUserID); err != nil {
-		nethttp.Error(w, fmt.Sprintf("save state: %v", err), nethttp.StatusInternalServerError)
+		h.internalError(w, "OAuthStart: SaveOAuthState", err, nethttp.StatusInternalServerError, "save state failed")
 		return
 	}
 	nethttp.Redirect(w, r, h.OIDC.AuthCodeURL(state), nethttp.StatusFound)
@@ -104,7 +118,7 @@ func (h *Handlers) OAuthCallback(w nethttp.ResponseWriter, r *nethttp.Request) {
 
 	tok, info, err := h.OIDC.Exchange(r.Context(), code)
 	if err != nil {
-		nethttp.Error(w, "code exchange failed: "+err.Error(), nethttp.StatusBadGateway)
+		h.internalError(w, "OAuthCallback: code exchange", err, nethttp.StatusBadGateway, "code exchange failed")
 		return
 	}
 
@@ -118,7 +132,7 @@ func (h *Handlers) OAuthCallback(w nethttp.ResponseWriter, r *nethttp.Request) {
 		ConnectedAt:      time.Now().UTC(),
 	})
 	if saveErr != nil {
-		nethttp.Error(w, "store user info: "+saveErr.Error(), nethttp.StatusInternalServerError)
+		h.internalError(w, "OAuthCallback: SaveUserInfo", saveErr, nethttp.StatusInternalServerError, "store user info failed")
 		return
 	}
 
@@ -127,7 +141,7 @@ func (h *Handlers) OAuthCallback(w nethttp.ResponseWriter, r *nethttp.Request) {
 			"mm_user_id": mmUserID,
 			"connected":  true,
 			"email":      info.Email,
-		})
+		}, &model.WebsocketBroadcast{UserId: mmUserID})
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

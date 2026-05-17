@@ -75,7 +75,6 @@ export function useResizable(opts: ResizeOpts): UseResizableResult {
 
     const [isResizing, setIsResizing] = useState(false);
 
-    // Refs for resize-start coords — no re-renders needed for these
     const resizeStartRef = useRef<{
         pointerX: number;
         pointerY: number;
@@ -83,7 +82,6 @@ export function useResizable(opts: ResizeOpts): UseResizableResult {
         startHeight: number;
     } | null>(null);
 
-    // Refs for event handlers so we can remove the exact same function reference
     const onPointerMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
     const onPointerUpRef = useRef<((e: MouseEvent) => void) | null>(null);
 
@@ -98,7 +96,6 @@ export function useResizable(opts: ResizeOpts): UseResizableResult {
         }
     }, []);
 
-    // Cleanup window listeners on unmount (in case mid-resize)
     useEffect(() => {
         return () => {
             removeWindowListeners();
@@ -110,8 +107,8 @@ export function useResizable(opts: ResizeOpts): UseResizableResult {
             const startPointerX = e.pageX;
             const startPointerY = e.pageY;
 
-            // Read current size from state via functional update trick
-            // We use resizeStartRef to store current widget size
+            // Functional update lets us read the current size without
+            // adding it to the useCallback dep list.
             setSize((current) => {
                 resizeStartRef.current = {
                     pointerX: startPointerX,

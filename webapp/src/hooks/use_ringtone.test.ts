@@ -9,6 +9,8 @@ class FakeAudio {
     currentTime = 0;
     play = jest.fn().mockResolvedValue(undefined);
     pause = jest.fn();
+    removeAttribute = jest.fn();
+    load = jest.fn();
 
     constructor(src: string) {
         this.src = src;
@@ -131,6 +133,27 @@ describe('useRingtone', () => {
 
         expect(captured).not.toBeNull();
         expect(captured!.pause).toHaveBeenCalled();
+    });
+
+    it('stop() drops the media source so play-keys cannot re-trigger the ringtone', () => {
+        let captured: FakeAudio | null = null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).Audio = jest.fn().mockImplementation((src: string) => {
+            captured = new FakeAudio(src);
+            return captured;
+        });
+
+        const {result} = renderHook(() => useRingtone());
+
+        act(() => {
+            result.current.start();
+        });
+        act(() => {
+            result.current.stop();
+        });
+
+        expect(captured!.removeAttribute).toHaveBeenCalledWith('src');
+        expect(captured!.load).toHaveBeenCalled();
     });
 
     it('play() rejection is swallowed (autoplay denied)', () => {

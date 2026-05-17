@@ -9,7 +9,6 @@ export interface LeaveCallModalProps {
     onEndForAll: () => void;
 }
 
-// Renders as a centered fixed overlay so it works in both the mini-bar and expanded-view contexts.
 export const LeaveCallModal: React.FC<LeaveCallModalProps> = ({open, onClose, onLeaveOnly, onEndForAll}) => {
     const t = useT();
 

@@ -10,6 +10,7 @@ interface PostProps {
     room_id: string;
     invite_code: string;
     host_username: string;
+    host_display_name?: string;
     frontend_url: string;
     status: 'STARTED' | 'ENDED' | 'MISSED';
     started_at: number;
@@ -33,7 +34,6 @@ const formatDuration = (seconds: number): string => {
     return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
-// OpenTalk brand teal — used for the accent stripe and live-badge.
 const opentalkTeal = '#00B59C';
 const opentalkTealDark = '#008F7A';
 
@@ -158,8 +158,7 @@ const PostTypeMeeting: React.FC<Props> = ({post}) => {
         if (inMeetingAlready) {
             return;
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const channelID = (post as any).channel_id ?? '';
+        const channelID = post.channel_id ?? '';
         startConferenceConnection(p.room_id, channelID, currentDisplayName, store);
     };
 

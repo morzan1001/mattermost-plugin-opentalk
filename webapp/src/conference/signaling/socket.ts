@@ -96,9 +96,17 @@ export class SignalingSocket {
         this.listeners[event].push(listener);
     }
 
+    public off(event: SignalingEvent, listener: SignalingListener): void {
+        const arr = this.listeners[event];
+        const i = arr.indexOf(listener);
+        if (i >= 0) {
+            arr.splice(i, 1);
+        }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private emit(event: SignalingEvent, data?: any): void {
-        for (const l of this.listeners[event]) {
+        for (const l of this.listeners[event].slice()) {
             l(data);
         }
     }

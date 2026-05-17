@@ -141,8 +141,8 @@ describe('OpenTalkConferenceClient', () => {
         emit(ws, {namespace: 'control', payload: {message: 'join_success', id: 'self-id', display_name: 'self-name', participants: []}});
         await connect;
 
-        emit(ws, {namespace: 'control', payload: {message: 'participant_connected', participant: {id: 'u2', display_name: 'bob'}}});
-        emit(ws, {namespace: 'control', payload: {message: 'participant_disconnected', id: 'u2'}});
+        emit(ws, {namespace: 'control', payload: {message: 'joined', id: 'u2', control: {display_name: 'bob'}}});
+        emit(ws, {namespace: 'control', payload: {message: 'left', id: 'u2'}});
 
         expect(onJoined).toHaveBeenCalledWith({id: 'u2', displayName: 'bob'});
         expect(onLeft).toHaveBeenCalledWith({id: 'u2'});

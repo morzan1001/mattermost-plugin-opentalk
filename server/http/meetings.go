@@ -14,6 +14,16 @@ import (
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
+// internalError logs the upstream error verbatim and replies with a generic
+// public message. Upstream errors from OIDC/OpenTalk can contain token bodies
+// or provider error descriptions; never echo them to the browser.
+func (h *Handlers) internalError(w nethttp.ResponseWriter, logTag string, err error, status int, publicMsg string) {
+	if h.LogWarn != nil && err != nil {
+		h.LogWarn("[opentalk] "+logTag, "err", err.Error())
+	}
+	nethttp.Error(w, publicMsg, status)
+}
+
 type createMeetingRequest struct {
 	ChannelID    string `json:"channel_id"`
 	DeviceSecret string `json:"device_secret"`
@@ -50,12 +60,22 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 
 	token, err := h.AccessTokenFor(mmUserID)
 	if err != nil {
-		nethttp.Error(w, "access token unavailable: "+err.Error(), nethttp.StatusUnauthorized)
+		h.internalError(w, "MeetingsCreate: access token", err, nethttp.StatusUnauthorized, "access token unavailable")
 		return
 	}
 
-	// Guard: reject a second concurrent meeting in the same channel.
-	if existing, lErr := h.Store.LoadActiveMeeting(body.ChannelID); lErr == nil && existing != nil {
+	if h.AcquireChannelLock != nil {
+		release := h.AcquireChannelLock(body.ChannelID)
+		defer release()
+	}
+
+	if existing, lErr := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID); lErr == nil && existing != nil {
+		// Header-button click on a DM where a stale meeting is still in KV
+		// (host hung up but didn't end it). Re-ring the other recipients so
+		// they get a fresh modal before the webapp auto-joins.
+		if h.NotifyMeetingStarted != nil {
+			h.NotifyMeetingStarted(existing)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(nethttp.StatusConflict)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -72,14 +92,14 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 		WaitingRoom: h.Defaults.WaitingRoom,
 	})
 	if err != nil {
-		nethttp.Error(w, "create room: "+err.Error(), nethttp.StatusBadGateway)
+		h.internalError(w, "MeetingsCreate: CreateRoom", err, nethttp.StatusBadGateway, "create room failed")
 		return
 	}
 
 	expiry := time.Now().Add(time.Duration(h.Defaults.InviteExpirationHours) * time.Hour).UTC()
 	invite, err := h.OpenTalk.CreateInvite(token, room.ID, opentalk.CreateInviteRequest{Expiration: &expiry})
 	if err != nil {
-		nethttp.Error(w, "create invite: "+err.Error(), nethttp.StatusBadGateway)
+		h.internalError(w, "MeetingsCreate: CreateInvite", err, nethttp.StatusBadGateway, "create invite failed")
 		return
 	}
 
@@ -87,7 +107,7 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 		DeviceSecret: body.DeviceSecret,
 	})
 	if err != nil {
-		nethttp.Error(w, "start room: "+err.Error(), nethttp.StatusBadGateway)
+		h.internalError(w, "MeetingsCreate: StartRoom", err, nethttp.StatusBadGateway, "start room failed")
 		return
 	}
 
@@ -100,18 +120,38 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 		LastHeartbeat: time.Now().UTC(),
 		EnableSIP:     h.Defaults.EnableSIP,
 	}
-	if err := h.Store.SaveActiveMeeting(am); err != nil {
-		nethttp.Error(w, "persist meeting: "+err.Error(), nethttp.StatusInternalServerError)
+	if err := h.Store.CreateActiveMeetingAtomic(h.EncryptionKey, am); err != nil {
+		if errors.Is(err, store.ErrMeetingAlreadyActive) {
+			// Cross-node race: another caller created the meeting between our
+			// LoadActiveMeeting check and this write. Roll back the orphan room
+			// on the OpenTalk controller so it does not zombie.
+			if dErr := h.OpenTalk.DeleteInvite(token, room.ID, invite.InviteCode); dErr != nil && h.LogWarn != nil {
+				h.LogWarn("[opentalk] rollback DeleteInvite failed", "room", room.ID, "err", dErr.Error())
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(nethttp.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": "meeting already active in this channel",
+			})
+			return
+		}
+		h.internalError(w, "MeetingsCreate: CreateActiveMeetingAtomic", err, nethttp.StatusInternalServerError, "persist meeting failed")
 		return
 	}
 
 	// Build and post the custom-post via the bot. We persist ActiveMeeting
 	// *before* the post so that even if the post call fails we still know
 	// about the live room; the reaper will clean it up.
-	hostName := mmUserID
+	hostUsername := mmUserID
 	if h.HostUsernameOf != nil {
 		if n := h.HostUsernameOf(mmUserID); n != "" {
-			hostName = n
+			hostUsername = n
+		}
+	}
+	hostDisplayName := hostUsername
+	if h.HostDisplayNameOf != nil {
+		if n := h.HostDisplayNameOf(mmUserID); n != "" {
+			hostDisplayName = n
 		}
 	}
 	hostLocale := ""
@@ -122,17 +162,21 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 	if h.IsDMChannel != nil {
 		isDM = h.IsDMChannel(body.ChannelID)
 	}
-	botPost := post.BuildMeetingPost(am, h.FrontendURL, hostName, hostLocale, isDM)
+	botPost := post.BuildMeetingPost(am, h.FrontendURL, hostUsername, hostDisplayName, hostLocale, isDM)
 	botPost.UserId = h.BotUserID
 	created, err := h.CreatePost(botPost)
 	if err != nil {
-		nethttp.Error(w, "post meeting card: "+err.Error(), nethttp.StatusInternalServerError)
+		h.internalError(w, "MeetingsCreate: CreatePost", err, nethttp.StatusInternalServerError, "post meeting card failed")
 		return
 	}
 	am.PostID = created.Id
-	if err := h.Store.SaveActiveMeeting(am); err != nil {
-		nethttp.Error(w, "persist meeting (with post_id): "+err.Error(), nethttp.StatusInternalServerError)
+	if err := h.Store.SaveActiveMeeting(h.EncryptionKey, am); err != nil {
+		h.internalError(w, "MeetingsCreate: SaveActiveMeeting (post_id)", err, nethttp.StatusInternalServerError, "persist meeting failed")
 		return
+	}
+
+	if h.NotifyMeetingStarted != nil {
+		h.NotifyMeetingStarted(am)
 	}
 
 	resp := createMeetingResponse{
@@ -185,7 +229,12 @@ func (h *Handlers) MeetingsJoin(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 
-	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
+	if h.IsChannelMember == nil || !h.IsChannelMember(body.ChannelID, mmUserID) {
+		nethttp.Error(w, "forbidden", nethttp.StatusForbidden)
+		return
+	}
+
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID)
 	if err != nil {
 		nethttp.Error(w, "no active meeting in this channel", nethttp.StatusNotFound)
 		return
@@ -202,12 +251,16 @@ func (h *Handlers) MeetingsJoin(w nethttp.ResponseWriter, r *nethttp.Request) {
 		}
 	}
 
+	// OpenTalk's POST /rooms/{id}/start is owner-only. Every other caller --
+	// including registered users that are not the room's host -- has to take
+	// StartInvited with the meeting's invite_code, otherwise the controller
+	// answers 403.
 	var start *opentalk.StartResponse
 	var startErr error
-	if h.IsConnected != nil && h.IsConnected(mmUserID) {
+	if mmUserID == am.HostUserID && h.IsConnected != nil && h.IsConnected(mmUserID) {
 		token, terr := h.AccessTokenFor(mmUserID)
 		if terr != nil {
-			nethttp.Error(w, "access token: "+terr.Error(), nethttp.StatusUnauthorized)
+			h.internalError(w, "MeetingsJoin: access token", terr, nethttp.StatusUnauthorized, "access token unavailable")
 			return
 		}
 		start, startErr = h.OpenTalk.StartRoom(token, roomID, opentalk.StartRequest{
@@ -224,7 +277,7 @@ func (h *Handlers) MeetingsJoin(w nethttp.ResponseWriter, r *nethttp.Request) {
 		})
 	}
 	if startErr != nil {
-		nethttp.Error(w, "start: "+startErr.Error(), nethttp.StatusBadGateway)
+		h.internalError(w, "MeetingsJoin: Start", startErr, nethttp.StatusBadGateway, "start failed")
 		return
 	}
 
@@ -261,7 +314,7 @@ func (h *Handlers) MeetingsEnd(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 
-	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID)
 	if err != nil {
 		nethttp.Error(w, "no active meeting in this channel", nethttp.StatusNotFound)
 		return
@@ -272,7 +325,7 @@ func (h *Handlers) MeetingsEnd(w nethttp.ResponseWriter, r *nethttp.Request) {
 	}
 
 	if _, eErr := h.endMeetingFor(am); eErr != nil {
-		nethttp.Error(w, "delete meeting: "+eErr.Error(), nethttp.StatusInternalServerError)
+		h.internalError(w, "MeetingsEnd: endMeetingFor", eErr, nethttp.StatusInternalServerError, "end meeting failed")
 		return
 	}
 	w.WriteHeader(nethttp.StatusNoContent)
@@ -285,7 +338,7 @@ func (h *Handlers) endMeetingFor(am *store.ActiveMeeting) (*model.Post, error) {
 		if token, terr := h.AccessTokenFor(am.HostUserID); terr == nil {
 			if dErr := h.OpenTalk.DeleteInvite(token, am.RoomID, am.InviteCode); dErr != nil {
 				if h.LogWarn != nil {
-					h.LogWarn("[opentalk] DeleteInvite failed", "room", am.RoomID, "invite", am.InviteCode, "err", dErr.Error())
+					h.LogWarn("[opentalk] DeleteInvite failed", "room", am.RoomID, "err", dErr.Error())
 				}
 			}
 		}
@@ -307,7 +360,7 @@ func (h *Handlers) endMeetingFor(am *store.ActiveMeeting) (*model.Post, error) {
 		h.BroadcastFunc("meeting_ended", map[string]any{
 			"channel_id": am.ChannelID,
 			"room_id":    am.RoomID,
-		})
+		}, &model.WebsocketBroadcast{ChannelId: am.ChannelID})
 	}
 	return updated, nil
 }
@@ -331,7 +384,7 @@ func (h *Handlers) MeetingsPostActionEnd(w nethttp.ResponseWriter, r *nethttp.Re
 		return
 	}
 
-	am, err := h.Store.LoadActiveMeeting(channelID)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, channelID)
 	if err != nil {
 		writePostActionResponse(w, h.staleMeetingResponse(body.PostId, "This meeting is no longer active."))
 		return
@@ -377,8 +430,12 @@ func (h *Handlers) MeetingsPostActionDismiss(w nethttp.ResponseWriter, r *nethtt
 		nethttp.Error(w, "channel_id and room_id required in context", nethttp.StatusBadRequest)
 		return
 	}
+	if h.IsChannelMember == nil || !h.IsChannelMember(channelID, mmUserID) {
+		nethttp.Error(w, "forbidden", nethttp.StatusForbidden)
+		return
+	}
 
-	am, err := h.Store.LoadActiveMeeting(channelID)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, channelID)
 	if err != nil {
 		writePostActionResponse(w, h.staleMeetingResponse(body.PostId, "This meeting is no longer active."))
 		return
@@ -441,7 +498,7 @@ func (h *Handlers) dismissFor(am *store.ActiveMeeting, mmUserID string) (*model.
 			"channel_id": am.ChannelID,
 			"room_id":    am.RoomID,
 			"mm_user_id": mmUserID,
-		})
+		}, &model.WebsocketBroadcast{ChannelId: am.ChannelID})
 	}
 	if h.ChannelMembersOf == nil {
 		return nil, nil
@@ -472,7 +529,7 @@ func (h *Handlers) dismissFor(am *store.ActiveMeeting, mmUserID string) (*model.
 		h.BroadcastFunc("meeting_ended", map[string]any{
 			"channel_id": am.ChannelID,
 			"room_id":    am.RoomID,
-		})
+		}, &model.WebsocketBroadcast{ChannelId: am.ChannelID})
 	}
 	return updated, nil
 }
@@ -495,14 +552,18 @@ func (h *Handlers) MeetingsDismiss(w nethttp.ResponseWriter, r *nethttp.Request)
 		nethttp.Error(w, "channel_id and room_id required", nethttp.StatusBadRequest)
 		return
 	}
+	if h.IsChannelMember == nil || !h.IsChannelMember(body.ChannelID, mmUserID) {
+		nethttp.Error(w, "forbidden", nethttp.StatusForbidden)
+		return
+	}
 
-	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			w.WriteHeader(nethttp.StatusNoContent)
 			return
 		}
-		nethttp.Error(w, "load meeting: "+err.Error(), nethttp.StatusInternalServerError)
+		h.internalError(w, "MeetingsDismiss: LoadActiveMeeting", err, nethttp.StatusInternalServerError, "load meeting failed")
 		return
 	}
 	if am.RoomID != body.RoomID {
@@ -538,7 +599,7 @@ func (h *Handlers) MeetingsHeartbeat(w nethttp.ResponseWriter, r *nethttp.Reques
 		return
 	}
 
-	am, err := h.Store.LoadActiveMeeting(body.ChannelID)
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID)
 	if err != nil {
 		w.WriteHeader(nethttp.StatusNoContent)
 		return
@@ -551,7 +612,7 @@ func (h *Handlers) MeetingsHeartbeat(w nethttp.ResponseWriter, r *nethttp.Reques
 
 	am.LastHeartbeat = time.Now().UTC()
 	am.HostHeartbeatReceived = true
-	if sErr := h.Store.SaveActiveMeeting(am); sErr != nil {
+	if sErr := h.Store.SaveActiveMeeting(h.EncryptionKey, am); sErr != nil {
 		nethttp.Error(w, "save heartbeat: "+sErr.Error(), nethttp.StatusInternalServerError)
 		return
 	}

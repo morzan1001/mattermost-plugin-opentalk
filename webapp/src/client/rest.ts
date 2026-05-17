@@ -118,7 +118,7 @@ export async function dismissIncomingCall(channelID: string, roomID: string): Pr
 }
 
 export function getOrCreateDeviceSecret(): string {
-    const KEY = 'opentalk_device_secret';
+    const KEY = 'opentalk:device-secret:v1';
     let s = localStorage.getItem(KEY);
     if (!s) {
         s = Array.from(crypto.getRandomValues(new Uint8Array(32))).

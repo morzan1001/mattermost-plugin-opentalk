@@ -27,9 +27,7 @@ export function startMeetingAction(store: Store<GlobalState, Action>) {
             // Mattermost; nothing else to do here.
         } catch (e: any) {
             if (e.status === 409 && e.existing?.room_id) {
-                // A meeting is already active in this channel — auto-join the
-                // existing one (same UX as Calls). The post-card's [Beitreten]
-                // button does the same thing.
+                // A meeting is already active in this channel — auto-join it.
                 const displayName = selectCurrentDisplayName(store.getState());
                 await startConferenceConnection(e.existing.room_id, channel.id, displayName, store);
                 return;

@@ -7,7 +7,6 @@ import {
     participantsReset,
     handRaised,
     handLowered,
-    handsReset,
 } from './slice_participants';
 
 describe('participantsReducer', () => {
@@ -98,12 +97,4 @@ describe('participantsReducer', () => {
         expect(state.byId.a.handRaised).toBe(false);
     });
 
-    it('HANDS_RESET — clears handRaised for all participants', () => {
-        const p1 = {id: 'a', displayName: 'Alice', handRaised: true};
-        const p2 = {id: 'b', displayName: 'Bob', handRaised: true};
-        let state = participantsReducer(undefined, participantsBulkSet({participants: [p1, p2]}));
-        state = participantsReducer(state, handsReset());
-        expect(state.byId.a.handRaised).toBe(false);
-        expect(state.byId.b.handRaised).toBe(false);
-    });
 });

@@ -13,41 +13,31 @@ import {SignalingSocket} from './socket';
 const RESUMPTION_KEY_PREFIX = 'opentalk:resumption:';
 
 function readResumption(roomID: string): string | undefined {
-    if (typeof window === 'undefined') {
-        return undefined;
-    }
     try {
-        const v = window.localStorage.getItem(RESUMPTION_KEY_PREFIX + roomID);
-        return v ?? undefined;
+        return window.localStorage.getItem(RESUMPTION_KEY_PREFIX + roomID) ?? undefined;
     } catch {
         return undefined;
     }
 }
 
 function writeResumption(roomID: string, value: string): void {
-    if (typeof window === 'undefined') {
-        return;
-    }
     try {
         window.localStorage.setItem(RESUMPTION_KEY_PREFIX + roomID, value);
     } catch {
-        /* swallow — quota/private mode */
+        // quota / private mode
     }
 }
 
 function clearResumption(roomID: string): void {
-    if (typeof window === 'undefined') {
-        return;
-    }
     try {
         window.localStorage.removeItem(RESUMPTION_KEY_PREFIX + roomID);
     } catch {
-        /* swallow */
+        // quota / private mode
     }
 }
 
 export interface AuthProvider {
-    getTicket(roomID: string, channelID: string, deviceSecret: string, displayName: string): Promise<{
+    getTicket(roomID: string, channelID: string, deviceSecret: string): Promise<{
         ticket: string;
         resumption: string;
         roomserverURL: string;
@@ -123,12 +113,15 @@ export class ConferenceRoom {
         this.roomID = roomID;
         this.state = 'authenticating';
 
-        return this.auth.getTicket(roomID, channelID, deviceSecret, displayName).then(
+        return this.auth.getTicket(roomID, channelID, deviceSecret).then(
             (r) => {
                 const ticket = r.ticket;
-                if (r.resumption) {
-                    writeResumption(roomID, r.resumption);
-                }
+
+                // Prefer a server-confirmed token from a prior joinSuccess
+                // over the fresh ticket-time value, so the first attempt of
+                // a reconnect re-presents the same resumption the server has
+                // already acknowledged.
+                const initialResumption = readResumption(roomID) || r.resumption || '';
                 const roomserverURL = r.roomserverURL || this.defaultRoomserverURL;
 
                 this.state = 'connecting';
@@ -137,6 +130,14 @@ export class ConferenceRoom {
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'joinSuccess', (payload: any) => {
+                    // Server-confirmed resumption: only persist once the join
+                    // has been accepted. Writing the ticket-time value would
+                    // leave a stale token in localStorage if the join itself
+                    // was rejected (joinBlocked, banned, etc.).
+                    if (typeof payload.resumption === 'string' && payload.resumption) {
+                        writeResumption(roomID, payload.resumption);
+                    }
+
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const others = (payload.participants ?? []).map((p: any) => this.normalizeParticipant(p));
 
@@ -179,28 +180,18 @@ export class ConferenceRoom {
                     }
                 });
 
-                // Listen for both joined and participantConnected for forward-compat.
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const onJoinedFrame = (payload: any) => {
                     if (this.state !== 'connected') {
                         return;
                     }
-                    const ctrl = payload.control ?? payload.participant ?? payload;
-                    const p = this.normalizeParticipant({
-                        id: payload.id ?? ctrl.id,
-                        display_name: ctrl.display_name ?? ctrl.displayName ?? payload.display_name ?? payload.displayName,
-                        role: ctrl.role ?? payload.role,
-                    });
-
-                    // De-dupe in case the roomserver re-emits or both event
-                    // names fire — push only when not already present.
+                    const p = this.normalizeParticipant(payload);
                     if (!this.participants.some((existing) => existing.id === p.id)) {
                         this.participants.push(p);
                     }
                     this.emit('participant_joined', p);
                 };
                 this.listener.on(CoreNamespace, 'joined', onJoinedFrame);
-                this.listener.on(CoreNamespace, 'participantConnected', onJoinedFrame);
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const onLeftFrame = (payload: any) => {
@@ -212,7 +203,6 @@ export class ConferenceRoom {
                     this.emit('participant_left', {id});
                 };
                 this.listener.on(CoreNamespace, 'left', onLeftFrame);
-                this.listener.on(CoreNamespace, 'participantDisconnected', onLeftFrame);
 
                 // OpenTalk delivers LiveKit bootstrap as a separate frame
                 // {namespace:'livekit', payload:{action:'credentials', publicUrl, token, room}}
@@ -254,15 +244,15 @@ export class ConferenceRoom {
                 });
 
                 this.socket.on('open', () => {
-                    const resumption = readResumption(roomID);
                     this.socket?.send(buildFrame(CoreNamespace, 'join', {
                         displayName,
-                        ...(resumption ? {resumption} : {}),
+                        ...(initialResumption ? {resumption: initialResumption} : {}),
                     }));
                 });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.socket.on('close', (e: any) => {
                     this.state = 'closed';
+                    this.listener?.dispose();
                     if (!this.closedEmitted) {
                         this.closedEmitted = true;
                         this.emit('closed', {code: e?.code ?? 1006});
@@ -354,6 +344,7 @@ export class ConferenceRoom {
             // socket may already be closed; ignore
         }
         this.socket?.disconnect();
+        this.listener?.dispose();
         this.state = 'closed';
         if (this.roomID) {
             clearResumption(this.roomID);
@@ -377,12 +368,19 @@ export class ConferenceRoom {
         }
     }
 
+    // Flat shape for the self entry built in connect(), nested shape
+    // (participant.control.*) for joinSuccess.participants[] and joined.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private normalizeParticipant(p: any): Participant {
+        const ctrl = (p.control ?? p.participant ?? {}) as Record<string, unknown>;
+        const id = (p.id ?? ctrl.id) as string;
+        const displayName =
+            (p.displayName ?? p.display_name ?? ctrl.displayName ?? ctrl.display_name) as string | undefined;
+        const role = (p.role ?? ctrl.role) as string | undefined;
         return {
-            id: p.id,
-            displayName: p.displayName ?? p.display_name,
-            ...(p.role && {role: p.role}),
+            id,
+            displayName: displayName ?? id,
+            ...(role && {role: role as Participant['role']}),
         };
     }
 }

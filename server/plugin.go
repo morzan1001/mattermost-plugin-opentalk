@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	nethttp "net/http"
 	"strings"
@@ -47,6 +48,43 @@ type Plugin struct {
 	otClient *opentalk.Client
 
 	reaper *reaper.Reaper
+
+	channelLocks sync.Map
+}
+
+// channelMembersOf pages through every member of a channel and returns the
+// flat list of user IDs. A single GetChannelMembers call is capped at 200 by
+// the Mattermost plugin API, so any channel larger than 200 members needs
+// pagination — without it the dismiss-quorum check silently truncated and
+// channel-broadcast loops missed users.
+func (p *Plugin) channelMembersOf(channelID string) []string {
+	const perPage = 200
+	const safetyCap = 10000
+	out := make([]string, 0, perPage)
+	for page := 0; len(out) < safetyCap; page++ {
+		members, err := p.API.GetChannelMembers(channelID, page, perPage)
+		if err != nil || len(members) == 0 {
+			return out
+		}
+		for _, m := range members {
+			out = append(out, m.UserId)
+		}
+		if len(members) < perPage {
+			return out
+		}
+	}
+	return out
+}
+
+// acquireChannelLock serialises in-process operations for a channel so the
+// LoadActiveMeeting -> external-service -> SaveActiveMeeting sequence in
+// MeetingsCreate / CreateMeeting cannot interleave with itself. CAS on
+// SaveActiveMeeting still protects cross-node races.
+func (p *Plugin) acquireChannelLock(channelID string) func() {
+	mu, _ := p.channelLocks.LoadOrStore(channelID, &sync.Mutex{})
+	m := mu.(*sync.Mutex)
+	m.Lock()
+	return m.Unlock
 }
 
 func (p *Plugin) OnActivate() error {
@@ -65,8 +103,10 @@ func (p *Plugin) OnActivate() error {
 	p.store = store.New(p.API)
 
 	// Heartbeat-driven reaper: stale meetings (no heartbeat for >5min) are
-	// ended within ~60s.
+	// ended within ~60s. The encryption key is resolved per-tick so a
+	// config rotation propagates without a restart.
 	p.reaper = reaper.New(p.API, p.store, p.endMeetingFromReaper,
+		func() []byte { return []byte(p.getConfiguration().TokenEncryptionKey) },
 		60*time.Second, 5*time.Minute)
 	p.reaper.Start()
 
@@ -104,8 +144,8 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		PostUpdater: func(mp *model.Post) error {
 			return p.client.Post.UpdatePost(mp)
 		},
-		Broadcaster: func(event string, payload map[string]any) {
-			p.API.PublishWebSocketEvent(event, payload, &model.WebsocketBroadcast{})
+		Broadcaster: func(event string, payload map[string]any, b *model.WebsocketBroadcast) {
+			p.API.PublishWebSocketEvent(event, payload, b)
 		},
 		LocaleOf: p.localeOf,
 	}
@@ -117,9 +157,8 @@ func (p *Plugin) OnDeactivate() error {
 	return nil
 }
 
-// endMeetingFromReaper mirrors the MeetingsEnd HTTP handler (minus the
-// host-permission check). Status is ENDED, not MISSED — MISSED is reserved
-// for the "all DM recipients declined before joining" path.
+// endMeetingFromReaper transitions a stale meeting to ENDED status. MISSED is
+// reserved for the "all DM recipients declined before joining" path.
 func (p *Plugin) endMeetingFromReaper(am *store.ActiveMeeting) {
 	if am.PostID != "" {
 		if pp, appErr := p.API.GetPost(am.PostID); appErr == nil && pp != nil {
@@ -135,16 +174,15 @@ func (p *Plugin) endMeetingFromReaper(am *store.ActiveMeeting) {
 	}, &model.WebsocketBroadcast{ChannelId: am.ChannelID})
 }
 
-// NotificationWillBePushed is called by the Mattermost server before any
-// push-notification is dispatched. Returning (nil, "<reason>") tells MM
-// to suppress this push. We use it to drop the duplicate notification
-// the standard pipeline would send for our custom_opentalk_meeting
-// posts (we already send our own call-flavored push from CreateMeeting).
+// NotificationWillBePushed suppresses the standard MM push for our
+// custom_opentalk_meeting bot post -- we already send our own call-flavored
+// push from notifyMeetingStarted. The SenderId check is critical: without it
+// the hook also cancels our own plugin push (both carry the same PostId).
 func (p *Plugin) NotificationWillBePushed(push *model.PushNotification, mmUserID string) (*model.PushNotification, string) {
-	if push == nil {
+	if push == nil || push.PostId == "" {
 		return push, ""
 	}
-	if push.PostId == "" {
+	if push.SenderId == p.botUserID {
 		return push, ""
 	}
 	pp, appErr := p.API.GetPost(push.PostId)
@@ -189,8 +227,6 @@ func splitScopes(s string) []string {
 
 // displayNameOf returns the user's preferred display name in this priority:
 // nickname > first+last > username. Falls back to username on any nil/empty.
-// Used wherever the plugin shows a human-readable participant name (bot-
-// post host attribution, OpenTalk join displayName, etc.).
 func displayNameOf(u *model.User) string {
 	if u == nil {
 		return ""
@@ -220,8 +256,8 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 		Store:         p.store,
 		OIDC:          oidcClient,
 		EncryptionKey: []byte(cfg.TokenEncryptionKey),
-		BroadcastFunc: func(event string, payload map[string]any) {
-			p.API.PublishWebSocketEvent(event, payload, &model.WebsocketBroadcast{})
+		BroadcastFunc: func(event string, payload map[string]any, b *model.WebsocketBroadcast) {
+			p.API.PublishWebSocketEvent(event, payload, b)
 		},
 
 		OpenTalk:      p.getOTClient(),
@@ -243,6 +279,13 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 			return mp, nil
 		},
 		HostUsernameOf: func(mmUserID string) string {
+			u, err := p.API.GetUser(mmUserID)
+			if err != nil || u == nil {
+				return ""
+			}
+			return u.Username
+		},
+		HostDisplayNameOf: func(mmUserID string) string {
 			u, err := p.API.GetUser(mmUserID)
 			if err != nil || u == nil {
 				return ""
@@ -276,16 +319,17 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 		},
 
 		ChannelMembersOf: func(channelID string) []string {
-			members, err := p.API.GetChannelMembers(channelID, 0, 100)
-			if err != nil || members == nil {
-				return nil
-			}
-			out := make([]string, 0, len(members))
-			for _, m := range members {
-				out = append(out, m.UserId)
-			}
-			return out
+			return p.channelMembersOf(channelID)
 		},
+		IsChannelMember: func(channelID, mmUserID string) bool {
+			if channelID == "" || mmUserID == "" {
+				return false
+			}
+			m, err := p.API.GetChannelMember(channelID, mmUserID)
+			return err == nil && m != nil
+		},
+		AcquireChannelLock:   p.acquireChannelLock,
+		NotifyMeetingStarted: p.notifyMeetingStarted,
 		IsDMChannel: func(channelID string) bool {
 			ch, err := p.API.GetChannel(channelID)
 			if err != nil || ch == nil {
@@ -300,8 +344,8 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w nethttp.ResponseWriter, r *netht
 	pluginhttp.NewRouter(handlers).ServeHTTP(w, r)
 }
 
-// CreateMeeting provisions an OpenTalk room + bot post for channelID on behalf of mmUserID.
-// Used by the slash-command path (HTTP handler has its own equivalent in MeetingsCreate).
+// CreateMeeting provisions an OpenTalk room + bot post for channelID on
+// behalf of mmUserID.
 func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting, error) {
 	cfg := p.getConfiguration()
 
@@ -310,8 +354,11 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		return nil, fmt.Errorf("access token: %w", err)
 	}
 
-	// Guard: callers can branch with errors.Is(err, store.ErrMeetingAlreadyActive).
-	if existing, lErr := p.store.LoadActiveMeeting(channelID); lErr == nil && existing != nil {
+	release := p.acquireChannelLock(channelID)
+	defer release()
+
+	encKey := []byte(cfg.TokenEncryptionKey)
+	if existing, lErr := p.store.LoadActiveMeeting(encKey, channelID); lErr == nil && existing != nil {
 		return existing, store.ErrMeetingAlreadyActive
 	}
 
@@ -349,14 +396,25 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 		LastHeartbeat: time.Now().UTC(),
 		EnableSIP:     cfg.DefaultEnableSIP,
 	}
-	if err := p.store.SaveActiveMeeting(am); err != nil {
+	if err := p.store.CreateActiveMeetingAtomic(encKey, am); err != nil {
+		if errors.Is(err, store.ErrMeetingAlreadyActive) {
+			if dErr := ot.DeleteInvite(token, room.ID, invite.InviteCode); dErr != nil {
+				p.API.LogWarn("[opentalk] rollback DeleteInvite failed", "room", room.ID, "err", dErr.Error())
+			}
+			if existing, lErr := p.store.LoadActiveMeeting(encKey, channelID); lErr == nil && existing != nil {
+				return existing, store.ErrMeetingAlreadyActive
+			}
+			return nil, store.ErrMeetingAlreadyActive
+		}
 		return nil, fmt.Errorf("persist meeting: %w", err)
 	}
 
-	hostName := mmUserID
+	hostUsername := mmUserID
+	hostDisplayName := mmUserID
 	hostLocale := ""
 	if u, err := p.API.GetUser(mmUserID); err == nil && u != nil {
-		hostName = displayNameOf(u)
+		hostUsername = u.Username
+		hostDisplayName = displayNameOf(u)
 		hostLocale = u.Locale
 	}
 
@@ -364,80 +422,114 @@ func (p *Plugin) CreateMeeting(channelID, mmUserID string) (*store.ActiveMeeting
 	isDM := chErr == nil && ch != nil &&
 		(ch.Type == model.ChannelTypeDirect || ch.Type == model.ChannelTypeGroup)
 
-	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostName, hostLocale, isDM)
+	botPost := post.BuildMeetingPost(am, cfg.OpenTalkFrontendURL, hostUsername, hostDisplayName, hostLocale, isDM)
 	botPost.UserId = p.botUserID
 	if err := p.client.Post.CreatePost(botPost); err != nil {
 		return nil, fmt.Errorf("post meeting card: %w", err)
 	}
 	am.PostID = botPost.Id
-	if err := p.store.SaveActiveMeeting(am); err != nil {
+	if err := p.store.SaveActiveMeeting(encKey, am); err != nil {
 		return nil, fmt.Errorf("persist meeting (with post_id): %w", err)
 	}
 
-	if chErr == nil && ch != nil {
-		payload := map[string]any{
-			"channel_id":   channelID,
-			"room_id":      room.ID,
-			"host_user_id": mmUserID,
-			"host_name":    hostName,
-			"post_id":      botPost.Id,
-
-			// lets the webapp ignore stale broadcasts on WS reconnect
-			"created_at_unix_ms": time.Now().UnixMilli(),
-		}
-		if isDM {
-			// Resolve recipients (channel members minus host).
-			members, mErr := p.API.GetChannelMembers(channelID, 0, 100)
-			recipients := make([]string, 0, 4)
-			if mErr == nil {
-				for _, m := range members {
-					if m.UserId != mmUserID {
-						recipients = append(recipients, m.UserId)
-					}
-				}
-			}
-			payload["dm_user_ids"] = recipients
-
-			p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{
-				ChannelId: channelID,
-				OmitUsers: map[string]bool{mmUserID: true},
-			})
-
-			// Best-effort push notification per recipient; skip DND users.
-			for _, uid := range recipients {
-				status, _ := p.API.GetUserStatus(uid)
-				if status != nil && status.Status == model.StatusDnd {
-					continue
-				}
-				push := &model.PushNotification{
-					Version:     model.PushMessageV2,
-					Type:        model.PushTypeMessage,
-					TeamId:      ch.TeamId,
-					ChannelId:   channelID,
-					PostId:      botPost.Id,
-					SenderId:    p.botUserID,
-					ChannelType: ch.Type,
-					Message: i18n.T(p.localeOf(uid), i18n.Translatable{
-						DE: "Anruf von " + hostName,
-						EN: "Incoming call from " + hostName,
-					}),
-					IsIdLoaded: true,
-				}
-				if pErr := p.API.SendPushNotification(push, uid); pErr != nil {
-					p.API.LogWarn("[opentalk] push failed", "user", uid, "err", pErr.Error())
-				}
-			}
-		} else {
-			// Channel meeting: broadcast so others see the ChannelCallToast.
-			// Host is omitted — no need to notify yourself.
-			p.API.PublishWebSocketEvent("meeting_started", payload, &model.WebsocketBroadcast{
-				ChannelId: channelID,
-				OmitUsers: map[string]bool{mmUserID: true},
-			})
-		}
-	}
+	p.notifyMeetingStarted(am)
 
 	return am, nil
+}
+
+// notifyMeetingStarted is the single entry point for "a meeting just became
+// joinable" notifications. Both the HTTP MeetingsCreate path and the
+// slash-command path funnel through here so DMs always ring the recipients,
+// not only when the meeting is started via /opentalk start. Safe to call
+// more than once for the same meeting (e.g. on a header-button click while
+// a stale meeting is still in KV) — the receiving webapp reduces to the
+// newest ring per channel.
+func (p *Plugin) notifyMeetingStarted(am *store.ActiveMeeting) {
+	if am == nil {
+		return
+	}
+	ch, chErr := p.API.GetChannel(am.ChannelID)
+	if chErr != nil || ch == nil {
+		return
+	}
+
+	hostName := am.HostUserID
+	if u, uErr := p.API.GetUser(am.HostUserID); uErr == nil && u != nil {
+		hostName = displayNameOf(u)
+	}
+
+	payload := map[string]any{
+		"channel_id":   am.ChannelID,
+		"room_id":      am.RoomID,
+		"host_user_id": am.HostUserID,
+		"host_name":    hostName,
+		"post_id":      am.PostID,
+		// lets the webapp ignore stale broadcasts on WS reconnect
+		"created_at_unix_ms": time.Now().UnixMilli(),
+	}
+
+	isDM := ch.Type == model.ChannelTypeDirect || ch.Type == model.ChannelTypeGroup
+	if !isDM {
+		// Channel meeting: passive toast for everyone else.
+		p.API.PublishWebSocketEvent("meeting_started", payload, &model.WebsocketBroadcast{
+			ChannelId: am.ChannelID,
+			OmitUsers: map[string]bool{am.HostUserID: true},
+		})
+		return
+	}
+
+	members := p.channelMembersOf(am.ChannelID)
+	recipients := make([]string, 0, len(members))
+	for _, uid := range members {
+		if uid != am.HostUserID {
+			recipients = append(recipients, uid)
+		}
+	}
+	payload["dm_user_ids"] = recipients
+
+	// Defense-in-depth: fire both ChannelId- and UserId-scoped broadcasts.
+	// Either path on its own has cluster / cache edge cases under which MM
+	// silently drops the event; sending via both gives us two independent
+	// delivery routes. The webapp reducer is idempotent on channelID so a
+	// double-delivery is harmless.
+	p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{
+		ChannelId: am.ChannelID,
+		OmitUsers: map[string]bool{am.HostUserID: true},
+	})
+	for _, uid := range recipients {
+		p.API.PublishWebSocketEvent("incoming_call", payload, &model.WebsocketBroadcast{
+			UserId: uid,
+		})
+	}
+	p.API.LogInfo("[opentalk] incoming_call broadcast",
+		"channel_id", am.ChannelID,
+		"room_id", am.RoomID,
+		"recipients", strings.Join(recipients, ","),
+	)
+
+	// Best-effort push notification per recipient; skip DND users.
+	for _, uid := range recipients {
+		status, _ := p.API.GetUserStatus(uid)
+		if status != nil && status.Status == model.StatusDnd {
+			continue
+		}
+		push := &model.PushNotification{
+			Version:     model.PushMessageV2,
+			Type:        model.PushTypeMessage,
+			TeamId:      ch.TeamId,
+			ChannelId:   am.ChannelID,
+			PostId:      am.PostID,
+			SenderId:    p.botUserID,
+			ChannelType: ch.Type,
+			Message: i18n.T(p.localeOf(uid), i18n.Translatable{
+				DE: "Anruf von " + hostName,
+				EN: "Incoming call from " + hostName,
+			}),
+		}
+		if pErr := p.API.SendPushNotification(push, uid); pErr != nil {
+			p.API.LogWarn("[opentalk] push failed", "user", uid, "err", pErr.Error())
+		}
+	}
 }
 
 func generateDeviceSecret() (string, error) {

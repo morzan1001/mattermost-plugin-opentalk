@@ -16,9 +16,10 @@ export type LiveKitEvent =
     | 'disconnected'
     | 'track_subscribed'
     | 'track_unsubscribed'
-    | 'active_speakers_changed';
+    | 'active_speakers_changed'
+    | 'local_screen_share_ended';
 
-export interface TrackSubscribedData {
+interface TrackSubscribedData {
     track: RemoteTrack;
     publication: RemoteTrackPublication;
     participant: RemoteParticipant;
@@ -26,10 +27,6 @@ export interface TrackSubscribedData {
 
 type Listener<T = unknown> = (data: T) => void;
 
-/**
- * Thin wrapper around livekit-client's Room: connect/disconnect,
- * track-subscribe events, active-speakers, and mic/cam/screen publishing.
- */
 export class LiveKitRoom {
     private readonly room: Room;
     private readonly listeners: Record<LiveKitEvent, Listener[]> = {
@@ -38,6 +35,7 @@ export class LiveKitRoom {
         track_subscribed: [],
         track_unsubscribed: [],
         active_speakers_changed: [],
+        local_screen_share_ended: [],
     };
 
     public micTrack?: LocalAudioTrack;
@@ -55,11 +53,11 @@ export class LiveKitRoom {
         this.room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
             this.emit('active_speakers_changed', speakers.map((s) => s.identity));
         });
-    }
-
-    /** Wraps the underlying livekit-client Room — needed by track helpers. */
-    public getRoom(): Room {
-        return this.room;
+        this.room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
+            if (publication.source === Track.Source.ScreenShare) {
+                this.emit('local_screen_share_ended');
+            }
+        });
     }
 
     public async connect(url: string, token: string): Promise<void> {
@@ -117,15 +115,13 @@ export class LiveKitRoom {
         await this.room.localParticipant.setScreenShareEnabled(false);
     }
 
-    /**
-     * Publishes a pre-captured MediaStream's video track as a screen-share
-     * publication. Used by the Electron desktop-bridge flow where
-     * setScreenShareEnabled(true) doesn't surface a native picker.
-     */
+    // Publish a pre-captured MediaStream's video track as a screen share.
+    // The Electron desktop-bridge flow takes this path because
+    // setScreenShareEnabled(true) does not surface a native picker there.
     public async enableScreenShareFromStream(stream: MediaStream): Promise<void> {
         const videoTrack = stream.getVideoTracks()[0];
         if (!videoTrack) {
-            throw new Error('Stream hat keinen Video-Track');
+            throw new Error('Stream has no video track');
         }
         const localTrack = new LocalVideoTrack(videoTrack);
         await this.room.localParticipant.publishTrack(localTrack, {
@@ -144,14 +140,10 @@ export class LiveKitRoom {
         return this.room.localParticipant.isScreenShareEnabled;
     }
 
-    /** Local participant's identity, matching the OpenTalk-Roomserver
-     * participant id. Used to key local-track-publications into the same
-     * tracks slice that holds remote subscriptions. */
     public getLocalIdentity(): string {
         return this.room.localParticipant.identity;
     }
 
-    /** The currently-published local screen-share video track, if any. */
     public getLocalScreenTrack(): LocalVideoTrack | undefined {
         const pubs = this.room.localParticipant.getTrackPublications();
         for (const pub of pubs) {

@@ -6,7 +6,6 @@ const ACTION_TYPES = {
     RESET: 'opentalk/participants/reset',
     HAND_RAISED: 'opentalk/participants/hand_raised',
     HAND_LOWERED: 'opentalk/participants/hand_lowered',
-    HANDS_RESET: 'opentalk/participants/hands_reset',
 } as const;
 
 export interface ParticipantInfo {
@@ -45,9 +44,6 @@ export function handRaised(payload: {participantID: string}) {
 }
 export function handLowered(payload: {participantID: string}) {
     return {type: ACTION_TYPES.HAND_LOWERED, payload};
-}
-export function handsReset() {
-    return {type: ACTION_TYPES.HANDS_RESET};
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -117,13 +113,6 @@ export function participantsReducer(state: ParticipantsState = initial, action: 
             ...state,
             byId: {...state.byId, [participantID]: {...existing, handRaised: false}},
         };
-    }
-    case ACTION_TYPES.HANDS_RESET: {
-        const next: Record<string, ParticipantInfo> = {};
-        for (const [id, p] of Object.entries(state.byId)) {
-            next[id] = {...p, handRaised: false};
-        }
-        return {...state, byId: next};
     }
     default:
         return state;

@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 
+import {applyMicDeviceChange, applyCamDeviceChange} from '../../conference/controller';
 import {
     getPreferredMicId,
     setPreferredMicId,
@@ -12,9 +13,6 @@ import {ringtoneSettingKey} from '../../user_settings';
 import {useT} from '../../util/i18n';
 
 function readRingtone(): boolean {
-    if (typeof window === 'undefined') {
-        return true;
-    }
     try {
         return window.localStorage.getItem(ringtoneSettingKey) !== 'false';
     } catch {
@@ -23,13 +21,10 @@ function readRingtone(): boolean {
 }
 
 function writeRingtone(enabled: boolean): void {
-    if (typeof window === 'undefined') {
-        return;
-    }
     try {
         window.localStorage.setItem(ringtoneSettingKey, enabled ? 'true' : 'false');
     } catch {
-        /* swallow */
+        // quota / private mode
     }
 }
 
@@ -101,12 +96,17 @@ export const OpenTalkSettingsSection: React.FC = () => {
         const v = e.target.value;
         setMicIdState(v);
         setPreferredMicId(v);
+        // If a meeting is live and the mic is on, restart the track so the
+        // new device takes effect immediately without the user having to
+        // toggle the mic off and back on.
+        void applyMicDeviceChange();
     };
 
     const onCamChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const v = e.target.value;
         setCamIdState(v);
         setPreferredCamId(v);
+        void applyCamDeviceChange();
     };
 
     return (
