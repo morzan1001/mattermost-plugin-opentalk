@@ -19,7 +19,7 @@ export type LiveKitEvent =
     | 'active_speakers_changed'
     | 'local_screen_share_ended';
 
-export interface TrackSubscribedData {
+interface TrackSubscribedData {
     track: RemoteTrack;
     publication: RemoteTrackPublication;
     participant: RemoteParticipant;
@@ -58,10 +58,6 @@ export class LiveKitRoom {
                 this.emit('local_screen_share_ended');
             }
         });
-    }
-
-    public getRoom(): Room {
-        return this.room;
     }
 
     public async connect(url: string, token: string): Promise<void> {

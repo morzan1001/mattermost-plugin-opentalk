@@ -47,7 +47,7 @@ function clearResumption(roomID: string): void {
 }
 
 export interface AuthProvider {
-    getTicket(roomID: string, channelID: string, deviceSecret: string, displayName: string): Promise<{
+    getTicket(roomID: string, channelID: string, deviceSecret: string): Promise<{
         ticket: string;
         resumption: string;
         roomserverURL: string;
@@ -123,7 +123,7 @@ export class ConferenceRoom {
         this.roomID = roomID;
         this.state = 'authenticating';
 
-        return this.auth.getTicket(roomID, channelID, deviceSecret, displayName).then(
+        return this.auth.getTicket(roomID, channelID, deviceSecret).then(
             (r) => {
                 const ticket = r.ticket;
 

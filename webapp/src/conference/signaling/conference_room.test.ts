@@ -55,7 +55,7 @@ describe('ConferenceRoom', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(auth.getTicket).toHaveBeenCalledWith('room-1', 'ch-1', 'dev-1', 'alice');
+        expect(auth.getTicket).toHaveBeenCalledWith('room-1', 'ch-1', 'dev-1');
         const ws = getWS();
         expect(ws.url).toBe('wss://rs.example/signaling');
 

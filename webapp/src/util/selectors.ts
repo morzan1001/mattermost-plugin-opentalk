@@ -64,11 +64,6 @@ export function selectChannelID(state: AnyState): string | undefined {
     return state?.[stateKey]?.session?.channelID as string | undefined;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function selectParticipantCount(state: AnyState): number {
-    return state?.[stateKey]?.session?.participantCount ?? 0;
-}
-
 // Participants slice
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
