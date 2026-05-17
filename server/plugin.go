@@ -525,7 +525,6 @@ func (p *Plugin) notifyMeetingStarted(am *store.ActiveMeeting) {
 				DE: "Anruf von " + hostName,
 				EN: "Incoming call from " + hostName,
 			}),
-			IsIdLoaded: true,
 		}
 		if pErr := p.API.SendPushNotification(push, uid); pErr != nil {
 			p.API.LogWarn("[opentalk] push failed", "user", uid, "err", pErr.Error())
