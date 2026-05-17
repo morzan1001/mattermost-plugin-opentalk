@@ -131,7 +131,8 @@ func TestMeetingsCreate_PropagatesAccessTokenError(t *testing.T) {
 	assert.Equal(t, nethttp.StatusUnauthorized, rr.Code)
 }
 
-func TestMeetingsJoin_RegisteredUserPath(t *testing.T) {
+// The host of the meeting takes the owner-only StartRoom endpoint.
+func TestMeetingsJoin_HostUsesStartRoom(t *testing.T) {
 	var receivedAuth, receivedPath string
 	otSrv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -146,7 +147,7 @@ func TestMeetingsJoin_RegisteredUserPath(t *testing.T) {
 	defer otSrv.Close()
 
 	api := &plugintest.API{}
-	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1"}
+	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1", HostUserID: "u1"}
 	raw, _ := json.Marshal(am)
 	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
 
@@ -176,6 +177,50 @@ func TestMeetingsJoin_RegisteredUserPath(t *testing.T) {
 	assert.Equal(t, "wss://rs.example", resp["roomserver_url"])
 	assert.Equal(t, "Bearer tok-xyz", receivedAuth)
 	assert.Equal(t, "/v1/rooms/room-1/start", receivedPath)
+}
+
+// A connected non-host takes StartInvited with the invite code -- StartRoom is
+// owner-only and would answer 403.
+func TestMeetingsJoin_ConnectedNonHostUsesStartInvited(t *testing.T) {
+	var receivedPath string
+	var receivedBody map[string]any
+	otSrv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == nethttp.MethodPost && r.URL.Path == "/v1/rooms/room-1/start_invited" {
+			receivedPath = r.URL.Path
+			json.NewDecoder(r.Body).Decode(&receivedBody)
+			w.Write([]byte(`{"ticket":"room-1#abc","resumption":"res-1"}`))
+			return
+		}
+		w.WriteHeader(nethttp.StatusNotFound)
+	}))
+	defer otSrv.Close()
+
+	api := &plugintest.API{}
+	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1", HostUserID: "u-host"}
+	raw, _ := json.Marshal(am)
+	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
+
+	h := &Handlers{
+		Store:           store.New(api),
+		OpenTalk:        opentalk.NewClient(otSrv.URL),
+		RoomserverURL:   "wss://rs.example",
+		IsConnected:     func(_ string) bool { return true },
+		UsernameOf:      func(_ string) string { return "alice" },
+		IsChannelMember: func(_, _ string) bool { return true },
+	}
+
+	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev-1"}`)
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-1/join", body)
+	req.Header.Set("Mattermost-User-ID", "u-other")
+	rr := httptest.NewRecorder()
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
+	router.ServeHTTP(rr, req)
+
+	require.Equal(t, nethttp.StatusOK, rr.Code, rr.Body.String())
+	assert.Equal(t, "/v1/rooms/room-1/start_invited", receivedPath)
+	assert.Equal(t, "inv-1", receivedBody["invite_code"])
 }
 
 func TestMeetingsJoin_GuestPathUsesInvite(t *testing.T) {

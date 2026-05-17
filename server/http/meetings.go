@@ -251,9 +251,13 @@ func (h *Handlers) MeetingsJoin(w nethttp.ResponseWriter, r *nethttp.Request) {
 		}
 	}
 
+	// OpenTalk's POST /rooms/{id}/start is owner-only. Every other caller --
+	// including registered users that are not the room's host -- has to take
+	// StartInvited with the meeting's invite_code, otherwise the controller
+	// answers 403.
 	var start *opentalk.StartResponse
 	var startErr error
-	if h.IsConnected != nil && h.IsConnected(mmUserID) {
+	if mmUserID == am.HostUserID && h.IsConnected != nil && h.IsConnected(mmUserID) {
 		token, terr := h.AccessTokenFor(mmUserID)
 		if terr != nil {
 			h.internalError(w, "MeetingsJoin: access token", terr, nethttp.StatusUnauthorized, "access token unavailable")

@@ -174,16 +174,15 @@ func (p *Plugin) endMeetingFromReaper(am *store.ActiveMeeting) {
 	}, &model.WebsocketBroadcast{ChannelId: am.ChannelID})
 }
 
-// NotificationWillBePushed is called by the Mattermost server before any
-// push-notification is dispatched. Returning (nil, "<reason>") tells MM
-// to suppress this push. We use it to drop the duplicate notification
-// the standard pipeline would send for our custom_opentalk_meeting
-// posts (we already send our own call-flavored push from CreateMeeting).
+// NotificationWillBePushed suppresses the standard MM push for our
+// custom_opentalk_meeting bot post -- we already send our own call-flavored
+// push from notifyMeetingStarted. The SenderId check is critical: without it
+// the hook also cancels our own plugin push (both carry the same PostId).
 func (p *Plugin) NotificationWillBePushed(push *model.PushNotification, mmUserID string) (*model.PushNotification, string) {
-	if push == nil {
+	if push == nil || push.PostId == "" {
 		return push, ""
 	}
-	if push.PostId == "" {
+	if push.SenderId == p.botUserID {
 		return push, ""
 	}
 	pp, appErr := p.API.GetPost(push.PostId)
