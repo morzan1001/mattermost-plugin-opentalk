@@ -32,7 +32,6 @@ export const SpeakerLayout: React.FC = () => {
         );
     }
 
-    // Choose speakerId: first active speaker that exists in byId, else order[0]
     const activeSpeakerId = activeSpeakers.find((id: string) => byId[id] != null);
     const speakerId: string = activeSpeakerId ?? order[0];
 

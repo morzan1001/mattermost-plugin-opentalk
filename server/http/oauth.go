@@ -37,9 +37,7 @@ type Handlers struct {
 	// treated as English by i18n.T.
 	LocaleOf func(mmUserID string) string
 
-	// IsConnected gates the join endpoint between StartRoom (registered) and
-	// StartInvited (guest) based on KV store presence. UsernameOf returns the
-	// OpenTalk display_name shown in the room.
+	// IsConnected distinguishes registered users from guests.
 	IsConnected func(mmUserID string) bool
 	UsernameOf  func(mmUserID string) string
 

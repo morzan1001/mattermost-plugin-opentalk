@@ -10,12 +10,9 @@ export const ScreenFocusLayout: React.FC = () => {
     const order = useSelector(selectParticipantOrder);
     const perParticipant = useSelector(selectTracksPerParticipant);
 
-    // Find first participant in order with a screenTrackId
     const screenSharerId: string | undefined = order.find(
         (id: string) => Boolean(perParticipant[id]?.screenTrackId),
     );
-
-    // No screen share active — fall back to GridLayout
     if (screenSharerId === undefined) {
         return <GridLayout/>;
     }

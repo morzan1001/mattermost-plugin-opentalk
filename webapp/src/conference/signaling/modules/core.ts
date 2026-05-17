@@ -3,8 +3,7 @@
  * SPDX-FileCopyrightText: OpenTalk GmbH <mail@opentalk.eu>
  */
 
-// The on-the-wire namespace is "control" in OpenTalk Backend v25.x/v26.x; the
-// file name "core" is kept for parity with the upstream module layout.
+// On-the-wire namespace is "control" in OpenTalk Backend v25.x/v26.x.
 export const CoreNamespace = 'control' as const;
 export type CoreNamespace = typeof CoreNamespace;
 

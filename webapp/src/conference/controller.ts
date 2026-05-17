@@ -177,8 +177,7 @@ function clearOpenTalkStatus(): void {
     }).catch(() => { /* swallow */ });
 }
 
-// Captured at plugin bootstrap so root-component side effects (which run
-// outside a Redux Provider) can dispatch through the same store.
+// Root components don't have a Redux Provider; hold the store module-level.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let activeStore: Store<any, Action> | null = null;
 
@@ -253,8 +252,6 @@ export async function startConferenceConnection(
     client.on('connected', (data) => {
         const isHost = data.isHost === true;
 
-        // Self is always the first entry: ConferenceRoom.connect() prepends it
-        // from the joinSuccess top-level id.
         const localParticipantId = data.participants[0]?.id;
 
         store.dispatch(connected({
@@ -435,9 +432,6 @@ export async function leaveActiveConference(): Promise<void> {
     await tearDownActiveConference('leave');
 }
 
-// endActiveMeeting terminates the meeting for everyone. Sends a server-side
-// POST so the custom-post is marked ENDED and other participants receive the
-// meeting_ended WS event.
 export async function endActiveMeeting(): Promise<void> {
     if (!activeStore) {
         await leaveActiveConference();
@@ -664,7 +658,6 @@ export function lowerLocalHand(): void {
     activeClient.lowerHand();
 }
 
-// Test-only helper: reset module state.
 // eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention
 export function _reset(): void {
     activeClient = null;
@@ -673,7 +666,7 @@ export function _reset(): void {
     stopHeartbeat();
 }
 
-// Returns a JSON string (not a live object) so devtools doesn't truncate arrays.
+// JSON string so devtools doesn't truncate large arrays.
 export function debugState(): string {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stateSlice: any = activeStore?.getState()?.[PLUGIN_STATE_KEY] ?? {};

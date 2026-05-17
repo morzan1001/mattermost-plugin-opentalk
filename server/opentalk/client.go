@@ -1,6 +1,5 @@
-// Package opentalk wraps the OpenTalk-Controller REST API used by the
-// Mattermost plugin. The package is stateless: callers pass per-request
-// authentication (Bearer-Token for registered users, invite-code for guests).
+// Package opentalk is the OpenTalk-Controller REST client. Callers pass
+// per-request auth (Bearer for registered users, invite-code for guests).
 package opentalk
 
 import (

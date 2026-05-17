@@ -120,7 +120,6 @@ export default class Plugin {
         initDeviceCache();
 
         // Browser-devtools handle: window.opentalk.state() / toggleMic() etc.
-        // Kept in production builds — read-only-ish, same APIs as the React tree.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).opentalk = {
             state: debugState,
@@ -130,7 +129,6 @@ export default class Plugin {
             leave: leaveActiveConference,
             end: endActiveMeeting,
 
-            // Persists to localStorage. Returns the new state.
             ringtone: (enabled: boolean): boolean => {
                 try {
                     window.localStorage.setItem(ringtoneSettingKey, enabled ? 'true' : 'false');

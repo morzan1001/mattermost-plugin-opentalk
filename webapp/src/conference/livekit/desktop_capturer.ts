@@ -40,10 +40,7 @@ export function getDesktopSources(): Promise<DesktopSource[]> {
 // Captures a MediaStream for the chosen Chromium source-id using the
 // chromeMediaSource constraints. Throws on permission denial or invalid id.
 export async function captureDesktopStream(sourceId: string): Promise<MediaStream> {
-    // Cast: TypeScript's MediaTrackConstraints type doesn't know about
-    // chromeMediaSource. The constraint shape is the standard Electron/Chromium
-    // way of selecting a desktopCapturer source for getUserMedia.
-
+    // TypeScript's MediaTrackConstraints does not model chromeMediaSource.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const constraints: any = {
         audio: false,

@@ -65,7 +65,6 @@ export function useDraggable(opts: {
 
     const [isDragging, setIsDragging] = useState(false);
 
-    // Refs for drag-start coords — no re-renders needed for these
     const dragStartRef = useRef<{
         pointerX: number;
         pointerY: number;
@@ -73,7 +72,6 @@ export function useDraggable(opts: {
         widgetY: number;
     } | null>(null);
 
-    // Refs for event handlers so we can remove the exact same function reference
     const onPointerMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
     const onPointerUpRef = useRef<((e: MouseEvent) => void) | null>(null);
 
@@ -88,7 +86,6 @@ export function useDraggable(opts: {
         }
     }, []);
 
-    // Cleanup window listeners on unmount (in case mid-drag)
     useEffect(() => {
         return () => {
             removeWindowListeners();
@@ -100,8 +97,8 @@ export function useDraggable(opts: {
             const startPointerX = e.pageX;
             const startPointerY = e.pageY;
 
-            // Read current position from state via functional update trick
-            // We use dragStartRef to store current widget position
+            // Functional update lets us read the current position without
+            // adding it to the useCallback dep list.
             setPosition((current) => {
                 dragStartRef.current = {
                     pointerX: startPointerX,

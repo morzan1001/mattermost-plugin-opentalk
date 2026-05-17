@@ -384,10 +384,8 @@ export class ConferenceRoom {
         }
     }
 
-    // OpenTalk's BackendParticipant nests the display name under control.* in
-    // both joinSuccess.participants[] entries and joined frames. Older paths
-    // we keep handle the flat shape used by the inline self entry we build
-    // for joinSuccess.
+    // Flat shape for the self entry built in connect(), nested shape
+    // (participant.control.*) for joinSuccess.participants[] and joined.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private normalizeParticipant(p: any): Participant {
         const ctrl = (p.control ?? p.participant ?? {}) as Record<string, unknown>;

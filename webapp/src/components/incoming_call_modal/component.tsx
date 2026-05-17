@@ -13,7 +13,6 @@ import {ringtoneSettingKey} from '../../user_settings';
 import {useT} from '../../util/i18n';
 import {selectCurrentDisplayName, selectSessionStatus, selectIncomingCallsByChannelID} from '../../util/selectors';
 
-// Mirrors plugin.ts ringtoneEnabled(): default ON, false only on explicit opt-out.
 function isRingtoneEnabled(): boolean {
     if (typeof window === 'undefined') {
         return true;

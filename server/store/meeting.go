@@ -44,9 +44,9 @@ func meetingKey(channelID string) string {
 	return "meeting_" + channelID
 }
 
-// decodeActiveMeeting unwraps an at-rest value: it tries AES-GCM first and
-// falls back to plaintext JSON so values written before encryption was added
-// can still be read until the next save re-encrypts them.
+// decodeActiveMeeting tries AES-GCM first and falls through to raw JSON, so
+// a key rotation or a wiped TokenEncryptionKey does not mask the meeting --
+// the reaper can still see and end it.
 func decodeActiveMeeting(encKey, raw []byte) (*ActiveMeeting, error) {
 	if plain, dErr := crypto.Decrypt(encKey, raw); dErr == nil {
 		raw = plain
