@@ -196,12 +196,7 @@ export class ConferenceRoom {
                     if (this.state !== 'connected') {
                         return;
                     }
-                    const ctrl = payload.control ?? payload.participant ?? payload;
-                    const p = this.normalizeParticipant({
-                        id: payload.id ?? ctrl.id,
-                        display_name: ctrl.display_name ?? ctrl.displayName ?? payload.display_name ?? payload.displayName,
-                        role: ctrl.role ?? payload.role,
-                    });
+                    const p = this.normalizeParticipant(payload);
 
                     // De-dupe in case the roomserver re-emits or both event
                     // names fire — push only when not already present.
@@ -389,12 +384,21 @@ export class ConferenceRoom {
         }
     }
 
+    // OpenTalk's BackendParticipant nests the display name under control.* in
+    // both joinSuccess.participants[] entries and joined frames. Older paths
+    // we keep handle the flat shape used by the inline self entry we build
+    // for joinSuccess.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private normalizeParticipant(p: any): Participant {
+        const ctrl = (p.control ?? p.participant ?? {}) as Record<string, unknown>;
+        const id = (p.id ?? ctrl.id) as string;
+        const displayName =
+            (p.displayName ?? p.display_name ?? ctrl.displayName ?? ctrl.display_name) as string | undefined;
+        const role = (p.role ?? ctrl.role) as string | undefined;
         return {
-            id: p.id,
-            displayName: p.displayName ?? p.display_name,
-            ...(p.role && {role: p.role}),
+            id,
+            displayName: displayName ?? id,
+            ...(role && {role: role as Participant['role']}),
         };
     }
 }
