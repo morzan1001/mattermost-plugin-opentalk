@@ -10,7 +10,7 @@ import {useMeetingDuration} from '../../hooks/use_meeting_duration';
 import {useResizable} from '../../hooks/use_resizable';
 import {setMinimized} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {selectIsHost, selectIsMinimized, selectLocalParticipantId, selectSession, selectParticipantOrder} from '../../util/selectors';
+import {selectChannelType, selectIsHost, selectIsMinimized, selectLocalParticipantId, selectSession, selectParticipantOrder} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 import {LeaveCallModal} from '../leave_call_modal';
 
@@ -20,6 +20,9 @@ const MeetingMiniBar: React.FC = () => {
     const session = useSelector(selectSession);
     const isHost = useSelector(selectIsHost);
     const isMinimized = useSelector(selectIsMinimized);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const channelType = useSelector((s: any) => selectChannelType(s, session.channelID));
+    const isDM = channelType === 'D' || channelType === 'G';
     const [showLeavePrompt, setShowLeavePrompt] = useState(false);
 
     const drag = useDraggable({
@@ -76,7 +79,11 @@ const MeetingMiniBar: React.FC = () => {
     }
 
     const onLeaveClick = () => {
-        if (isHost) {
+        // DM hosts end the meeting outright -- "leave just for me" would
+        // strand an empty room in KV until the reaper, blocking re-rings.
+        if (isHost && isDM) {
+            endActiveMeeting();
+        } else if (isHost) {
             setShowLeavePrompt(true);
         } else {
             leaveActiveConference();
