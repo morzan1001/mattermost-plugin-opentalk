@@ -180,23 +180,18 @@ export class ConferenceRoom {
                     }
                 });
 
-                // Listen for both joined and participantConnected for forward-compat.
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const onJoinedFrame = (payload: any) => {
                     if (this.state !== 'connected') {
                         return;
                     }
                     const p = this.normalizeParticipant(payload);
-
-                    // De-dupe in case the roomserver re-emits or both event
-                    // names fire — push only when not already present.
                     if (!this.participants.some((existing) => existing.id === p.id)) {
                         this.participants.push(p);
                     }
                     this.emit('participant_joined', p);
                 };
                 this.listener.on(CoreNamespace, 'joined', onJoinedFrame);
-                this.listener.on(CoreNamespace, 'participantConnected', onJoinedFrame);
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const onLeftFrame = (payload: any) => {
@@ -208,7 +203,6 @@ export class ConferenceRoom {
                     this.emit('participant_left', {id});
                 };
                 this.listener.on(CoreNamespace, 'left', onLeftFrame);
-                this.listener.on(CoreNamespace, 'participantDisconnected', onLeftFrame);
 
                 // OpenTalk delivers LiveKit bootstrap as a separate frame
                 // {namespace:'livekit', payload:{action:'credentials', publicUrl, token, room}}

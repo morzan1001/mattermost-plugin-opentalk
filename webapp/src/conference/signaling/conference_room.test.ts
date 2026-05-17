@@ -116,7 +116,7 @@ describe('ConferenceRoom', () => {
         ]);
     });
 
-    it('updates participants list on participantConnected and emits event', async () => {
+    it('updates participants list on joined and emits event', async () => {
         const room = new ConferenceRoom(makeFakeAuth(), 'wss://rs.example');
         const onJoined = jest.fn();
         room.on('participant_joined', onJoined);
@@ -131,8 +131,9 @@ describe('ConferenceRoom', () => {
         emit(ws, {
             namespace: 'control',
             payload: {
-                message: 'participant_connected',
-                participant: {id: 'u2', display_name: 'carol'},
+                message: 'joined',
+                id: 'u2',
+                control: {display_name: 'carol'},
             },
         });
 
@@ -143,7 +144,7 @@ describe('ConferenceRoom', () => {
         ]);
     });
 
-    it('removes participants on participantDisconnected and emits event', async () => {
+    it('removes participants on left and emits event', async () => {
         const room = new ConferenceRoom(makeFakeAuth(), 'wss://rs.example');
         const onLeft = jest.fn();
         room.on('participant_left', onLeft);
@@ -159,11 +160,11 @@ describe('ConferenceRoom', () => {
                 message: 'join_success',
                 id: 'self-id',
                 display_name: 'self-name',
-                participants: [{id: 'u2', display_name: 'carol'}, {id: 'u3', display_name: 'dave'}],
+                participants: [{id: 'u2', control: {display_name: 'carol'}}, {id: 'u3', control: {display_name: 'dave'}}],
             },
         });
 
-        emit(ws, {namespace: 'control', payload: {message: 'participant_disconnected', id: 'u2'}});
+        emit(ws, {namespace: 'control', payload: {message: 'left', id: 'u2'}});
 
         expect(onLeft).toHaveBeenCalledWith({id: 'u2'});
         expect(room.getParticipants()).toEqual([
