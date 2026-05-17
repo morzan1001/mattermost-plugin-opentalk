@@ -38,10 +38,6 @@
                     {"key": "OpenTalkRoomserverURL", "type": "text",
                      "display_name": "Roomserver URL (WebSocket)",
                      "help_text": "Base WebSocket URL of the OpenTalk Roomserver, e.g. wss://controller.opentalk.example. The plugin appends /v1/signaling/<ticket>.",
-                     "default": ""},
-                    {"key": "LiveKitURL", "type": "text",
-                     "display_name": "LiveKit URL (optional override)",
-                     "help_text": "Override LiveKit endpoint. Leave empty to use what the Roomserver returns via the livekit signaling module.",
                      "default": ""}
                 ]
             },

@@ -14,7 +14,6 @@ type Configuration struct {
 	OpenTalkControllerURL string
 	OpenTalkFrontendURL   string
 	OpenTalkRoomserverURL string
-	LiveKitURL            string
 
 	OIDCAuthority    string
 	OIDCClientID     string

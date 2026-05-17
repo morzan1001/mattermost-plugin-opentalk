@@ -67,10 +67,3 @@ type StartResponse struct {
 	Ticket     string `json:"ticket"`
 	Resumption string `json:"resumption"`
 }
-
-// SIPInfo is returned by GET /v1/rooms/{id}/sip when the room has SIP enabled.
-type SIPInfo struct {
-	ID       string `json:"id"`
-	Password string `json:"password"`
-	Lobby    bool   `json:"lobby"`
-}
