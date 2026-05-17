@@ -14,9 +14,6 @@ import {useT} from '../../util/i18n';
 import {selectCurrentDisplayName, selectSessionStatus, selectIncomingCallsByChannelID} from '../../util/selectors';
 
 function isRingtoneEnabled(): boolean {
-    if (typeof window === 'undefined') {
-        return true;
-    }
     try {
         return window.localStorage.getItem(ringtoneSettingKey) !== 'false';
     } catch {

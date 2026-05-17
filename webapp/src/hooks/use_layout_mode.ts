@@ -12,15 +12,12 @@ function isValidLayoutMode(value: unknown): value is LayoutMode {
 
 function readStoredMode(): LayoutMode {
     try {
-        if (typeof window === 'undefined') {
-            return 'speaker';
-        }
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw !== null && isValidLayoutMode(raw)) {
             return raw;
         }
     } catch {
-        // localStorage may be unavailable — silently ignore
+        // localStorage unavailable
     }
     return 'speaker';
 }

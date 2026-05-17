@@ -29,7 +29,7 @@ export function useRingtone(): {start: () => void; stop: () => void} {
     };
 
     const start = () => {
-        if (typeof window === 'undefined' || typeof Audio === 'undefined') {
+        if (typeof Audio === 'undefined') {
             return;
         }
         if (!audioRef.current) {

@@ -54,9 +54,6 @@ const CAM_DEVICE_KEY = 'opentalk:preferred-cam-id';
 const MUTE_ON_JOIN_KEY = 'opentalk:mute-on-join';
 
 function readSetting(key: string): string | undefined {
-    if (typeof window === 'undefined') {
-        return undefined;
-    }
     try {
         return window.localStorage.getItem(key) ?? undefined;
     } catch {
@@ -65,9 +62,6 @@ function readSetting(key: string): string | undefined {
 }
 
 function writeSetting(key: string, value: string): void {
-    if (typeof window === 'undefined') {
-        return;
-    }
     try {
         window.localStorage.setItem(key, value);
     } catch {

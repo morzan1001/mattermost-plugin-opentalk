@@ -80,12 +80,8 @@ const incomingCallFreshnessMs = 30000;
 // Default ON. User can opt out via the Settings modal, /opentalk ring off,
 // or window.opentalk.ringtone(false).
 function ringtoneEnabled(): boolean {
-    if (typeof window === 'undefined') {
-        return true;
-    }
     try {
-        const v = window.localStorage.getItem(ringtoneSettingKey);
-        return v !== 'false';
+        return window.localStorage.getItem(ringtoneSettingKey) !== 'false';
     } catch {
         return true;
     }

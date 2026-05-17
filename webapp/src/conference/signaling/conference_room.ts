@@ -13,36 +13,26 @@ import {SignalingSocket} from './socket';
 const RESUMPTION_KEY_PREFIX = 'opentalk:resumption:';
 
 function readResumption(roomID: string): string | undefined {
-    if (typeof window === 'undefined') {
-        return undefined;
-    }
     try {
-        const v = window.localStorage.getItem(RESUMPTION_KEY_PREFIX + roomID);
-        return v ?? undefined;
+        return window.localStorage.getItem(RESUMPTION_KEY_PREFIX + roomID) ?? undefined;
     } catch {
         return undefined;
     }
 }
 
 function writeResumption(roomID: string, value: string): void {
-    if (typeof window === 'undefined') {
-        return;
-    }
     try {
         window.localStorage.setItem(RESUMPTION_KEY_PREFIX + roomID, value);
     } catch {
-        /* swallow — quota/private mode */
+        // quota / private mode
     }
 }
 
 function clearResumption(roomID: string): void {
-    if (typeof window === 'undefined') {
-        return;
-    }
     try {
         window.localStorage.removeItem(RESUMPTION_KEY_PREFIX + roomID);
     } catch {
-        /* swallow */
+        // quota / private mode
     }
 }
 

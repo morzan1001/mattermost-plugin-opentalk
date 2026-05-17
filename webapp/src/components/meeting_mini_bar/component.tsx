@@ -28,8 +28,8 @@ const MeetingMiniBar: React.FC = () => {
     const drag = useDraggable({
         storageKey: 'opentalk:widget-position:v2',
         defaultPosition: {
-            x: typeof window === 'undefined' ? 16 : window.innerWidth - 620,
-            y: typeof window === 'undefined' ? 16 : window.innerHeight - 100,
+            x: window.innerWidth - 620,
+            y: window.innerHeight - 100,
         },
     });
 

@@ -78,9 +78,6 @@ const PRIOR_STATUS_KEY = 'opentalk:prior-status:v1';
 type CustomStatus = {emoji?: string; text?: string; duration?: string; expires_at?: string};
 
 function readPriorStatus(): CustomStatus | null {
-    if (typeof window === 'undefined') {
-        return null;
-    }
     try {
         const raw = window.localStorage.getItem(PRIOR_STATUS_KEY);
         return raw ? JSON.parse(raw) as CustomStatus : null;
@@ -90,9 +87,6 @@ function readPriorStatus(): CustomStatus | null {
 }
 
 function writePriorStatus(status: CustomStatus | null): void {
-    if (typeof window === 'undefined') {
-        return;
-    }
     try {
         if (status === null) {
             window.localStorage.removeItem(PRIOR_STATUS_KEY);
@@ -100,7 +94,7 @@ function writePriorStatus(status: CustomStatus | null): void {
             window.localStorage.setItem(PRIOR_STATUS_KEY, JSON.stringify(status));
         }
     } catch {
-        // quota/private mode — restore degrades gracefully
+        // quota / private mode
     }
 }
 

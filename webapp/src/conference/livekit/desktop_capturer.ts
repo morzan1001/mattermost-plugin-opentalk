@@ -26,7 +26,7 @@ declare global {
 }
 
 export function getDesktopSources(): Promise<DesktopSource[]> {
-    if (typeof window === 'undefined' || !window.desktopAPI?.getDesktopSources) {
+    if (!window.desktopAPI?.getDesktopSources) {
         return Promise.reject(new Error(
             'Mattermost Desktop screen-share API unavailable (window.desktopAPI.getDesktopSources missing). Update Mattermost Desktop or use a browser.',
         ));
