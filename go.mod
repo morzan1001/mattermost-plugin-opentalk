@@ -3,7 +3,7 @@ module github.com/morzan1001/mattermost-plugin-opentalk
 go 1.25.8
 
 require (
-	github.com/coreos/go-oidc/v3 v3.18.0
+	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/mattermost/mattermost/server/public v0.3.1
