@@ -17,14 +17,15 @@ func TestOAuthState_StoreAndConsume(t *testing.T) {
 		Return(nil)
 
 	s := New(api)
-	require.NoError(t, s.SaveOAuthState("uuid-1", "mm-user-1"))
+	require.NoError(t, s.SaveOAuthState("uuid-1", "mm-user-1", "pkce-verifier-1"))
 
 	api.On("KVGet", oauthStateKey("uuid-1")).Return(stored, nil)
 	api.On("KVCompareAndDelete", oauthStateKey("uuid-1"), mock.Anything).Return(true, nil)
 
-	mmUserID, err := s.ConsumeOAuthState("uuid-1")
+	st, err := s.ConsumeOAuthState("uuid-1")
 	require.NoError(t, err)
-	assert.Equal(t, "mm-user-1", mmUserID)
+	assert.Equal(t, "mm-user-1", st.MattermostUserID)
+	assert.Equal(t, "pkce-verifier-1", st.PKCEVerifier)
 	api.AssertExpectations(t)
 }
 

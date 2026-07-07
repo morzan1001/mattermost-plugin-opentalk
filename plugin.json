@@ -37,7 +37,7 @@
                      "default": ""},
                     {"key": "OpenTalkRoomserverURL", "type": "text",
                      "display_name": "Roomserver URL (WebSocket)",
-                     "help_text": "Base WebSocket URL of the OpenTalk Roomserver, e.g. wss://controller.opentalk.example. The plugin appends /v1/signaling/<ticket>.",
+                     "help_text": "Base WebSocket URL of the OpenTalk Roomserver, e.g. wss://controller.opentalk.example. The plugin connects to <URL>/signaling and authenticates via the Sec-WebSocket-Protocol ticket.",
                      "default": ""}
                 ]
             },
@@ -47,13 +47,14 @@
                 "settings": [
                     {"key": "OIDCAuthority", "type": "text",
                      "display_name": "OIDC Authority",
-                     "help_text": "e.g. https://keycloak.example/realms/opentalk",
+                     "help_text": "OIDC issuer URL, must match the iss claim exactly (including any trailing slash), e.g. https://keycloak.example/realms/opentalk or https://authentik.example/application/o/opentalk/",
                      "default": ""},
                     {"key": "OIDCClientID", "type": "text",
                      "display_name": "OIDC Client ID",
                      "default": "mattermost-plugin-opentalk"},
                     {"key": "OIDCClientSecret", "type": "text",
                      "display_name": "OIDC Client Secret",
+                     "help_text": "Leave empty for public clients (no secret, PKCE only).",
                      "secret": true,
                      "default": ""},
                     {"key": "OIDCScopes", "type": "text",

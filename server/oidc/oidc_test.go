@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -14,8 +15,10 @@ import (
 
 // mockOIDCServer spins up a minimal OIDC IdP for tests:
 // /.well-known/openid-configuration, /token, /userinfo, /jwks.
-func mockOIDCServer(t *testing.T) *httptest.Server {
+// The returned url.Values captures the form of the last /token request.
+func mockOIDCServer(t *testing.T) (*httptest.Server, *url.Values) {
 	t.Helper()
+	tokenForm := &url.Values{}
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -30,6 +33,8 @@ func mockOIDCServer(t *testing.T) *httptest.Server {
 				"id_token_signing_alg_values_supported": []string{"RS256"},
 			})
 		case "/token":
+			_ = r.ParseForm()
+			*tokenForm = r.PostForm
 			json.NewEncoder(w).Encode(map[string]any{
 				"access_token":  "access-jwt",
 				"refresh_token": "refresh-jwt",
@@ -48,7 +53,7 @@ func mockOIDCServer(t *testing.T) *httptest.Server {
 			http.NotFound(w, r)
 		}
 	}))
-	return srv
+	return srv, tokenForm
 }
 
 func newTestClient(t *testing.T, srv *httptest.Server) *Client {
@@ -65,32 +70,35 @@ func newTestClient(t *testing.T, srv *httptest.Server) *Client {
 }
 
 func TestNewClient_DiscoversIssuer(t *testing.T) {
-	srv := mockOIDCServer(t)
+	srv, _ := mockOIDCServer(t)
 	defer srv.Close()
 	c := newTestClient(t, srv)
 
-	url := c.AuthCodeURL("state-xyz")
-	assert.Contains(t, url, "client_id=test-client")
-	assert.Contains(t, url, "state=state-xyz")
-	assert.Contains(t, url, "scope=openid+email+profile+offline_access")
-	assert.True(t, strings.HasPrefix(url, srv.URL+"/auth"))
+	authURL := c.AuthCodeURL("state-xyz", GenerateVerifier())
+	assert.Contains(t, authURL, "client_id=test-client")
+	assert.Contains(t, authURL, "state=state-xyz")
+	assert.Contains(t, authURL, "scope=openid+email+profile+offline_access")
+	assert.Contains(t, authURL, "code_challenge=")
+	assert.Contains(t, authURL, "code_challenge_method=S256")
+	assert.True(t, strings.HasPrefix(authURL, srv.URL+"/auth"))
 }
 
 func TestExchange_ReturnsTokenAndUserinfo(t *testing.T) {
-	srv := mockOIDCServer(t)
+	srv, tokenForm := mockOIDCServer(t)
 	defer srv.Close()
 	c := newTestClient(t, srv)
 
-	tok, info, err := c.Exchange(context.Background(), "auth-code-xyz")
+	tok, info, err := c.Exchange(context.Background(), "auth-code-xyz", "pkce-verifier-1")
 	require.NoError(t, err)
 	assert.Equal(t, "access-jwt", tok.AccessToken)
 	assert.Equal(t, "refresh-jwt", tok.RefreshToken)
 	assert.Equal(t, "kc-sub-1", info.Sub)
 	assert.Equal(t, "alice@example.com", info.Email)
+	assert.Equal(t, "pkce-verifier-1", tokenForm.Get("code_verifier"))
 }
 
 func TestRefresh_ReturnsNewToken(t *testing.T) {
-	srv := mockOIDCServer(t)
+	srv, _ := mockOIDCServer(t)
 	defer srv.Close()
 	c := newTestClient(t, srv)
 

@@ -97,6 +97,21 @@ func TestConfiguration_IsValid(t *testing.T) {
 		err := c.IsValid()
 		assert.NoError(t, err)
 	})
+
+	t.Run("accepts empty client secret for public clients", func(t *testing.T) {
+		c := &Configuration{
+			OpenTalkControllerURL: "https://controller.example",
+			OpenTalkFrontendURL:   "https://opentalk.example",
+			OpenTalkRoomserverURL: "wss://controller.example",
+			OIDCAuthority:         "https://authentik.example/application/o/opentalk/",
+			OIDCClientID:          "opentalk-frontend",
+			OIDCClientSecret:      "",
+			InviteExpirationHours: 24,
+			TokenEncryptionKey:    "a-32-byte-encryption-key-padded!",
+		}
+		err := c.IsValid()
+		assert.NoError(t, err)
+	})
 }
 
 func TestPlugin_OnConfigurationChange(t *testing.T) {

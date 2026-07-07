@@ -48,9 +48,8 @@ func (c *Configuration) IsValid() error {
 	if c.OIDCClientID == "" {
 		return errors.New("OIDCClientID must not be empty")
 	}
-	if c.OIDCClientSecret == "" {
-		return errors.New("OIDCClientSecret must not be empty")
-	}
+
+	// OIDCClientSecret may be empty: public clients have no secret.
 	if c.InviteExpirationHours < 1 {
 		return fmt.Errorf("InviteExpirationHours must be >= 1, got %d", c.InviteExpirationHours)
 	}
