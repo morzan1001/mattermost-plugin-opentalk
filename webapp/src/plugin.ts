@@ -193,6 +193,14 @@ export default class Plugin {
 
                 const ownCall = Boolean(myId && msg.data.host_user_id === myId);
                 const stale = typeof createdAt !== 'number' || ageMs > incomingCallFreshnessMs;
+
+                // Re-ring for the channel this session is already connected to:
+                // the SwitchCallModal would surface and its Cancel would flip
+                // the live meeting to MISSED. Never ring for your own live call.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const ownSession: any = (store.getState() as any)?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk']?.session;
+                const alreadyHere = ownSession?.status !== 'idle' && ownSession?.channelID === msg.data.channel_id;
+
                 // Verbose-level only; visible when devtools is set to Verbose.
                 // eslint-disable-next-line no-console
                 console.debug('[opentalk] incoming_call received', {
@@ -202,10 +210,11 @@ export default class Plugin {
                     age_ms: ageMs,
                     own_call: ownCall,
                     stale,
-                    will_dispatch: !ownCall && !stale,
+                    already_here: alreadyHere,
+                    will_dispatch: !ownCall && !stale && !alreadyHere,
                 });
 
-                if (ownCall || stale) {
+                if (ownCall || stale || alreadyHere) {
                     return;
                 }
 

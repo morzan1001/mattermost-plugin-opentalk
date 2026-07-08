@@ -91,7 +91,7 @@ export async function joinMeeting(
 }
 
 export async function heartbeat(channelID: string): Promise<void> {
-    await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/heartbeat', {
+    const r = await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/heartbeat', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -100,6 +100,12 @@ export async function heartbeat(channelID: string): Promise<void> {
         credentials: 'include',
         body: JSON.stringify({channel_id: channelID}),
     });
+
+    // fetch only rejects on network errors; a 5xx would otherwise be swallowed,
+    // defeating the caller's failure logging.
+    if (!r.ok) {
+        throw new Error(`heartbeat failed: ${r.status}`);
+    }
 }
 
 export async function dismissIncomingCall(channelID: string, roomID: string): Promise<void> {

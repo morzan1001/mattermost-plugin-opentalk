@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -34,9 +35,9 @@ type ActiveMeeting struct {
 	DialInNumber  string    `json:"dial_in_number,omitempty"`
 	DialInPIN     string    `json:"dial_in_pin,omitempty"`
 
-	// HostHeartbeatReceived flips to true the first time the host's webapp
-	// reports a heartbeat against this meeting. Mobile-only hosts never set
-	// it; the reaper grants them a longer initial grace before reaping.
+	// HostHeartbeatReceived flips to true the first time any participant's
+	// webapp reports a heartbeat against this meeting. Until then (e.g. a
+	// mobile-only host) the reaper grants a longer initial grace before reaping.
 	HostHeartbeatReceived bool `json:"host_heartbeat_received,omitempty"`
 }
 
@@ -44,9 +45,13 @@ func meetingKey(channelID string) string {
 	return "meeting_" + channelID
 }
 
-// decodeActiveMeeting tries AES-GCM first and falls through to raw JSON, so
-// a key rotation or a wiped TokenEncryptionKey does not mask the meeting --
-// the reaper can still see and end it.
+// decodeActiveMeeting decrypts then unmarshals, falling back to treating raw
+// as plaintext JSON when decryption fails. This keeps unencrypted records
+// (tests store with a nil key) readable. Production records are always
+// AES-GCM, so a record that fails BOTH paths -- e.g. ciphertext under a
+// rotated TokenEncryptionKey -- surfaces as an error the caller treats as an
+// orphan. It is NOT a key-rotation recovery path: rotating the key makes live
+// records undecodable, not plaintext-readable.
 func decodeActiveMeeting(encKey, raw []byte) (*ActiveMeeting, error) {
 	if plain, dErr := crypto.Decrypt(encKey, raw); dErr == nil {
 		raw = plain
@@ -103,12 +108,49 @@ func (s *Store) LoadActiveMeeting(encKey []byte, channelID string) (*ActiveMeeti
 	return decodeActiveMeeting(encKey, raw)
 }
 
+// LoadActiveMeetingRaw also returns the stored ciphertext, for callers that
+// need it as the compare-and-set precondition of a later conditional write.
+func (s *Store) LoadActiveMeetingRaw(encKey []byte, channelID string) (*ActiveMeeting, []byte, error) {
+	raw, err := s.Get(meetingKey(channelID))
+	if err != nil {
+		return nil, nil, err
+	}
+	am, dErr := decodeActiveMeeting(encKey, raw)
+	if dErr != nil {
+		return nil, nil, dErr
+	}
+	return am, raw, nil
+}
+
+// SaveActiveMeetingCAS writes am only if the stored value still equals prev
+// (the ciphertext previously read). Returns false when the record changed or
+// was deleted meanwhile, so a heartbeat cannot resurrect a meeting that end/
+// dismiss/reaper deleted concurrently.
+func (s *Store) SaveActiveMeetingCAS(encKey []byte, am *ActiveMeeting, prev []byte) (bool, error) {
+	value, err := encodeActiveMeeting(encKey, am)
+	if err != nil {
+		return false, err
+	}
+	ok, appErr := s.api.KVSetWithOptions(meetingKey(am.ChannelID), value, model.PluginKVSetOptions{
+		Atomic:   true,
+		OldValue: prev,
+	})
+	if appErr != nil {
+		return false, appErr
+	}
+	return ok, nil
+}
+
 func (s *Store) DeleteActiveMeeting(channelID string) error {
 	return s.Delete(meetingKey(channelID))
 }
 
 // ListActiveMeetings enumerates every meeting_<channelID> KV entry by paging
-// through KVList. Returns the partial list on per-key parse errors.
+// through KVList. Records that no longer decode under the current encryption
+// key (e.g. after a TokenEncryptionKey change) are deleted as orphans:
+// leaving them would brick the channel forever, since LoadActiveMeeting can
+// no longer read them and CreateActiveMeetingAtomic's CAS keeps failing on
+// the stale key.
 func (s *Store) ListActiveMeetings(encKey []byte) ([]*ActiveMeeting, error) {
 	out := make([]*ActiveMeeting, 0, 8)
 	page := 0
@@ -131,6 +173,8 @@ func (s *Store) ListActiveMeetings(encKey []byte) ([]*ActiveMeeting, error) {
 			}
 			am, dErr := decodeActiveMeeting(encKey, raw)
 			if dErr != nil {
+				_ = s.api.KVDelete(k)
+				s.api.LogWarn("[opentalk] deleted undecodable ActiveMeeting orphan", "key", k, "err", dErr.Error())
 				continue
 			}
 			out = append(out, am)
@@ -148,25 +192,47 @@ func dismissalKey(channelID, roomID string) string {
 }
 
 // AddDismissal records that mmUserID has dismissed the call in
-// (channelID, roomID) and returns the full updated set.
+// (channelID, roomID) and returns the full updated set. The read-modify-write
+// runs under a compare-and-set retry loop so concurrent dismissals (different
+// users, possibly on different cluster nodes) cannot clobber each other and
+// lose a member from the set -- which would break the all-declined -> MISSED
+// flip.
 func (s *Store) AddDismissal(channelID, roomID, mmUserID string) ([]string, error) {
-	set, _ := s.LoadDismissals(channelID, roomID)
-	seen := make(map[string]bool, len(set))
-	for _, u := range set {
-		seen[u] = true
+	key := dismissalKey(channelID, roomID)
+	ttl := int64((1 * time.Hour).Seconds())
+	const maxAttempts = 5
+	for range maxAttempts {
+		oldRaw, appErr := s.api.KVGet(key)
+		if appErr != nil {
+			return nil, appErr
+		}
+		var set []string
+		if oldRaw != nil {
+			if err := json.Unmarshal(oldRaw, &set); err != nil {
+				return nil, err
+			}
+		}
+		if slices.Contains(set, mmUserID) {
+			return set, nil
+		}
+		next := append(append([]string(nil), set...), mmUserID)
+		raw, err := json.Marshal(next)
+		if err != nil {
+			return nil, err
+		}
+		ok, appErr := s.api.KVSetWithOptions(key, raw, model.PluginKVSetOptions{
+			Atomic:          true,
+			OldValue:        oldRaw,
+			ExpireInSeconds: ttl,
+		})
+		if appErr != nil {
+			return nil, appErr
+		}
+		if ok {
+			return next, nil
+		}
 	}
-	if !seen[mmUserID] {
-		set = append(set, mmUserID)
-	}
-	raw, err := json.Marshal(set)
-	if err != nil {
-		return nil, err
-	}
-	// 1h TTL — keep the set well past the call's lifetime to avoid races.
-	if err := s.Set(dismissalKey(channelID, roomID), raw, int64((1 * time.Hour).Seconds())); err != nil {
-		return nil, err
-	}
-	return set, nil
+	return nil, fmt.Errorf("AddDismissal: CAS contention on %s", key)
 }
 
 // LoadDismissals returns the set of user-IDs that have dismissed the call

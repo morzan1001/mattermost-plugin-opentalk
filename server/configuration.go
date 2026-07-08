@@ -95,9 +95,6 @@ func (p *Plugin) OnConfigurationChange() error {
 		return fmt.Errorf("invalid plugin configuration: %w", err)
 	}
 
-	ot := opentalk.NewClient(configuration.OpenTalkControllerURL)
-	p.setConfigurationAndClient(configuration, ot)
-
 	redirectURL := fmt.Sprintf("%s/plugins/%s/oauth/callback", p.getSiteURL(), pluginID)
 	client, err := oidc.NewClient(context.Background(), oidc.Config{
 		Issuer:       configuration.OIDCAuthority,
@@ -109,6 +106,12 @@ func (p *Plugin) OnConfigurationChange() error {
 	if err != nil {
 		return fmt.Errorf("oidc client init: %w", err)
 	}
+
+	// Publish config, OpenTalk client, and OIDC client only after all of them
+	// succeed, so an OIDC failure leaves the prior working state untouched
+	// instead of a half-applied (new config, stale/nil oidc) mix.
+	ot := opentalk.NewClient(configuration.OpenTalkControllerURL)
+	p.setConfigurationAndClient(configuration, ot)
 	p.setOIDCClient(client)
 
 	return nil

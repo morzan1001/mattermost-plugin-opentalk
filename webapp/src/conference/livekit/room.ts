@@ -3,6 +3,7 @@ import {
     RoomEvent,
     Track,
     LocalVideoTrack,
+    ConnectionState,
     type RemoteTrack,
     type RemoteTrackPublication,
     type RemoteParticipant,
@@ -41,6 +42,14 @@ export class LiveKitRoom {
     public micTrack?: LocalAudioTrack;
     public camTrack?: LocalVideoTrack;
 
+    // In-flight publish guards: getUserMedia + publishTrack take several
+    // event-loop turns, so a check-then-await on micTrack/camTrack alone lets
+    // two concurrent enable calls each publish a track. The second one then
+    // leaks -- it stays published (hot mic) while the state only tracks the
+    // last assignment. Concurrent callers share the same pending publish.
+    private micPublish?: Promise<void>;
+    private camPublish?: Promise<void>;
+
     constructor() {
         this.room = new Room({adaptiveStream: true, dynacast: true});
         this.room.on(RoomEvent.Disconnected, () => this.emit('disconnected'));
@@ -54,7 +63,11 @@ export class LiveKitRoom {
             this.emit('active_speakers_changed', speakers.map((s) => s.identity));
         });
         this.room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
-            if (publication.source === Track.Source.ScreenShare) {
+            // A full reconnect republishes local tracks, unpublishing each one
+            // first. Only treat an unpublish as an OS-driven screen-share stop
+            // while the room is actually connected, or a reconnect would
+            // spuriously kill an ongoing share.
+            if (publication.source === Track.Source.ScreenShare && this.room.state === ConnectionState.Connected) {
                 this.emit('local_screen_share_ended');
             }
         });
@@ -73,7 +86,14 @@ export class LiveKitRoom {
         if (this.micTrack) {
             return;
         }
-        this.micTrack = await publishMic(this.room, opts);
+        if (!this.micPublish) {
+            this.micPublish = (async () => {
+                this.micTrack = await publishMic(this.room, opts);
+            })().finally(() => {
+                this.micPublish = undefined;
+            });
+        }
+        await this.micPublish;
     }
 
     public async disableMic(): Promise<void> {
@@ -92,7 +112,14 @@ export class LiveKitRoom {
         if (this.camTrack) {
             return;
         }
-        this.camTrack = await publishCam(this.room, opts);
+        if (!this.camPublish) {
+            this.camPublish = (async () => {
+                this.camTrack = await publishCam(this.room, opts);
+            })().finally(() => {
+                this.camPublish = undefined;
+            });
+        }
+        await this.camPublish;
     }
 
     public async disableCam(): Promise<void> {
@@ -124,9 +151,16 @@ export class LiveKitRoom {
             throw new Error('Stream has no video track');
         }
         const localTrack = new LocalVideoTrack(videoTrack);
-        await this.room.localParticipant.publishTrack(localTrack, {
-            source: Track.Source.ScreenShare,
-        });
+        try {
+            await this.room.localParticipant.publishTrack(localTrack, {
+                source: Track.Source.ScreenShare,
+            });
+        } catch (err) {
+            // Publish failed: stop the capture so the OS screen-share picker
+            // indicator doesn't stay on with no publication behind it.
+            localTrack.stop();
+            throw err;
+        }
 
         // When user stops via OS share-controls, the track ends. Tear down our
         // publication so isScreenShareEnabled() flips back to false.

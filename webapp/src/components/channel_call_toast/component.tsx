@@ -1,7 +1,7 @@
 import React from 'react';
 import {useDispatch, useSelector, useStore} from 'react-redux';
 
-import {startConferenceConnection} from '../../conference/controller';
+import {leaveActiveConference, startConferenceConnection} from '../../conference/controller';
 import {activeMeetingDismissed, type ActiveMeeting} from '../../store/slice_active_meetings';
 import {useT} from '../../util/i18n';
 import {selectCurrentDisplayName, selectSessionStatus, selectCurrentChannelId, selectChannelType, selectActiveMeetingsByChannelID, selectChannelID} from '../../util/selectors';
@@ -80,6 +80,12 @@ const ChannelCallToast: React.FC = () => {
     const onJoin = async () => {
         const displayName = selectCurrentDisplayName(store.getState());
         try {
+            // Already in a call in another channel: startConferenceConnection
+            // would no-op on the live client. Leave first, then join here.
+            if (sessionStatus !== 'idle') {
+                await leaveActiveConference();
+                await new Promise((r) => setTimeout(r, 50));
+            }
             await startConferenceConnection(meeting.roomID, meeting.channelID, displayName, store);
         } catch (e) {
             // eslint-disable-next-line no-console

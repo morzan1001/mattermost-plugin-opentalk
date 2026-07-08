@@ -10,6 +10,7 @@ import (
 
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/i18n"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/oidc"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/opentalk"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
@@ -26,6 +27,11 @@ type Handler struct {
 	FrontendURL   string
 
 	MeetingCreator func(channelID, mmUserID string) (*store.ActiveMeeting, error)
+
+	// OpenTalk + AccessTokenFor let /opentalk end revoke the invite, mirroring
+	// the HTTP end path. Both may be nil; the caller then skips the revoke.
+	OpenTalk       *opentalk.Client
+	AccessTokenFor func(mmUserID string) (string, error)
 
 	PostGetter func(postID string) (*model.Post, error)
 

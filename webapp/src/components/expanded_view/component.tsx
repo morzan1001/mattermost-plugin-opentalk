@@ -13,7 +13,7 @@ import type {ParticipantInfo} from '../../store/slice_participants';
 import type {SessionStatus} from '../../store/slice_session';
 import {setExpanded} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {selectIsExpanded, selectIsHost, selectJoinedAt, selectSessionStatus, selectParticipantOrder, selectParticipantsById} from '../../util/selectors';
+import {selectIsExpanded, selectIsHost, selectJoinedAt, selectSessionStatus, selectParticipantOrder, selectParticipantsById, selectChannelID, selectChannelType} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 import {HandIcon} from '../icons';
 import {LeaveCallModal} from '../leave_call_modal';
@@ -24,6 +24,10 @@ const ExpandedView: React.FC = () => {
     const status = useSelector(selectSessionStatus) as SessionStatus;
     const isHost = useSelector(selectIsHost);
     const joinedAt = useSelector(selectJoinedAt);
+    const channelID = useSelector(selectChannelID);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const channelType = useSelector((s: any) => selectChannelType(s, channelID));
+    const isDM = channelType === 'D' || channelType === 'G';
 
     const order = useSelector(selectParticipantOrder);
     const byId = useSelector(selectParticipantsById);
@@ -42,7 +46,12 @@ const ExpandedView: React.FC = () => {
     }
 
     const onLeaveClick = () => {
-        if (isHost) {
+        // DM hosts end the meeting outright -- "leave just for me" would strand
+        // an empty room in KV until the reaper, blocking re-rings. Mirrors the
+        // mini-bar hangup.
+        if (isHost && isDM) {
+            endActiveMeeting();
+        } else if (isHost) {
             setShowLeavePrompt(true);
         } else {
             leaveActiveConference();

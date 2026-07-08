@@ -343,6 +343,14 @@ describe('"error" client event', () => {
 
         c().trigger('error', new Error('ws gone'));
 
+        // connectError is now dispatched after teardown resolves (so
+        // disconnected() cannot wipe it in the same tick); flush the teardown
+        // microtasks before asserting.
+        for (let i = 0; i < 5; i++) {
+            // eslint-disable-next-line no-await-in-loop
+            await Promise.resolve();
+        }
+
         const errAction = dispatched.find((a) => a.type === 'opentalk/session/connect_error');
         expect(errAction?.payload?.error).toBe('ws gone');
         const types = dispatched.map((a) => a.type);
