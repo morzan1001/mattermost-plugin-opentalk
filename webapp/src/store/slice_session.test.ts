@@ -12,6 +12,7 @@ import {
     setExpanded,
     setMinimized,
     setRaiseHandsEnabled,
+    setIsHost,
 } from './slice_session';
 
 describe('sessionReducer', () => {
@@ -209,5 +210,12 @@ describe('sessionReducer', () => {
         expect(s.raiseHandsEnabled).toBe(false);
         s = sessionReducer(s, setRaiseHandsEnabled(true));
         expect(s.raiseHandsEnabled).toBe(true);
+    });
+
+    it('setIsHost toggles isHost', () => {
+        let s = sessionReducer(undefined, setIsHost(true));
+        expect(s.isHost).toBe(true);
+        s = sessionReducer(s, setIsHost(false));
+        expect(s.isHost).toBe(false);
     });
 });

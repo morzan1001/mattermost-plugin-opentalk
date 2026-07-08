@@ -5,7 +5,7 @@
 
 import {EventListener} from './event_listener';
 import {buildFrame} from './frame';
-import {CoreNamespace, type Participant} from './modules/core';
+import {CoreNamespace, type Participant, type ParticipantRole} from './modules/core';
 import {LivekitNamespace} from './modules/livekit';
 import {ModerationNamespace, type KickScope} from './modules/moderation';
 import {SignalingSocket} from './socket';
@@ -54,6 +54,8 @@ type EventName =
     | 'hand_raised'
     | 'hand_lowered'
     | 'raise_hands_toggled'
+    | 'force_muted'
+    | 'role_updated'
     | 'closed'
     | 'error';
 
@@ -78,6 +80,8 @@ export class ConferenceRoom {
         hand_raised: [],
         hand_lowered: [],
         raise_hands_toggled: [],
+        force_muted: [],
+        role_updated: [],
         closed: [],
         error: [],
     };
@@ -264,6 +268,49 @@ export class ConferenceRoom {
                     if (typeof handIsUp === 'boolean' && id) {
                         this.emit(handIsUp ? 'hand_raised' : 'hand_lowered', {participantId: id});
                     }
+
+                    // A role change on another participant reaches uninvolved
+                    // peers only through this update frame.
+                    const role = ctrl.role ?? payload.role;
+                    if (typeof role === 'string' && id) {
+                        this.setParticipantRole(id, role as ParticipantRole);
+                        this.emit('role_updated', {participantId: id, newRole: role as ParticipantRole});
+                    }
+                });
+
+                // Force-mute confirmation for the local user: LiveKit does not
+                // auto-mute the publisher, so the client stops its own mic.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(LivekitNamespace, 'forceMuted', (payload: any) => {
+                    this.emit('force_muted', {moderator: payload.moderator});
+                });
+
+                // Role change for the local user (frame targets self, no id).
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(CoreNamespace, 'roleUpdated', (payload: any) => {
+                    const newRole = payload.newRole as ParticipantRole;
+                    this.setParticipantRole(this.localId, newRole);
+                    this.emit('role_updated', {participantId: this.localId, newRole});
+                });
+
+                // Issuer-side confirmation that a target's role changed.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(CoreNamespace, 'moderatorRoleGranted', (payload: any) => {
+                    const target = payload.target as string;
+                    this.setParticipantRole(target, 'moderator');
+                    this.emit('role_updated', {participantId: target, newRole: 'moderator'});
+                });
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(CoreNamespace, 'moderatorRoleRevoked', (payload: any) => {
+                    const target = payload.target as string;
+                    this.setParticipantRole(target, 'user');
+                    this.emit('role_updated', {participantId: target, newRole: 'user'});
+                });
+
+                // Sent to the participant whose hand a moderator reset; carries
+                // no id, so it is implicitly the local user.
+                this.listener.on(ModerationNamespace, 'raisedHandResetByModerator', () => {
+                    this.emit('hand_lowered', {participantId: this.localId});
                 });
 
                 // Join rejection / pre-join server errors: without these
@@ -373,6 +420,62 @@ export class ConferenceRoom {
         this.socket.send(buildFrame(ModerationNamespace, 'enableRaiseHands', {}));
     }
 
+    public forceMute(participants: string[]): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(LivekitNamespace, 'forceMute', {participants}));
+    }
+
+    public kick(target: string): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(ModerationNamespace, 'kick', {target}));
+    }
+
+    public ban(target: string): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(ModerationNamespace, 'ban', {target}));
+    }
+
+    public grantModerator(target: string): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(CoreNamespace, 'grantModeratorRole', {target}));
+    }
+
+    public revokeModerator(target: string): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(CoreNamespace, 'revokeModeratorRole', {target}));
+    }
+
+    public resetRaisedHands(target?: string | string[]): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(ModerationNamespace, 'resetRaisedHands', target === undefined ? {} : {target}));
+    }
+
+    public grantScreenShare(participants: string[]): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(LivekitNamespace, 'grantScreenSharePermission', {participants}));
+    }
+
+    public revokeScreenShare(participants: string[]): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(LivekitNamespace, 'revokeScreenSharePermission', {participants}));
+    }
+
     /** Host-only: kick all participants out of the room. Used when ending the
      * meeting for everyone so connected peers are disconnected on the OpenTalk
      * side before the host leaves. */
@@ -426,6 +529,10 @@ export class ConferenceRoom {
         for (const cb of snapshot) {
             cb(data);
         }
+    }
+
+    private setParticipantRole(id: string, role: ParticipantRole): void {
+        this.participants = this.participants.map((p) => (p.id === id ? {...p, role} : p));
     }
 
     // Flat shape for the self entry built in connect(), nested shape

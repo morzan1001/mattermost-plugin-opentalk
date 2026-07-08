@@ -7,6 +7,7 @@ import {
     participantsReset,
     handRaised,
     handLowered,
+    participantRoleChanged,
 } from './slice_participants';
 
 describe('participantsReducer', () => {
@@ -97,4 +98,17 @@ describe('participantsReducer', () => {
         expect(state.byId.a.handRaised).toBe(false);
     });
 
+    it('ROLE_CHANGED — updates role of existing participant only', () => {
+        const p = {id: 'a', displayName: 'Alice', role: 'user' as const};
+        let state = participantsReducer(undefined, participantAdded({participant: p}));
+        state = participantsReducer(state, participantRoleChanged({id: 'a', role: 'moderator'}));
+        expect(state.byId.a.role).toBe('moderator');
+        expect(state.byId.a.displayName).toBe('Alice');
+    });
+
+    it('ROLE_CHANGED — no-op for absent participant', () => {
+        const before = participantsReducer(undefined, {type: '@@INIT'});
+        const after = participantsReducer(before, participantRoleChanged({id: 'nonexistent', role: 'moderator'}));
+        expect(after).toEqual(before);
+    });
 });

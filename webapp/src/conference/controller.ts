@@ -19,6 +19,7 @@ import {
     handRaised,
     handLowered,
     participantMediaChanged,
+    participantRoleChanged,
     type ParticipantInfo,
 } from '../store/slice_participants';
 import {
@@ -32,6 +33,7 @@ import {
     setScreenShareEnabled,
     setLivekitConnected,
     setRaiseHandsEnabled,
+    setIsHost,
 } from '../store/slice_session';
 import {
     trackSubscribed,
@@ -309,6 +311,22 @@ export async function startConferenceConnection(
     });
     client.on('raise_hands_toggled', ({enabled}) => {
         store.dispatch(setRaiseHandsEnabled(enabled));
+    });
+    client.on('force_muted', () => {
+        // LiveKit does not auto-mute the publisher on a moderator force-mute;
+        // stop the local mic and reflect it in Redux.
+        if (!activeLiveKit) {
+            return;
+        }
+        activeLiveKit.disableMic().catch(() => { /* already muted / no track */ });
+        store.dispatch(setMicEnabled(false));
+    });
+    client.on('role_updated', ({participantId, newRole}) => {
+        store.dispatch(participantRoleChanged({id: participantId, role: newRole}));
+        const localId = store.getState()?.[PLUGIN_STATE_KEY]?.session?.localParticipantId;
+        if (participantId === localId) {
+            store.dispatch(setIsHost(newRole === 'moderator'));
+        }
     });
     client.on('participant_left', ({id}) => {
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
@@ -686,6 +704,78 @@ export function lowerLocalHand(): void {
         return;
     }
     activeClient.lowerHand();
+}
+
+export function forceMute(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.forceMute([participantId]);
+}
+
+export function muteAll(): void {
+    if (!activeClient) {
+        return;
+    }
+    const selfId = activeStore?.getState()?.[PLUGIN_STATE_KEY]?.session?.localParticipantId;
+    const others = activeClient.getParticipants().map((p) => p.id).filter((id) => id !== selfId);
+    activeClient.forceMute(others);
+}
+
+export function kick(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.kick(participantId);
+}
+
+export function ban(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.ban(participantId);
+}
+
+export function grantModerator(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.grantModerator(participantId);
+}
+
+export function revokeModerator(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.revokeModerator(participantId);
+}
+
+export function resetHand(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.resetRaisedHands(participantId);
+}
+
+export function resetAllHands(): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.resetRaisedHands();
+}
+
+export function grantScreenShare(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.grantScreenShare([participantId]);
+}
+
+export function revokeScreenShare(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.revokeScreenShare([participantId]);
 }
 
 // eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention

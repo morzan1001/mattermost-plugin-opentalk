@@ -11,6 +11,7 @@ const ACTION_TYPES = {
     SET_EXPANDED: 'opentalk/session/set_expanded',
     SET_MINIMIZED: 'opentalk/session/set_minimized',
     SET_RAISE_HANDS_ENABLED: 'opentalk/session/set_raise_hands_enabled',
+    SET_IS_HOST: 'opentalk/session/set_is_host',
 } as const;
 
 export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'leaving';
@@ -87,6 +88,9 @@ export function setMinimized(value: boolean) {
 export function setRaiseHandsEnabled(value: boolean) {
     return {type: ACTION_TYPES.SET_RAISE_HANDS_ENABLED, payload: {value}};
 }
+export function setIsHost(value: boolean) {
+    return {type: ACTION_TYPES.SET_IS_HOST, payload: {value}};
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAction = {type: string; payload?: any};
@@ -130,6 +134,8 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
         return {...state, minimized: action.payload.value};
     case ACTION_TYPES.SET_RAISE_HANDS_ENABLED:
         return {...state, raiseHandsEnabled: action.payload.value};
+    case ACTION_TYPES.SET_IS_HOST:
+        return {...state, isHost: action.payload.value};
     default:
         return state;
     }

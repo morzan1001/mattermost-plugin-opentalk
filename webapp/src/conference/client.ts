@@ -23,6 +23,8 @@ type ConferenceEvent =
     | 'hand_raised'
     | 'hand_lowered'
     | 'raise_hands_toggled'
+    | 'force_muted'
+    | 'role_updated'
     | 'closed'
     | 'error';
 
@@ -59,6 +61,8 @@ export class OpenTalkConferenceClient {
     public on(event: 'hand_raised', cb: (data: {participantId: string}) => void): () => void;
     public on(event: 'hand_lowered', cb: (data: {participantId: string}) => void): () => void;
     public on(event: 'raise_hands_toggled', cb: (data: {enabled: boolean}) => void): () => void;
+    public on(event: 'force_muted', cb: (data: {moderator: string}) => void): () => void;
+    public on(event: 'role_updated', cb: (data: {participantId: string; newRole: 'user' | 'moderator'}) => void): () => void;
     public on(event: 'closed', cb: (data: {code: number}) => void): () => void;
     public on(event: 'error', cb: (err: Error) => void): () => void;
 
@@ -82,6 +86,38 @@ export class OpenTalkConferenceClient {
 
     public sendDebrief(): void {
         this.room.sendDebrief('all');
+    }
+
+    public forceMute(participants: string[]): void {
+        this.room.forceMute(participants);
+    }
+
+    public kick(target: string): void {
+        this.room.kick(target);
+    }
+
+    public ban(target: string): void {
+        this.room.ban(target);
+    }
+
+    public grantModerator(target: string): void {
+        this.room.grantModerator(target);
+    }
+
+    public revokeModerator(target: string): void {
+        this.room.revokeModerator(target);
+    }
+
+    public resetRaisedHands(target?: string | string[]): void {
+        this.room.resetRaisedHands(target);
+    }
+
+    public grantScreenShare(participants: string[]): void {
+        this.room.grantScreenShare(participants);
+    }
+
+    public revokeScreenShare(participants: string[]): void {
+        this.room.revokeScreenShare(participants);
     }
 
     public getState(): RoomState {

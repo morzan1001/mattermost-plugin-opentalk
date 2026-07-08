@@ -7,6 +7,7 @@ const ACTION_TYPES = {
     HAND_RAISED: 'opentalk/participants/hand_raised',
     HAND_LOWERED: 'opentalk/participants/hand_lowered',
     MEDIA_CHANGED: 'opentalk/participants/media_changed',
+    ROLE_CHANGED: 'opentalk/participants/role_changed',
 } as const;
 
 export interface ParticipantInfo {
@@ -52,6 +53,9 @@ export function handLowered(payload: {participantID: string}) {
 }
 export function participantMediaChanged(payload: {id: string; muted?: boolean; cameraOff?: boolean}) {
     return {type: ACTION_TYPES.MEDIA_CHANGED, payload};
+}
+export function participantRoleChanged(payload: {id: string; role: 'user' | 'moderator'}) {
+    return {type: ACTION_TYPES.ROLE_CHANGED, payload};
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,6 +140,14 @@ export function participantsReducer(state: ParticipantsState = initial, action: 
             next.cameraOff = cameraOff;
         }
         return {...state, byId: {...state.byId, [id]: next}};
+    }
+    case ACTION_TYPES.ROLE_CHANGED: {
+        const {id, role} = action.payload as {id: string; role: 'user' | 'moderator'};
+        const existing = state.byId[id];
+        if (!existing) {
+            return state;
+        }
+        return {...state, byId: {...state.byId, [id]: {...existing, role}}};
     }
     default:
         return state;
