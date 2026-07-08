@@ -18,6 +18,7 @@ import {
     participantsReset,
     handRaised,
     handLowered,
+    participantMediaChanged,
     type ParticipantInfo,
 } from '../store/slice_participants';
 import {
@@ -427,6 +428,16 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
     lk.on('active_speakers_changed', (speakers: unknown) => {
         store.dispatch(activeSpeakersChanged({speakers: speakers as string[]}));
         store.dispatch(speakingChanged({speakers: speakers as string[]}));
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    lk.on('track_muted', (data: any) => {
+        const source = data?.source as string | undefined;
+        if (source === 'microphone') {
+            store.dispatch(participantMediaChanged({id: data.participantId, muted: data.muted}));
+        } else if (source === 'camera') {
+            store.dispatch(participantMediaChanged({id: data.participantId, cameraOff: data.muted}));
+        }
     });
 
     // OS share-controls / dismissed-tab stops the screen track outside our

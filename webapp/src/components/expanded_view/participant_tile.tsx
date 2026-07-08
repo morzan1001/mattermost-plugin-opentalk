@@ -3,6 +3,7 @@ import {useSelector} from 'react-redux';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
 import {selectParticipantsById, selectTracksPerParticipant} from '../../util/selectors';
+import {HandIcon, MicOffIcon} from '../icons';
 
 function initialsOf(name: string | undefined): string {
     const safe = (name ?? '').trim();
@@ -75,6 +76,8 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({participantId, 
 
     const displayName: string = participant?.displayName ?? '';
     const isSpeaking = participant?.isSpeaking === true;
+    const isMuted = participant?.muted === true;
+    const handRaised = participant?.handRaised === true;
 
     const speakingStyle: React.CSSProperties = isSpeaking ? {outline: '2px solid #00B59C', outlineOffset: 1} : {};
 
@@ -125,6 +128,33 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({participantId, 
                 />
             ) : (
                 initialsOf(displayName || participantId.slice(0, 8))
+            )}
+            {(isMuted || handRaised) && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: 4,
+                        left: 4,
+                        display: 'flex',
+                        gap: 4,
+                    }}
+                >
+                    {isMuted && (
+                        <span
+                            data-testid={`participant-tile-muted-${participantId}`}
+                            style={{display: 'flex', padding: 3, borderRadius: 4, background: 'rgba(227,53,76,0.85)', color: 'white', lineHeight: 0}}
+                        >
+                            <MicOffIcon/>
+                        </span>
+                    )}
+                    {handRaised && (
+                        <span
+                            style={{display: 'flex', padding: 3, borderRadius: 4, background: 'rgba(0,181,156,0.85)', color: 'white', lineHeight: 0}}
+                        >
+                            <HandIcon size={14}/>
+                        </span>
+                    )}
+                </div>
             )}
             <span style={labelStyle}>{displayName || participantId.slice(0, 8)}</span>
         </div>

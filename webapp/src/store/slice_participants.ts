@@ -6,6 +6,7 @@ const ACTION_TYPES = {
     RESET: 'opentalk/participants/reset',
     HAND_RAISED: 'opentalk/participants/hand_raised',
     HAND_LOWERED: 'opentalk/participants/hand_lowered',
+    MEDIA_CHANGED: 'opentalk/participants/media_changed',
 } as const;
 
 export interface ParticipantInfo {
@@ -15,6 +16,10 @@ export interface ParticipantInfo {
     isHost?: boolean;
     isSpeaking?: boolean;
     handRaised?: boolean;
+
+    // Derived from LiveKit track mute events; undefined until the first event.
+    muted?: boolean;
+    cameraOff?: boolean;
 }
 
 export interface ParticipantsState {
@@ -44,6 +49,9 @@ export function handRaised(payload: {participantID: string}) {
 }
 export function handLowered(payload: {participantID: string}) {
     return {type: ACTION_TYPES.HAND_LOWERED, payload};
+}
+export function participantMediaChanged(payload: {id: string; muted?: boolean; cameraOff?: boolean}) {
+    return {type: ACTION_TYPES.MEDIA_CHANGED, payload};
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -113,6 +121,21 @@ export function participantsReducer(state: ParticipantsState = initial, action: 
             ...state,
             byId: {...state.byId, [participantID]: {...existing, handRaised: false}},
         };
+    }
+    case ACTION_TYPES.MEDIA_CHANGED: {
+        const {id, muted, cameraOff} = action.payload as {id: string; muted?: boolean; cameraOff?: boolean};
+        const existing = state.byId[id];
+        if (!existing) {
+            return state;
+        }
+        const next = {...existing};
+        if (muted !== undefined) {
+            next.muted = muted;
+        }
+        if (cameraOff !== undefined) {
+            next.cameraOff = cameraOff;
+        }
+        return {...state, byId: {...state.byId, [id]: next}};
     }
     default:
         return state;

@@ -18,7 +18,8 @@ export type LiveKitEvent =
     | 'track_subscribed'
     | 'track_unsubscribed'
     | 'active_speakers_changed'
-    | 'local_screen_share_ended';
+    | 'local_screen_share_ended'
+    | 'track_muted';
 
 interface TrackSubscribedData {
     track: RemoteTrack;
@@ -37,6 +38,7 @@ export class LiveKitRoom {
         track_unsubscribed: [],
         active_speakers_changed: [],
         local_screen_share_ended: [],
+        track_muted: [],
     };
 
     public micTrack?: LocalAudioTrack;
@@ -55,12 +57,22 @@ export class LiveKitRoom {
         this.room.on(RoomEvent.Disconnected, () => this.emit('disconnected'));
         this.room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
             this.emit('track_subscribed', {track, publication, participant} as TrackSubscribedData);
+
+            // Seed the initial mute state (e.g. a participant who joined muted
+            // never fires a TrackMuted event).
+            this.emit('track_muted', {participantId: participant.identity, source: publication.source, muted: publication.isMuted});
         });
         this.room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
             this.emit('track_unsubscribed', {track, publication, participant} as TrackSubscribedData);
         });
         this.room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
             this.emit('active_speakers_changed', speakers.map((s) => s.identity));
+        });
+        this.room.on(RoomEvent.TrackMuted, (publication, participant) => {
+            this.emit('track_muted', {participantId: participant.identity, source: publication.source, muted: true});
+        });
+        this.room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
+            this.emit('track_muted', {participantId: participant.identity, source: publication.source, muted: false});
         });
         this.room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
             // A full reconnect republishes local tracks, unpublishing each one
