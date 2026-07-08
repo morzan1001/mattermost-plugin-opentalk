@@ -25,7 +25,7 @@ A Mattermost server plugin that deeply integrates the OpenTalk video-conferencin
 ## Build
 
 Prerequisites:
-- Go ≥ 1.25 (version pinned in `.go-version`; recommended: `goenv`)
+- Go ≥ 1.26 (version pinned in `.go-version`; recommended: `goenv`)
 - Node ≥ 24 (version pinned in `.nvmrc`; recommended: `nvm`)
 - GNU Make
 
