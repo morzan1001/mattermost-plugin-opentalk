@@ -27,6 +27,11 @@ export interface SessionState {
     screenShareEnabled: boolean;
     livekitConnected: boolean;
     isHost: boolean;
+
+    // Room ownership is fixed at connect (OpenTalk is_room_owner = the MM meeting
+    // creator). Unlike isHost, a mid-call moderator promotion does not set it, so
+    // only the owner may end the meeting for everyone.
+    isRoomOwner: boolean;
     expanded: boolean;
     minimized: boolean;
     joinedAt?: number;
@@ -45,6 +50,7 @@ const initial: SessionState = {
     screenShareEnabled: false,
     livekitConnected: false,
     isHost: false,
+    isRoomOwner: false,
     expanded: false,
     minimized: false,
     joinedAt: undefined,
@@ -55,7 +61,7 @@ const initial: SessionState = {
 export function connectStarted(payload: {channelID: string; roomID: string}) {
     return {type: ACTION_TYPES.CONNECT_STARTED, payload};
 }
-export function connected(payload: {participantCount: number; isHost?: boolean; localParticipantId?: string}) {
+export function connected(payload: {participantCount: number; isHost?: boolean; isRoomOwner?: boolean; localParticipantId?: string}) {
     return {type: ACTION_TYPES.CONNECTED, payload};
 }
 export function participantsChanged(payload: {participantCount: number}) {
@@ -110,6 +116,7 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
             status: 'connected',
             participantCount: action.payload.participantCount,
             isHost: action.payload.isHost === true,
+            isRoomOwner: action.payload.isRoomOwner === true,
             localParticipantId: action.payload.localParticipantId,
             error: undefined,
             joinedAt: Date.now(),

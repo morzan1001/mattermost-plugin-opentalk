@@ -13,7 +13,7 @@ import type {ParticipantInfo} from '../../store/slice_participants';
 import type {SessionStatus} from '../../store/slice_session';
 import {setExpanded} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {selectIsExpanded, selectIsHost, selectJoinedAt, selectSessionStatus, selectParticipantOrder, selectParticipantsById, selectChannelID, selectChannelType} from '../../util/selectors';
+import {selectIsExpanded, selectIsHost, selectIsRoomOwner, selectJoinedAt, selectSessionStatus, selectParticipantOrder, selectParticipantsById, selectChannelID, selectChannelType} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 import {HandIcon} from '../icons';
 import {LeaveCallModal} from '../leave_call_modal';
@@ -23,6 +23,7 @@ const ExpandedView: React.FC = () => {
     const expanded = useSelector(selectIsExpanded);
     const status = useSelector(selectSessionStatus) as SessionStatus;
     const isHost = useSelector(selectIsHost);
+    const isRoomOwner = useSelector(selectIsRoomOwner);
     const joinedAt = useSelector(selectJoinedAt);
     const channelID = useSelector(selectChannelID);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,12 +47,13 @@ const ExpandedView: React.FC = () => {
     }
 
     const onLeaveClick = () => {
-        // DM hosts end the meeting outright -- "leave just for me" would strand
-        // an empty room in KV until the reaper, blocking re-rings. Mirrors the
-        // mini-bar hangup.
-        if (isHost && isDM) {
+        // Only the room owner can end for everyone; the server end-endpoint
+        // authorizes the meeting creator, not mid-call moderators. DM owners end
+        // outright -- "leave just for me" would strand an empty room in KV until
+        // the reaper, blocking re-rings. Mirrors the mini-bar hangup.
+        if (isRoomOwner && isDM) {
             endActiveMeeting();
-        } else if (isHost) {
+        } else if (isRoomOwner) {
             setShowLeavePrompt(true);
         } else {
             leaveActiveConference();

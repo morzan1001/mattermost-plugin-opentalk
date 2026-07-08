@@ -5,11 +5,12 @@ import {createStore} from 'redux';
 
 import ExpandedView from './component';
 
-import {resetHand} from '../../conference/controller';
+import {resetHand, leaveActiveConference, endActiveMeeting} from '../../conference/controller';
 import * as trackRegistry from '../../conference/livekit/track_registry';
 
 jest.mock('../../conference/controller', () => ({
     leaveActiveConference: jest.fn().mockResolvedValue(undefined),
+    endActiveMeeting: jest.fn().mockResolvedValue(undefined),
     toggleMic: jest.fn().mockResolvedValue(undefined),
     toggleCam: jest.fn().mockResolvedValue(undefined),
     toggleScreenShare: jest.fn().mockResolvedValue(undefined),
@@ -222,6 +223,38 @@ describe('ExpandedView', () => {
             expect(chip.tagName).not.toBe('BUTTON');
             fireEvent.click(chip);
             expect(resetHand).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('end-for-everyone gating', () => {
+        beforeEach(() => {
+            (leaveActiveConference as jest.Mock).mockClear();
+            (endActiveMeeting as jest.Mock).mockClear();
+        });
+
+        it('room owner leaving a non-DM channel is offered "End meeting for everyone"', () => {
+            const store = makeStore({expanded: true, status: 'connected', isHost: true, isRoomOwner: true});
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            fireEvent.click(screen.getByRole('button', {name: /Leave or end meeting/}));
+            fireEvent.click(screen.getByRole('button', {name: 'End meeting for everyone'}));
+            expect(endActiveMeeting).toHaveBeenCalled();
+        });
+
+        it('promoted moderator (isHost but not room owner) only leaves, no end-for-everyone', () => {
+            const store = makeStore({expanded: true, status: 'connected', isHost: true, isRoomOwner: false});
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            fireEvent.click(screen.getByRole('button', {name: /Leave/}));
+            expect(leaveActiveConference).toHaveBeenCalled();
+            expect(endActiveMeeting).not.toHaveBeenCalled();
+            expect(screen.queryByRole('button', {name: 'End meeting for everyone'})).not.toBeInTheDocument();
         });
     });
 });

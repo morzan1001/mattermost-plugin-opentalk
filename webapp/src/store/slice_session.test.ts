@@ -22,6 +22,7 @@ describe('sessionReducer', () => {
             participantCount: 0,
             micEnabled: false,
             isHost: false,
+            isRoomOwner: false,
             camEnabled: false,
             screenShareEnabled: false,
             livekitConnected: false,
@@ -42,6 +43,7 @@ describe('sessionReducer', () => {
             participantCount: 0,
             micEnabled: false,
             isHost: false,
+            isRoomOwner: false,
             camEnabled: false,
             screenShareEnabled: false,
             livekitConnected: false,
@@ -64,6 +66,7 @@ describe('sessionReducer', () => {
                 error: 'old',
                 micEnabled: false,
                 isHost: false,
+                isRoomOwner: false,
                 camEnabled: false,
                 screenShareEnabled: false,
                 livekitConnected: false,
@@ -90,6 +93,7 @@ describe('sessionReducer', () => {
                 participantCount: 3,
                 micEnabled: false,
                 isHost: false,
+                isRoomOwner: false,
                 camEnabled: false,
                 screenShareEnabled: false,
                 livekitConnected: false,
@@ -111,6 +115,7 @@ describe('sessionReducer', () => {
                 participantCount: 3,
                 micEnabled: true,
                 isHost: false,
+                isRoomOwner: true,
                 camEnabled: true,
                 screenShareEnabled: true,
                 livekitConnected: true,
@@ -126,6 +131,7 @@ describe('sessionReducer', () => {
             participantCount: 0,
             micEnabled: false,
             isHost: false,
+            isRoomOwner: false,
             camEnabled: false,
             screenShareEnabled: false,
             livekitConnected: false,
@@ -146,6 +152,7 @@ describe('sessionReducer', () => {
                 participantCount: 0,
                 micEnabled: false,
                 isHost: false,
+                isRoomOwner: false,
                 camEnabled: false,
                 screenShareEnabled: false,
                 livekitConnected: false,
@@ -217,5 +224,19 @@ describe('sessionReducer', () => {
         expect(s.isHost).toBe(true);
         s = sessionReducer(s, setIsHost(false));
         expect(s.isHost).toBe(false);
+    });
+
+    it('connected sets isRoomOwner from the payload', () => {
+        expect(sessionReducer(undefined, connected({participantCount: 1, isRoomOwner: true})).isRoomOwner).toBe(true);
+        expect(sessionReducer(undefined, connected({participantCount: 1, isRoomOwner: false})).isRoomOwner).toBe(false);
+        expect(sessionReducer(undefined, connected({participantCount: 1})).isRoomOwner).toBe(false);
+    });
+
+    it('setIsHost does not touch isRoomOwner (mid-call moderator promotion)', () => {
+        const owned = sessionReducer(undefined, connected({participantCount: 1, isHost: true, isRoomOwner: true}));
+        expect(sessionReducer(owned, setIsHost(false)).isRoomOwner).toBe(true);
+
+        const guest = sessionReducer(undefined, connected({participantCount: 1, isHost: false, isRoomOwner: false}));
+        expect(sessionReducer(guest, setIsHost(true)).isRoomOwner).toBe(false);
     });
 });

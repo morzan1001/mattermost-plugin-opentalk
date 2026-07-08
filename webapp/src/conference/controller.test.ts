@@ -457,6 +457,30 @@ describe('endActiveMeeting', () => {
         expect(endCall).toBeDefined();
         expect(endCall![1].method).toBe('POST');
     });
+
+    it('surfaces a notice and still leaves when the end REST call fails', async () => {
+        const store = makeTestStore('ch-end');
+        setActiveStore(store);
+
+        startConferenceConnection('room-1', 'ch-end', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: true});
+
+        const clientRef = c();
+        mockFetch.mockResolvedValue({ok: false, status: 403, json: async () => ({})});
+        dispatched = [];
+
+        await endActiveMeeting();
+
+        // Local leave still completed.
+        expect(clientRef.leave).toHaveBeenCalled();
+        expect(dispatched.map((a) => a.type)).toContain('opentalk/session/disconnected');
+
+        const notice = dispatched.find((a) => a.type === 'opentalk/notice/set');
+        expect(notice).toBeDefined();
+        expect(notice?.payload?.kind).toBe('error');
+        expect(notice?.payload?.message).toBe('Failed to end the meeting');
+    });
 });
 
 describe('toggleMic', () => {

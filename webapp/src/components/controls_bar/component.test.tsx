@@ -136,6 +136,33 @@ describe('ControlsBar', () => {
         expect(muteAll).toHaveBeenCalled();
     });
 
+    it('labels the hangup button with the end option only for the room owner', () => {
+        const owner = makeStore({isHost: true, isRoomOwner: true});
+        const {unmount} = render(
+            <Provider store={owner}>
+                <ControlsBar
+                    showExpand={false}
+                    onLeave={jest.fn()}
+                    onMinimize={jest.fn()}
+                />
+            </Provider>,
+        );
+        expect(screen.getByTitle('Leave / End meeting')).toBeInTheDocument();
+        unmount();
+
+        const promotedModerator = makeStore({isHost: true, isRoomOwner: false});
+        render(
+            <Provider store={promotedModerator}>
+                <ControlsBar
+                    showExpand={false}
+                    onLeave={jest.fn()}
+                    onMinimize={jest.fn()}
+                />
+            </Provider>,
+        );
+        expect(screen.getByTitle('Leave meeting')).toBeInTheDocument();
+    });
+
     it('clicking Minimize calls the onMinimize prop', () => {
         const onMinimize = jest.fn();
         const store = makeStore();

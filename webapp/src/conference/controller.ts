@@ -269,6 +269,7 @@ export async function startConferenceConnection(
         store.dispatch(connected({
             participantCount: data.participants.length,
             isHost,
+            isRoomOwner: isHost,
             localParticipantId,
         }));
 
@@ -481,12 +482,13 @@ export async function leaveActiveConference(): Promise<void> {
 }
 
 export async function endActiveMeeting(): Promise<void> {
-    if (!activeStore) {
+    const store = activeStore;
+    if (!store) {
         await leaveActiveConference();
         return;
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const channelID: string | undefined = activeStore.getState()?.[PLUGIN_STATE_KEY]?.session?.channelID;
+    const channelID: string | undefined = store.getState()?.[PLUGIN_STATE_KEY]?.session?.channelID;
 
     // Kick all participants on the OpenTalk side before we leave. Best-effort:
     // failure must not block teardown.
@@ -497,7 +499,7 @@ export async function endActiveMeeting(): Promise<void> {
         return;
     }
     try {
-        await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/end', {
+        const res = await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/end', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -506,7 +508,16 @@ export async function endActiveMeeting(): Promise<void> {
             credentials: 'include',
             body: JSON.stringify({channel_id: channelID}),
         });
+        if (!res.ok) {
+            throw new Error(`endMeeting failed: ${res.status}`);
+        }
     } catch (err) {
+        // The server-side meeting stays "in progress" until the reaper; surface
+        // it so the user knows the channel is still blocked for a restart.
+        store.dispatch(noticeSet({
+            kind: 'error',
+            message: t({de: 'Meeting konnte nicht beendet werden', en: 'Failed to end the meeting'}),
+        }));
         // eslint-disable-next-line no-console
         console.warn('[opentalk] endActiveMeeting failed:', (err as Error).message);
     }

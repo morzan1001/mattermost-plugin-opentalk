@@ -4,7 +4,7 @@ import {useSelector, useDispatch} from 'react-redux';
 import {toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand, muteAll} from '../../conference/controller';
 import {setExpanded} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {selectIsHost, selectLocalParticipantId, selectMicEnabled, selectCamEnabled, selectScreenShareEnabled, selectParticipantsById} from '../../util/selectors';
+import {selectIsHost, selectIsRoomOwner, selectLocalParticipantId, selectMicEnabled, selectCamEnabled, selectScreenShareEnabled, selectParticipantsById} from '../../util/selectors';
 import {
     MicIcon,
     MicOffIcon,
@@ -77,6 +77,7 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
     const camEnabled = useSelector(selectCamEnabled);
     const screenShareEnabled = useSelector(selectScreenShareEnabled);
     const isHost = useSelector(selectIsHost);
+    const isRoomOwner = useSelector(selectIsRoomOwner);
     const localId = useSelector(selectLocalParticipantId);
     const byId = useSelector(selectParticipantsById);
     const isRaised = localId ? Boolean(byId[localId]?.handRaised) : false;
@@ -164,8 +165,8 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                 type='button'
                 style={dangerButtonStyle}
                 onClick={onLeave}
-                title={isHost ? t({de: 'Verlassen / Meeting beenden', en: 'Leave / End meeting'}) : t({de: 'Meeting verlassen', en: 'Leave meeting'})}
-                aria-label={isHost ? t({de: 'Verlassen oder Meeting beenden', en: 'Leave or end meeting'}) : t({de: 'Meeting verlassen', en: 'Leave meeting'})}
+                title={isRoomOwner ? t({de: 'Verlassen / Meeting beenden', en: 'Leave / End meeting'}) : t({de: 'Meeting verlassen', en: 'Leave meeting'})}
+                aria-label={isRoomOwner ? t({de: 'Verlassen oder Meeting beenden', en: 'Leave or end meeting'}) : t({de: 'Meeting verlassen', en: 'Leave meeting'})}
             >
                 <HangupIcon/>
             </button>
