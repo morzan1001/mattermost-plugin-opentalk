@@ -59,7 +59,24 @@ export interface CoreLowerHand {
     action: 'lowerHand';
 }
 
-export type CoreOutgoing = CoreJoin | CoreLeave | CoreEnterRoom | CoreRaiseHand | CoreLowerHand;
+export interface CoreGrantModeratorRole {
+    action: 'grantModeratorRole';
+    target: string;
+}
+
+export interface CoreRevokeModeratorRole {
+    action: 'revokeModeratorRole';
+    target: string;
+}
+
+export type CoreOutgoing =
+    | CoreJoin
+    | CoreLeave
+    | CoreEnterRoom
+    | CoreRaiseHand
+    | CoreLowerHand
+    | CoreGrantModeratorRole
+    | CoreRevokeModeratorRole;
 
 // ---------- Incoming ----------
 
@@ -95,24 +112,6 @@ export interface CoreParticipantDisconnected {
     reason: DisconnectReason;
 }
 
-export interface CoreJoinedWaitingRoom {
-    action: 'joinedWaitingRoom';
-    id: string;
-    displayName?: string;
-}
-
-export interface CoreLeftWaitingRoom {
-    action: 'leftWaitingRoom';
-    id: string;
-    connectionId?: string;
-}
-
-export interface CoreInWaitingRoom {
-    action: 'inWaitingRoom';
-    participantId: string;
-    connectionId?: string;
-}
-
 export interface CoreClosing {
     action: 'closing';
     reason: RoomCloseReason;
@@ -136,15 +135,30 @@ export interface CoreHandLowered {
     participant: string;
 }
 
+export interface CoreModeratorRoleGranted {
+    action: 'moderatorRoleGranted';
+    target: string;
+}
+
+export interface CoreModeratorRoleRevoked {
+    action: 'moderatorRoleRevoked';
+    target: string;
+}
+
+export interface CoreRoleUpdated {
+    action: 'roleUpdated';
+    newRole: ParticipantRole;
+}
+
 export type CoreIncoming =
     | CoreJoinSuccess
     | CoreParticipantConnected
     | CoreJoinBlocked
     | CoreParticipantDisconnected
-    | CoreJoinedWaitingRoom
-    | CoreLeftWaitingRoom
-    | CoreInWaitingRoom
     | CoreClosing
     | CoreRoomParametersChanged
     | CoreHandRaised
-    | CoreHandLowered;
+    | CoreHandLowered
+    | CoreModeratorRoleGranted
+    | CoreModeratorRoleRevoked
+    | CoreRoleUpdated;

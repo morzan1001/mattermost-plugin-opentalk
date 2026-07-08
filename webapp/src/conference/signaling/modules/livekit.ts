@@ -29,11 +29,28 @@ export interface LiveKitCreateNewAccessToken {
     action: 'createNewAccessToken';
 }
 
+export interface LiveKitForceMute {
+    action: 'forceMute';
+    participants: string[];
+}
+
+export interface LiveKitEnableMicrophoneRestrictions {
+    action: 'enableMicrophoneRestrictions';
+    unrestrictedParticipants: string[];
+}
+
+export interface LiveKitDisableMicrophoneRestrictions {
+    action: 'disableMicrophoneRestrictions';
+}
+
 export type LiveKitOutgoing =
     | LiveKitGrantScreenSharePermission
     | LiveKitRevokeScreenSharePermission
     | LiveKitRequestPopoutStreamAccessToken
-    | LiveKitCreateNewAccessToken;
+    | LiveKitCreateNewAccessToken
+    | LiveKitForceMute
+    | LiveKitEnableMicrophoneRestrictions
+    | LiveKitDisableMicrophoneRestrictions;
 
 // ---------- Incoming ----------
 
@@ -60,8 +77,25 @@ export interface LiveKitErrorMessage {
     error: LivekitError;
 }
 
+export interface LiveKitForceMuted {
+    action: 'forceMuted';
+    moderator: string;
+}
+
+export interface LiveKitMicrophoneRestrictionsEnabled {
+    action: 'microphoneRestrictionsEnabled';
+    unrestrictedParticipants: string[];
+}
+
+export interface LiveKitMicrophoneRestrictionsDisabled {
+    action: 'microphoneRestrictionsDisabled';
+}
+
 export type LiveKitIncoming =
     | LiveKitPopoutStreamAccessToken
     | LiveKitCredentials
     | LiveKitScreenSharePermissionsUpdated
-    | LiveKitErrorMessage;
+    | LiveKitErrorMessage
+    | LiveKitForceMuted
+    | LiveKitMicrophoneRestrictionsEnabled
+    | LiveKitMicrophoneRestrictionsDisabled;
