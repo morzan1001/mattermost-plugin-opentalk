@@ -9,6 +9,7 @@ import * as trackRegistry from './livekit/track_registry';
 import type {Participant} from './signaling/modules/core';
 
 import {getOrCreateDeviceSecret, heartbeat} from '../client/rest';
+import {noticeSet} from '../store/slice_notice';
 import {
     participantAdded,
     participantRemoved,
@@ -134,6 +135,7 @@ async function setOpenTalkStatusAsync(epoch: number): Promise<void> {
     if (prior && prior.emoji !== OPENTALK_STATUS_EMOJI) {
         writePriorStatus(prior);
     }
+
     // MM 6+ rejects custom-status PUTs with a duration but no expires_at
     // (400 Bad Request). Send both.
     const expiresAt = new Date(Date.now() + (4 * 60 * 60 * 1000)).toISOString();
@@ -318,6 +320,13 @@ export async function startConferenceConnection(
         }
         connectErrorDispatched = true;
         store.dispatch(connectError({error: message}));
+
+        // Surface it: teardown resets the session to idle and the widget
+        // vanishes, so the error would otherwise be invisible.
+        store.dispatch(noticeSet({
+            kind: 'error',
+            message: `${t({de: 'Meeting-Beitritt fehlgeschlagen', en: 'Could not join the meeting'})}: ${message}`,
+        }));
     };
 
     client.on('closed', () => {

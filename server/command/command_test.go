@@ -113,7 +113,7 @@ func TestInfo_Connected(t *testing.T) {
 }
 
 func TestAutocomplete_HasAllSubcommands(t *testing.T) {
-	data := AutocompleteData()
+	data := AutocompleteData("en")
 	require.NotNil(t, data)
 	require.Len(t, data.SubCommands, 9)
 	names := []string{}

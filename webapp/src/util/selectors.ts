@@ -95,6 +95,13 @@ export function selectIncomingCallsByChannelID(state: AnyState): Record<string, 
     return state?.[stateKey]?.incomingCalls?.byChannelID ?? {};
 }
 
+// Notice slice
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function selectNotice(state: AnyState): import('../store/slice_notice').NoticeState {
+    return state?.[stateKey]?.notice ?? {message: null, kind: 'error', seq: 0};
+}
+
 // Active meetings slice
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

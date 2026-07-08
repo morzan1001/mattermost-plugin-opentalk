@@ -191,8 +191,9 @@ func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostDisplayNam
 	}}
 }
 
-// ApplyEndedStatus mutates an existing meeting-post in place to mark the meeting as ended.
-func ApplyEndedStatus(p *model.Post, endedAt time.Time) {
+// ApplyEndedStatus mutates an existing meeting-post in place to mark the meeting
+// as ended. locale is the host locale (matching the started card); pass "" for English.
+func ApplyEndedStatus(p *model.Post, endedAt time.Time, locale string) {
 	startedAtRaw := p.GetProp("started_at")
 	var duration int64
 	switch v := startedAtRaw.(type) {
@@ -205,35 +206,40 @@ func ApplyEndedStatus(p *model.Post, endedAt time.Time) {
 	p.AddProp("ended_at", endedAt.Unix())
 	p.AddProp("duration_seconds", duration)
 
-	rebuildAttachmentForStatus(p, "ENDED", endedAt, duration)
+	rebuildAttachmentForStatus(p, "ENDED", endedAt, duration, locale)
 }
 
 // ApplyMissedStatus mutates the post in place to reflect a "missed" custom-
 // post-status (DM call where all recipients declined or timed out).
-func ApplyMissedStatus(p *model.Post, when time.Time) {
+func ApplyMissedStatus(p *model.Post, when time.Time, locale string) {
 	if p.Props == nil {
 		p.Props = model.StringInterface{}
 	}
 	p.AddProp("status", "MISSED")
 	p.AddProp("ended_at", when.Unix())
 
-	rebuildAttachmentForStatus(p, "MISSED", when, 0)
+	rebuildAttachmentForStatus(p, "MISSED", when, 0, locale)
 }
 
-// rebuildAttachmentForStatus rewrites props.attachments; rebuilt attachments are always English (caller-locale unknown at update time).
-func rebuildAttachmentForStatus(p *model.Post, status string, when time.Time, durationSeconds int64) {
+func rebuildAttachmentForStatus(p *model.Post, status string, when time.Time, durationSeconds int64, locale string) {
 	hostName, _ := p.GetProp("host_display_name").(string)
 	if hostName == "" {
 		hostName, _ = p.GetProp("host_username").(string)
 	}
 
 	if status == "ENDED" {
-		text := "Ended " + formatRelativeAge(when, "en") + "."
+		text := i18n.T(locale, i18n.Translatable{
+			DE: "Beendet " + formatRelativeAge(when, locale) + ".",
+			EN: "Ended " + formatRelativeAge(when, locale) + ".",
+		})
 		if durationSeconds > 0 {
-			text = fmt.Sprintf("Ended %s, duration %s.", formatRelativeAge(when, "en"), formatDuration(durationSeconds))
+			text = i18n.T(locale, i18n.Translatable{
+				DE: fmt.Sprintf("Beendet %s, Dauer %s.", formatRelativeAge(when, locale), formatDuration(durationSeconds)),
+				EN: fmt.Sprintf("Ended %s, duration %s.", formatRelativeAge(when, locale), formatDuration(durationSeconds)),
+			})
 		}
 		p.AddProp("attachments", []*model.SlackAttachment{{
-			Title: "OpenTalk meeting (ended)",
+			Title: i18n.T(locale, i18n.Translatable{DE: "OpenTalk-Meeting (beendet)", EN: "OpenTalk meeting (ended)"}),
 			Text:  text,
 			Color: "#9e9e9e",
 		}})
@@ -241,8 +247,8 @@ func rebuildAttachmentForStatus(p *model.Post, status string, when time.Time, du
 	}
 
 	p.AddProp("attachments", []*model.SlackAttachment{{
-		Title: "OpenTalk meeting (missed)",
-		Text:  fmt.Sprintf("Missed call from %s.", hostName),
+		Title: i18n.T(locale, i18n.Translatable{DE: "OpenTalk-Meeting (verpasst)", EN: "OpenTalk meeting (missed)"}),
+		Text:  i18n.T(locale, i18n.Translatable{DE: fmt.Sprintf("Verpasster Anruf von %s.", hostName), EN: fmt.Sprintf("Missed call from %s.", hostName)}),
 		Color: "#9e9e9e",
 	}})
 }

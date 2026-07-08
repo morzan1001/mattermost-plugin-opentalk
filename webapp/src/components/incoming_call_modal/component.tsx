@@ -144,8 +144,10 @@ const IncomingCallModal: React.FC = () => {
     // when the effect re-runs only on channelID change. Without this the
     // 30s timeout captures whichever `call` object was live at mount time.
     const onDeclineRef = useRef(onDecline);
+    const onAcceptRef = useRef(onAccept);
     useEffect(() => {
         onDeclineRef.current = onDecline;
+        onAcceptRef.current = onAccept;
     });
 
     useEffect(() => {
@@ -154,6 +156,27 @@ const IncomingCallModal: React.FC = () => {
         }
         const id = window.setTimeout(() => onDeclineRef.current(), 30000);
         return () => window.clearTimeout(id);
+    }, [isShowingCall, call?.channelID]);
+
+    // Keyboard access to a ringing call: focus Accept, answer with Enter,
+    // decline with Escape.
+    const acceptBtnRef = useRef<HTMLButtonElement>(null);
+    useEffect(() => {
+        if (!isShowingCall) {
+            return undefined;
+        }
+        acceptBtnRef.current?.focus();
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                onAcceptRef.current();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                onDeclineRef.current();
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
     }, [isShowingCall, call?.channelID]);
 
     if (!isShowingCall || call === null) {
@@ -171,6 +194,9 @@ const IncomingCallModal: React.FC = () => {
     return (
         <div
             data-testid='incoming-call-modal'
+            role='dialog'
+            aria-modal={true}
+            aria-label={`${call.hostName} ${t({de: 'ruft an', en: 'is calling'})}`}
             style={{
                 position: 'fixed',
                 inset: 0,
@@ -260,6 +286,7 @@ const IncomingCallModal: React.FC = () => {
                     }}
                 >
                     <button
+                        ref={acceptBtnRef}
                         type='button'
                         onClick={onAccept}
                         disabled={busy}

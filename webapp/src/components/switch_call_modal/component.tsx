@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useDispatch, useSelector, useStore} from 'react-redux';
 
 import {dismissIncomingCall} from '../../client/rest';
@@ -58,6 +58,29 @@ const SwitchCallModal: React.FC = () => {
         setBusy(false);
     }, [call?.channelID, call?.roomID]);
 
+    // Keyboard access: focus Switch, Enter switches, Escape cancels. Clicking
+    // the refs runs the current onSwitch/onCancel (defined after this hook).
+    const switchBtnRef = useRef<HTMLButtonElement>(null);
+    const cancelBtnRef = useRef<HTMLButtonElement>(null);
+    const visible = sessionStatus !== 'idle' && call !== null;
+    useEffect(() => {
+        if (!visible) {
+            return undefined;
+        }
+        switchBtnRef.current?.focus();
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                switchBtnRef.current?.click();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelBtnRef.current?.click();
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [visible, call?.channelID]);
+
     if (sessionStatus === 'idle' || call === null) {
         return null;
     }
@@ -114,6 +137,9 @@ const SwitchCallModal: React.FC = () => {
             }}
         >
             <div
+                role='dialog'
+                aria-modal={true}
+                aria-label={t({de: 'Anruf annehmen und wechseln?', en: 'Switch calls?'})}
                 style={{
                     background: '#1c2230',
                     color: 'white',
@@ -131,12 +157,14 @@ const SwitchCallModal: React.FC = () => {
                 </div>
                 <div style={{display: 'flex', gap: 8, justifyContent: 'flex-end'}}>
                     <button
+                        ref={cancelBtnRef}
                         type='button'
                         onClick={onCancel}
                         style={cancelStyle}
                         disabled={busy}
                     >{t({de: 'Abbrechen', en: 'Cancel'})}</button>
                     <button
+                        ref={switchBtnRef}
                         type='button'
                         onClick={onSwitch}
                         style={switchStyle}

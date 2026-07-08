@@ -47,7 +47,7 @@ func (h *Handler) end(args *model.CommandArgs) (*model.CommandResponse, *model.A
 	if am.PostID != "" && h.PostGetter != nil && h.PostUpdater != nil {
 		p, getErr := h.PostGetter(am.PostID)
 		if getErr == nil && p != nil {
-			post.ApplyEndedStatus(p, time.Now().UTC())
+			post.ApplyEndedStatus(p, time.Now().UTC(), locale)
 			if updErr := h.PostUpdater(p); updErr != nil {
 				h.API.LogWarn("end: post update failed", "err", updErr.Error())
 			}

@@ -22,6 +22,7 @@ func TestPlugin_OnActivate(t *testing.T) {
 		api.On("EnsureBotUser", mock.MatchedBy(func(b *model.Bot) bool {
 			return b.Username == botUsername && b.DisplayName == botDisplayName
 		})).Return("bot-user-id", nil)
+		api.On("GetConfig").Return(&model.Config{})
 		api.On("RegisterCommand", mock.MatchedBy(func(cmd *model.Command) bool {
 			return cmd.Trigger == "opentalk"
 		})).Return(nil)
