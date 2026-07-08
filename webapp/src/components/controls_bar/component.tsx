@@ -1,7 +1,7 @@
 import React from 'react';
 import {useSelector, useDispatch} from 'react-redux';
 
-import {toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand} from '../../conference/controller';
+import {toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand, muteAll} from '../../conference/controller';
 import {setExpanded} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
 import {selectIsHost, selectLocalParticipantId, selectMicEnabled, selectCamEnabled, selectScreenShareEnabled, selectParticipantsById} from '../../util/selectors';
@@ -122,6 +122,19 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
             >
                 <HandIcon/>
             </button>
+
+            {isHost && (
+                <button
+                    type='button'
+                    data-testid='controls-mute-all'
+                    style={mutedButtonStyle}
+                    onClick={() => muteAll()}
+                    title={t({de: 'Alle stummschalten', en: 'Mute all'})}
+                    aria-label={t({de: 'Alle stummschalten', en: 'Mute all'})}
+                >
+                    <MicOffIcon/>
+                </button>
+            )}
 
             <div style={{width: 1, height: 24, background: 'rgba(255,255,255,0.1)', margin: '0 4px'}}/>
 

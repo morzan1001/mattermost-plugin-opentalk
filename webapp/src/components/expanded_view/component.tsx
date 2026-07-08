@@ -6,7 +6,7 @@ import {LayoutSwitcher} from './layout_switcher';
 import {ScreenFocusLayout} from './screen_focus_layout';
 import {SpeakerLayout} from './speaker_layout';
 
-import {leaveActiveConference, endActiveMeeting} from '../../conference/controller';
+import {leaveActiveConference, endActiveMeeting, resetHand} from '../../conference/controller';
 import {useLayoutMode} from '../../hooks/use_layout_mode';
 import {useMeetingDuration} from '../../hooks/use_meeting_duration';
 import type {ParticipantInfo} from '../../store/slice_participants';
@@ -111,7 +111,42 @@ const ExpandedView: React.FC = () => {
                     >
                         <HandIcon/>
                         <span style={{color: '#00B59C', fontWeight: 600, marginRight: 6}}>{t({de: 'Wartereihe:', en: 'Queue:'})}</span>
-                        <span>{raisedParticipants.map((p) => p.displayName || p.id.slice(0, 8)).join(' · ')}</span>
+                        <div style={{display: 'flex', flexWrap: 'wrap', gap: 6}}>
+                            {raisedParticipants.map((p) => {
+                                const name = p.displayName || p.id.slice(0, 8);
+                                const chipStyle: React.CSSProperties = {
+                                    padding: '2px 8px',
+                                    borderRadius: 12,
+                                    border: 'none',
+                                    background: 'rgba(0, 181, 156, 0.2)',
+                                    color: 'white',
+                                    fontSize: 13,
+                                };
+                                if (!isHost) {
+                                    return (
+                                        <span
+                                            key={p.id}
+                                            data-testid={`raised-hand-chip-${p.id}`}
+                                            style={chipStyle}
+                                        >
+                                            {name}
+                                        </span>
+                                    );
+                                }
+                                return (
+                                    <button
+                                        key={p.id}
+                                        type='button'
+                                        data-testid={`raised-hand-chip-${p.id}`}
+                                        style={{...chipStyle, cursor: 'pointer'}}
+                                        onClick={() => resetHand(p.id)}
+                                        title={t({de: 'Hand senken', en: 'Lower hand'})}
+                                    >
+                                        {name}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 

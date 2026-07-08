@@ -3,7 +3,8 @@ import {useSelector} from 'react-redux';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
 import {selectParticipantsById, selectTracksPerParticipant} from '../../util/selectors';
-import {HandIcon, MicOffIcon} from '../icons';
+import {CrownIcon, HandIcon, MicOffIcon} from '../icons';
+import {ParticipantMenu} from '../participant_menu/component';
 
 function initialsOf(name: string | undefined): string {
     const safe = (name ?? '').trim();
@@ -78,6 +79,7 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({participantId, 
     const isSpeaking = participant?.isSpeaking === true;
     const isMuted = participant?.muted === true;
     const handRaised = participant?.handRaised === true;
+    const isModerator = participant?.role === 'moderator' || participant?.isHost === true;
 
     const speakingStyle: React.CSSProperties = isSpeaking ? {outline: '2px solid #00B59C', outlineOffset: 1} : {};
 
@@ -129,7 +131,7 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({participantId, 
             ) : (
                 initialsOf(displayName || participantId.slice(0, 8))
             )}
-            {(isMuted || handRaised) && (
+            {(isMuted || handRaised || isModerator) && (
                 <div
                     style={{
                         position: 'absolute',
@@ -154,8 +156,17 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({participantId, 
                             <HandIcon size={14}/>
                         </span>
                     )}
+                    {isModerator && (
+                        <span
+                            data-testid={`participant-tile-moderator-${participantId}`}
+                            style={{display: 'flex', padding: 3, borderRadius: 4, background: 'rgba(255,184,0,0.85)', color: 'white', lineHeight: 0}}
+                        >
+                            <CrownIcon size={14}/>
+                        </span>
+                    )}
                 </div>
             )}
+            <ParticipantMenu participantId={participantId}/>
             <span style={labelStyle}>{displayName || participantId.slice(0, 8)}</span>
         </div>
     );

@@ -1,10 +1,11 @@
-import {render, screen} from '@testing-library/react';
+import {render, screen, fireEvent} from '@testing-library/react';
 import React from 'react';
 import {Provider} from 'react-redux';
 import {createStore} from 'redux';
 
 import ExpandedView from './component';
 
+import {resetHand} from '../../conference/controller';
 import * as trackRegistry from '../../conference/livekit/track_registry';
 
 jest.mock('../../conference/controller', () => ({
@@ -12,6 +13,7 @@ jest.mock('../../conference/controller', () => ({
     toggleMic: jest.fn().mockResolvedValue(undefined),
     toggleCam: jest.fn().mockResolvedValue(undefined),
     toggleScreenShare: jest.fn().mockResolvedValue(undefined),
+    resetHand: jest.fn(),
 }));
 
 jest.mock('../../conference/livekit/track_registry', () => ({
@@ -171,5 +173,55 @@ describe('ExpandedView', () => {
         expect(screen.getByTestId('layout-switcher-speaker')).toBeInTheDocument();
         expect(screen.getByTestId('layout-switcher-grid')).toBeInTheDocument();
         expect(screen.getByTestId('layout-switcher-screen-focus')).toBeInTheDocument();
+    });
+
+    describe('raised-hand queue strip', () => {
+        const raisedParticipants = {
+            byId: {
+                p1: {id: 'p1', displayName: 'Alice', handRaised: true},
+                p2: {id: 'p2', displayName: 'Bob', handRaised: true},
+            },
+            order: ['p1', 'p2'],
+        };
+
+        beforeEach(() => {
+            (resetHand as jest.Mock).mockClear();
+        });
+
+        it('renders one chip per raised participant', () => {
+            const store = makeStore({expanded: true, status: 'connected'}, {participants: raisedParticipants});
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            expect(screen.getByTestId('raised-hand-chip-p1')).toBeInTheDocument();
+            expect(screen.getByTestId('raised-hand-chip-p2')).toBeInTheDocument();
+        });
+
+        it('host chips are clickable and call resetHand with that participant\'s id', () => {
+            const store = makeStore({expanded: true, status: 'connected', isHost: true}, {participants: raisedParticipants});
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            fireEvent.click(screen.getByTestId('raised-hand-chip-p1'));
+            expect(resetHand).toHaveBeenCalledWith('p1');
+            expect(resetHand).not.toHaveBeenCalledWith('p2');
+        });
+
+        it('non-host chips are read-only and do not call resetHand on click', () => {
+            const store = makeStore({expanded: true, status: 'connected', isHost: false}, {participants: raisedParticipants});
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            const chip = screen.getByTestId('raised-hand-chip-p1');
+            expect(chip.tagName).not.toBe('BUTTON');
+            fireEvent.click(chip);
+            expect(resetHand).not.toHaveBeenCalled();
+        });
     });
 });
