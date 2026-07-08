@@ -11,22 +11,20 @@ const config = {
                 safari: 12,
             },
             modules: false,
-            corejs: 3,
             debug: false,
-            useBuiltIns: 'usage',
             shippedProposals: true,
         }],
-        ['@babel/preset-react', {
-            useBuiltIns: true,
-        }],
-        ['@babel/typescript', {
-            allExtensions: true,
-            isTSX: true,
-        }],
-        ['@emotion/babel-preset-css-prop'],
+        ['@babel/preset-react'],
+
+        // onlyRemoveTypeImports:false keeps Babel 7's behaviour of eliding
+        // imports used only as types even without an explicit `import type`.
+        ['@babel/typescript', {onlyRemoveTypeImports: false}],
     ],
+
+    // Babel 8 removed preset-env's useBuiltIns/corejs; core-js usage injection
+    // now lives in this plugin.
     plugins: [
-        'babel-plugin-typescript-to-proptypes',
+        ['polyfill-corejs3', {method: 'usage-global', version: '3.49'}],
     ],
 };
 
