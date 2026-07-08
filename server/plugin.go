@@ -50,6 +50,7 @@ type Plugin struct {
 	reaper *reaper.Reaper
 
 	channelLocks sync.Map
+	userLocks    sync.Map
 }
 
 // channelMembersOf pages through every member of a channel and returns the
@@ -134,6 +135,8 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		PluginID:       pluginID,
 		FrontendURL:    cfg.OpenTalkFrontendURL,
 		MeetingCreator: p.CreateMeeting,
+		OpenTalk:       p.getOTClient(),
+		AccessTokenFor: p.accessTokenFor,
 		PostGetter: func(postID string) (*model.Post, error) {
 			mp, appErr := p.API.GetPost(postID)
 			if appErr != nil {
@@ -507,11 +510,29 @@ func (p *Plugin) notifyMeetingStarted(am *store.ActiveMeeting) {
 		"recipients", strings.Join(recipients, ","),
 	)
 
+	// Respect the server's push privacy setting: with generic contents the
+	// sender's name must not appear in the push payload.
+	pushContents := model.FullNotification
+	if mmCfg := p.API.GetConfig(); mmCfg != nil && mmCfg.EmailSettings.PushNotificationContents != nil {
+		pushContents = *mmCfg.EmailSettings.PushNotificationContents
+	}
+	generic := pushContents == model.GenericNotification || pushContents == model.GenericNoChannelNotification
+
 	// Best-effort push notification per recipient; skip DND users.
 	for _, uid := range recipients {
 		status, _ := p.API.GetUserStatus(uid)
 		if status != nil && status.Status == model.StatusDnd {
 			continue
+		}
+		message := i18n.T(p.localeOf(uid), i18n.Translatable{
+			DE: "Anruf von " + hostName,
+			EN: "Incoming call from " + hostName,
+		})
+		if generic {
+			message = i18n.T(p.localeOf(uid), i18n.Translatable{
+				DE: "Eingehender Anruf",
+				EN: "Incoming call",
+			})
 		}
 		// No PostId: the NotificationWillBePushed hook cancels the standard
 		// bot-post push by its post id + Type, and identifies this call push
@@ -523,10 +544,7 @@ func (p *Plugin) notifyMeetingStarted(am *store.ActiveMeeting) {
 			ChannelId:   am.ChannelID,
 			SenderId:    p.botUserID,
 			ChannelType: ch.Type,
-			Message: i18n.T(p.localeOf(uid), i18n.Translatable{
-				DE: "Anruf von " + hostName,
-				EN: "Incoming call from " + hostName,
-			}),
+			Message:     message,
 		}
 		if pErr := p.API.SendPushNotification(push, uid); pErr != nil {
 			p.API.LogWarn("[opentalk] push failed", "user", uid, "err", pErr.Error())
@@ -561,6 +579,15 @@ func (p *Plugin) localeOf(mmUserID string) string {
 // persisted; persistence failures are logged but don't block the caller —
 // we still return the working in-memory token.
 func (p *Plugin) accessTokenFor(mmUserID string) (string, error) {
+	// Serialize per user so two concurrent callers don't both refresh and race
+	// their SaveUserInfo writes -- with a rotating refresh token the loser's
+	// stored token would be invalidated. The second caller re-loads under the
+	// lock and sees the already-refreshed token.
+	mu, _ := p.userLocks.LoadOrStore(mmUserID, &sync.Mutex{})
+	m := mu.(*sync.Mutex)
+	m.Lock()
+	defer m.Unlock()
+
 	cfg := p.getConfiguration()
 	encKey := []byte(cfg.TokenEncryptionKey)
 

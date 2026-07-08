@@ -265,6 +265,32 @@ export class ConferenceRoom {
                         this.emit(handIsUp ? 'hand_raised' : 'hand_lowered', {participantId: id});
                     }
                 });
+
+                // Join rejection / pre-join server errors: without these
+                // connect() would sit in 'connecting' forever (its promise only
+                // settles on joinSuccess, socket close, or a socket-level error).
+                // Only fatal before the join completes -- a moderation/control
+                // error mid-call (e.g. a rejected kick) must not tear down a
+                // live session.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const failIfConnecting = (msg: string) => {
+                    if (this.state !== 'connected') {
+                        this.emit('error', new Error(msg));
+                    }
+                };
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(CoreNamespace, 'joinBlocked', (payload: any) => {
+                    failIfConnecting(`join_blocked: ${payload.reason ?? 'unknown'}`);
+                });
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(CoreNamespace, 'error', (payload: any) => {
+                    failIfConnecting(`control_error: ${payload.text ?? payload.error ?? 'unknown'}`);
+                });
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(ModerationNamespace, 'error', (payload: any) => {
+                    failIfConnecting(`moderation_error: ${payload.error ?? 'unknown'}`);
+                });
+
                 this.listener.on(ModerationNamespace, 'raiseHandsEnabled', () => {
                     this.emit('raise_hands_toggled', {enabled: true});
                 });

@@ -46,13 +46,18 @@ export const OpenTalkSettingsSection: React.FC = () => {
         let cancelled = false;
         const refresh = async () => {
             try {
-                // Request permission so browsers populate device labels.
-                // Some browsers return empty labels until getUserMedia has been called once.
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({audio: true, video: true});
-                    stream.getTracks().forEach((track) => track.stop());
-                } catch {
-                    /* user denied; fall through with whatever enumerateDevices returns */
+                // Request permission so browsers populate device labels (empty
+                // until getUserMedia succeeds once). Ask audio and video
+                // separately: a combined request throws on a camera-less
+                // machine, which would leave even the mic picker unlabelled.
+                for (const constraints of [{audio: true}, {video: true}]) {
+                    try {
+                        // eslint-disable-next-line no-await-in-loop
+                        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                        stream.getTracks().forEach((track) => track.stop());
+                    } catch {
+                        /* device absent or denied; try the other kind */
+                    }
                 }
                 const all = await navigator.mediaDevices.enumerateDevices();
                 if (cancelled) {

@@ -42,6 +42,7 @@ const IncomingCallModal: React.FC = () => {
     const [busy, setBusy] = useState(false);
     const [avatarError, setAvatarError] = useState(false);
     const [barWidth, setBarWidth] = useState(100);
+    const [barTransition, setBarTransition] = useState('none');
 
     // CRITICAL: always mounted as RootComponent — gate effects on isShowingCall
     // so the ringtone doesn't start at app-init when there's no incoming call.
@@ -64,12 +65,20 @@ const IncomingCallModal: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isShowingCall]);
 
-    // Countdown bar: animate from 100→0% over 30s via CSS transition.
+    // Countdown bar: reset to full with no animation, then animate down to 0%
+    // over 30s. The reset is essential -- this is a persistent root component,
+    // so without it barWidth stays at 0 from the previous ring and every ring
+    // after the first shows an empty bar.
     useEffect(() => {
         if (call === null) {
             return undefined;
         }
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setBarTransition('none');
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setBarWidth(100);
         const rafId = requestAnimationFrame(() => {
+            setBarTransition('width 30s linear');
             setBarWidth(0);
         });
         return () => {
@@ -77,7 +86,7 @@ const IncomingCallModal: React.FC = () => {
         };
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [call?.channelID]);
+    }, [call?.channelID, call?.receivedAt]);
 
     useEffect(() => {
         setAvatarError(false);
@@ -195,7 +204,7 @@ const IncomingCallModal: React.FC = () => {
                         height: 4,
                         width: `${barWidth}%`,
                         background: '#00B59C',
-                        transition: 'width 30s linear',
+                        transition: barTransition,
                         borderRadius: '16px 0 0 0',
                     }}
                 />

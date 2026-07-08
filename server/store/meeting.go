@@ -35,9 +35,9 @@ type ActiveMeeting struct {
 	DialInNumber  string    `json:"dial_in_number,omitempty"`
 	DialInPIN     string    `json:"dial_in_pin,omitempty"`
 
-	// HostHeartbeatReceived flips to true the first time the host's webapp
-	// reports a heartbeat against this meeting. Mobile-only hosts never set
-	// it; the reaper grants them a longer initial grace before reaping.
+	// HostHeartbeatReceived flips to true the first time any participant's
+	// webapp reports a heartbeat against this meeting. Until then (e.g. a
+	// mobile-only host) the reaper grants a longer initial grace before reaping.
 	HostHeartbeatReceived bool `json:"host_heartbeat_received,omitempty"`
 }
 
@@ -106,6 +106,39 @@ func (s *Store) LoadActiveMeeting(encKey []byte, channelID string) (*ActiveMeeti
 		return nil, err
 	}
 	return decodeActiveMeeting(encKey, raw)
+}
+
+// LoadActiveMeetingRaw also returns the stored ciphertext, for callers that
+// need it as the compare-and-set precondition of a later conditional write.
+func (s *Store) LoadActiveMeetingRaw(encKey []byte, channelID string) (*ActiveMeeting, []byte, error) {
+	raw, err := s.Get(meetingKey(channelID))
+	if err != nil {
+		return nil, nil, err
+	}
+	am, dErr := decodeActiveMeeting(encKey, raw)
+	if dErr != nil {
+		return nil, nil, dErr
+	}
+	return am, raw, nil
+}
+
+// SaveActiveMeetingCAS writes am only if the stored value still equals prev
+// (the ciphertext previously read). Returns false when the record changed or
+// was deleted meanwhile, so a heartbeat cannot resurrect a meeting that end/
+// dismiss/reaper deleted concurrently.
+func (s *Store) SaveActiveMeetingCAS(encKey []byte, am *ActiveMeeting, prev []byte) (bool, error) {
+	value, err := encodeActiveMeeting(encKey, am)
+	if err != nil {
+		return false, err
+	}
+	ok, appErr := s.api.KVSetWithOptions(meetingKey(am.ChannelID), value, model.PluginKVSetOptions{
+		Atomic:   true,
+		OldValue: prev,
+	})
+	if appErr != nil {
+		return false, appErr
+	}
+	return ok, nil
 }
 
 func (s *Store) DeleteActiveMeeting(channelID string) error {

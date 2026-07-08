@@ -121,8 +121,16 @@ async function fetchCurrentStatus(): Promise<CustomStatus | null> {
 
 const OPENTALK_STATUS_EMOJI = 'phone';
 
-async function setOpenTalkStatusAsync(): Promise<void> {
+// Bumped by both set and clear. setOpenTalkStatusAsync captures the value at
+// call time and bails before its PUT if it changed, so a late set cannot
+// overwrite a clear that ran while its GET was in flight (status stuck 4h).
+let statusEpoch = 0;
+
+async function setOpenTalkStatusAsync(epoch: number): Promise<void> {
     const prior = await fetchCurrentStatus();
+    if (epoch !== statusEpoch) {
+        return;
+    }
     if (prior && prior.emoji !== OPENTALK_STATUS_EMOJI) {
         writePriorStatus(prior);
     }
@@ -146,10 +154,12 @@ async function setOpenTalkStatusAsync(): Promise<void> {
 }
 
 function setOpenTalkStatus(): void {
-    setOpenTalkStatusAsync().catch(() => { /* swallow */ });
+    const epoch = ++statusEpoch;
+    setOpenTalkStatusAsync(epoch).catch(() => { /* swallow */ });
 }
 
 function clearOpenTalkStatus(): void {
+    statusEpoch++;
     const prior = readPriorStatus();
     writePriorStatus(null);
     if (!prior || !prior.emoji) {

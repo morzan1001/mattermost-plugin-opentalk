@@ -363,12 +363,12 @@ func TestMeetingsHeartbeat_FlipsHostHeartbeatReceived(t *testing.T) {
 	api.On("KVGet", "meeting_ch-1").Return(stored, nil)
 
 	var saved []byte
-	api.On("KVSetWithExpiry", "meeting_ch-1", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("int64")).
+	api.On("KVSetWithOptions", "meeting_ch-1", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("model.PluginKVSetOptions")).
 		Run(func(args mock.Arguments) { saved = args.Get(1).([]byte) }).
-		Return(nil)
+		Return(true, (*model.AppError)(nil))
 
 	encKey := []byte("0123456789abcdef0123456789abcdef")
-	h := &Handlers{Store: store.New(api), EncryptionKey: encKey}
+	h := &Handlers{Store: store.New(api), EncryptionKey: encKey, IsChannelMember: func(_, _ string) bool { return true }}
 
 	body, _ := json.Marshal(map[string]string{"channel_id": "ch-1"})
 	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/heartbeat", bytes.NewReader(body))
@@ -383,8 +383,22 @@ func TestMeetingsHeartbeat_FlipsHostHeartbeatReceived(t *testing.T) {
 	var got store.ActiveMeeting
 	require.NoError(t, json.Unmarshal(plain, &got))
 	assert.True(t, got.HostHeartbeatReceived,
-		"first host heartbeat must flip the flag")
+		"first participant heartbeat must flip the flag")
 	assert.False(t, got.LastHeartbeat.IsZero(), "LastHeartbeat must be advanced")
+}
+
+func TestMeetingsHeartbeat_NonMemberIgnored(t *testing.T) {
+	api := &plugintest.API{}
+	h := &Handlers{Store: store.New(api), IsChannelMember: func(_, _ string) bool { return false }}
+
+	body, _ := json.Marshal(map[string]string{"channel_id": "ch-1"})
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/heartbeat", bytes.NewReader(body))
+	req.Header.Set("Mattermost-User-ID", "outsider")
+	rr := httptest.NewRecorder()
+	h.MeetingsHeartbeat(rr, req)
+
+	assert.Equal(t, nethttp.StatusNoContent, rr.Code)
+	api.AssertNotCalled(t, "KVGet", mock.Anything)
 }
 
 func TestMeetingsPostActionEnd_Host(t *testing.T) {
@@ -404,7 +418,8 @@ func TestMeetingsPostActionEnd_Host(t *testing.T) {
 
 	var broadcasts []string
 	h := &Handlers{
-		Store: store.New(api),
+		Store:           store.New(api),
+		IsChannelMember: func(_, _ string) bool { return true },
 		PostGetter: func(id string) (*model.Post, error) {
 			return &model.Post{Id: id, Props: model.StringInterface{
 				"started_at":    am.CreatedAt.Unix(),
@@ -455,7 +470,7 @@ func TestMeetingsPostActionEnd_NonHost(t *testing.T) {
 	require.NoError(t, err)
 	api.On("KVGet", "meeting_ch-1").Return(stored, nil)
 
-	h := &Handlers{Store: store.New(api)}
+	h := &Handlers{Store: store.New(api), IsChannelMember: func(_, _ string) bool { return true }}
 
 	body, _ := json.Marshal(model.PostActionIntegrationRequest{
 		UserId:    "intruder-uid",

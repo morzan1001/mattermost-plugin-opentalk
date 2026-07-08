@@ -34,6 +34,16 @@ func (h *Handler) end(args *model.CommandArgs) (*model.CommandResponse, *model.A
 		})), nil
 	}
 
+	// Best-effort invite revoke so the guest-joinable code stops working,
+	// mirroring the HTTP end path. Failures must not block the end-flow.
+	if am.InviteCode != "" && h.OpenTalk != nil && h.AccessTokenFor != nil {
+		if token, terr := h.AccessTokenFor(am.HostUserID); terr == nil {
+			if dErr := h.OpenTalk.DeleteInvite(token, am.RoomID, am.InviteCode); dErr != nil {
+				h.API.LogWarn("end: DeleteInvite failed", "room", am.RoomID, "err", dErr.Error())
+			}
+		}
+	}
+
 	if am.PostID != "" && h.PostGetter != nil && h.PostUpdater != nil {
 		p, getErr := h.PostGetter(am.PostID)
 		if getErr == nil && p != nil {

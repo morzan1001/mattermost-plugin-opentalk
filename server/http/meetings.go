@@ -133,11 +133,17 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 			if dErr := h.OpenTalk.DeleteInvite(token, room.ID, invite.InviteCode); dErr != nil && h.LogWarn != nil {
 				h.LogWarn("[opentalk] rollback DeleteInvite failed", "room", room.ID, "err", dErr.Error())
 			}
+			// Mirror the pre-check 409 body so the webapp can auto-join the
+			// meeting that won the race.
+			conflict := map[string]any{"error": "meeting already active in this channel"}
+			if winner, lErr := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID); lErr == nil && winner != nil {
+				conflict["room_id"] = winner.RoomID
+				conflict["post_id"] = winner.PostID
+				conflict["host_user_id"] = winner.HostUserID
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(nethttp.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"error": "meeting already active in this channel",
-			})
+			_ = json.NewEncoder(w).Encode(conflict)
 			return
 		}
 		h.internalError(w, "MeetingsCreate: CreateActiveMeetingAtomic", err, nethttp.StatusInternalServerError, "persist meeting failed")
@@ -401,6 +407,10 @@ func (h *Handlers) MeetingsPostActionEnd(w nethttp.ResponseWriter, r *nethttp.Re
 		nethttp.Error(w, "channel_id required in context", nethttp.StatusBadRequest)
 		return
 	}
+	if h.IsChannelMember == nil || !h.IsChannelMember(channelID, mmUserID) {
+		nethttp.Error(w, "forbidden", nethttp.StatusForbidden)
+		return
+	}
 
 	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, channelID)
 	if err != nil {
@@ -600,7 +610,9 @@ type heartbeatRequest struct {
 	ChannelID string `json:"channel_id"`
 }
 
-// MeetingsHeartbeat advances LastHeartbeat for the host. Returns 204 silently on race with meeting-end.
+// MeetingsHeartbeat advances LastHeartbeat while any channel member is in the
+// meeting, so a meeting is not reaped just because the host left. Returns 204
+// silently on race with meeting-end.
 func (h *Handlers) MeetingsHeartbeat(w nethttp.ResponseWriter, r *nethttp.Request) {
 	mmUserID := r.Header.Get("Mattermost-User-ID")
 	if mmUserID == "" {
@@ -617,23 +629,27 @@ func (h *Handlers) MeetingsHeartbeat(w nethttp.ResponseWriter, r *nethttp.Reques
 		return
 	}
 
-	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, body.ChannelID)
-	if err != nil {
+	if h.IsChannelMember == nil || !h.IsChannelMember(body.ChannelID, mmUserID) {
 		w.WriteHeader(nethttp.StatusNoContent)
 		return
 	}
 
-	if am.HostUserID != mmUserID {
+	am, raw, err := h.Store.LoadActiveMeetingRaw(h.EncryptionKey, body.ChannelID)
+	if err != nil {
 		w.WriteHeader(nethttp.StatusNoContent)
 		return
 	}
 
 	am.LastHeartbeat = time.Now().UTC()
 	am.HostHeartbeatReceived = true
-	if sErr := h.Store.SaveActiveMeeting(h.EncryptionKey, am); sErr != nil {
+	// Conditional write: if end/dismiss/reaper deleted the record between our
+	// load and here, the CAS fails and we must not resurrect it.
+	ok, sErr := h.Store.SaveActiveMeetingCAS(h.EncryptionKey, am, raw)
+	if sErr != nil {
 		nethttp.Error(w, "save heartbeat: "+sErr.Error(), nethttp.StatusInternalServerError)
 		return
 	}
+	_ = ok
 
 	w.WriteHeader(nethttp.StatusNoContent)
 }

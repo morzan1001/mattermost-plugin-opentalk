@@ -3,6 +3,7 @@ import {
     RoomEvent,
     Track,
     LocalVideoTrack,
+    ConnectionState,
     type RemoteTrack,
     type RemoteTrackPublication,
     type RemoteParticipant,
@@ -62,7 +63,11 @@ export class LiveKitRoom {
             this.emit('active_speakers_changed', speakers.map((s) => s.identity));
         });
         this.room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
-            if (publication.source === Track.Source.ScreenShare) {
+            // A full reconnect republishes local tracks, unpublishing each one
+            // first. Only treat an unpublish as an OS-driven screen-share stop
+            // while the room is actually connected, or a reconnect would
+            // spuriously kill an ongoing share.
+            if (publication.source === Track.Source.ScreenShare && this.room.state === ConnectionState.Connected) {
                 this.emit('local_screen_share_ended');
             }
         });
@@ -146,9 +151,16 @@ export class LiveKitRoom {
             throw new Error('Stream has no video track');
         }
         const localTrack = new LocalVideoTrack(videoTrack);
-        await this.room.localParticipant.publishTrack(localTrack, {
-            source: Track.Source.ScreenShare,
-        });
+        try {
+            await this.room.localParticipant.publishTrack(localTrack, {
+                source: Track.Source.ScreenShare,
+            });
+        } catch (err) {
+            // Publish failed: stop the capture so the OS screen-share picker
+            // indicator doesn't stay on with no publication behind it.
+            localTrack.stop();
+            throw err;
+        }
 
         // When user stops via OS share-controls, the track ends. Tear down our
         // publication so isScreenShareEnabled() flips back to false.
