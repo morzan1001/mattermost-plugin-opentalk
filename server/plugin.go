@@ -50,6 +50,7 @@ type Plugin struct {
 	reaper *reaper.Reaper
 
 	channelLocks sync.Map
+	userLocks    sync.Map
 }
 
 // channelMembersOf pages through every member of a channel and returns the
@@ -134,6 +135,8 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		PluginID:       pluginID,
 		FrontendURL:    cfg.OpenTalkFrontendURL,
 		MeetingCreator: p.CreateMeeting,
+		OpenTalk:       p.getOTClient(),
+		AccessTokenFor: p.accessTokenFor,
 		PostGetter: func(postID string) (*model.Post, error) {
 			mp, appErr := p.API.GetPost(postID)
 			if appErr != nil {
@@ -176,13 +179,13 @@ func (p *Plugin) endMeetingFromReaper(am *store.ActiveMeeting) {
 
 // NotificationWillBePushed suppresses the standard MM push for our
 // custom_opentalk_meeting bot post -- we already send our own call-flavored
-// push from notifyMeetingStarted. The SenderId check is critical: without it
-// the hook also cancels our own plugin push (both carry the same PostId).
+// push from notifyMeetingStarted. Our own push carries no PostId (identified
+// by that omission, it returns early above); the standard bot-post push
+// carries the post id and its Type, and is the one we cancel here. A
+// SenderId guard cannot separate the two: both are authored by the bot, so
+// both carry SenderId == botUserID and the standard push would slip through.
 func (p *Plugin) NotificationWillBePushed(push *model.PushNotification, mmUserID string) (*model.PushNotification, string) {
 	if push == nil || push.PostId == "" {
-		return push, ""
-	}
-	if push.SenderId == p.botUserID {
 		return push, ""
 	}
 	pp, appErr := p.API.GetPost(push.PostId)
@@ -507,24 +510,41 @@ func (p *Plugin) notifyMeetingStarted(am *store.ActiveMeeting) {
 		"recipients", strings.Join(recipients, ","),
 	)
 
+	// Respect the server's push privacy setting: with generic contents the
+	// sender's name must not appear in the push payload.
+	pushContents := model.FullNotification
+	if mmCfg := p.API.GetConfig(); mmCfg != nil && mmCfg.EmailSettings.PushNotificationContents != nil {
+		pushContents = *mmCfg.EmailSettings.PushNotificationContents
+	}
+	generic := pushContents == model.GenericNotification || pushContents == model.GenericNoChannelNotification
+
 	// Best-effort push notification per recipient; skip DND users.
 	for _, uid := range recipients {
 		status, _ := p.API.GetUserStatus(uid)
 		if status != nil && status.Status == model.StatusDnd {
 			continue
 		}
+		message := i18n.T(p.localeOf(uid), i18n.Translatable{
+			DE: "Anruf von " + hostName,
+			EN: "Incoming call from " + hostName,
+		})
+		if generic {
+			message = i18n.T(p.localeOf(uid), i18n.Translatable{
+				DE: "Eingehender Anruf",
+				EN: "Incoming call",
+			})
+		}
+		// No PostId: the NotificationWillBePushed hook cancels the standard
+		// bot-post push by its post id + Type, and identifies this call push
+		// to keep by the absence of a PostId.
 		push := &model.PushNotification{
 			Version:     model.PushMessageV2,
 			Type:        model.PushTypeMessage,
 			TeamId:      ch.TeamId,
 			ChannelId:   am.ChannelID,
-			PostId:      am.PostID,
 			SenderId:    p.botUserID,
 			ChannelType: ch.Type,
-			Message: i18n.T(p.localeOf(uid), i18n.Translatable{
-				DE: "Anruf von " + hostName,
-				EN: "Incoming call from " + hostName,
-			}),
+			Message:     message,
 		}
 		if pErr := p.API.SendPushNotification(push, uid); pErr != nil {
 			p.API.LogWarn("[opentalk] push failed", "user", uid, "err", pErr.Error())
@@ -559,6 +579,15 @@ func (p *Plugin) localeOf(mmUserID string) string {
 // persisted; persistence failures are logged but don't block the caller —
 // we still return the working in-memory token.
 func (p *Plugin) accessTokenFor(mmUserID string) (string, error) {
+	// Serialize per user so two concurrent callers don't both refresh and race
+	// their SaveUserInfo writes -- with a rotating refresh token the loser's
+	// stored token would be invalidated. The second caller re-loads under the
+	// lock and sees the already-refreshed token.
+	mu, _ := p.userLocks.LoadOrStore(mmUserID, &sync.Mutex{})
+	m := mu.(*sync.Mutex)
+	m.Lock()
+	defer m.Unlock()
+
 	cfg := p.getConfiguration()
 	encKey := []byte(cfg.TokenEncryptionKey)
 

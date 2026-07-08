@@ -30,6 +30,11 @@ const mockCall = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeStore(sessionOverrides: any = {}, incomingCalls: any = {byChannelID: {}}) {
     const dispatched: unknown[] = [];
+
+    // Stable session object so tests can mutate status mid-flow (e.g. a mocked
+    // startConferenceConnection flipping it to 'connected') and have selectors
+    // observe the change through getState().
+    const session = {status: 'idle', ...sessionOverrides};
     const store = createStore(() => ({
         entities: {
             users: {
@@ -40,13 +45,15 @@ function makeStore(sessionOverrides: any = {}, incomingCalls: any = {byChannelID
             },
         },
         [stateKey]: {
-            session: {
-                status: 'idle',
-                ...sessionOverrides,
-            },
+            session,
             incomingCalls,
         },
     }));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (store as any).setSessionStatus = (s: string) => {
+        session.status = s;
+    };
 
     // Track dispatched actions for assertions
     const originalDispatch = store.dispatch.bind(store);
@@ -132,6 +139,13 @@ describe('IncomingCallModal', () => {
             {status: 'idle'},
             {byChannelID: {'ch-1': mockCall}},
         );
+
+        // A successful connect leaves the session non-idle; the modal only
+        // clears the ring once it observes that.
+        (startConferenceConnection as jest.Mock).mockImplementation(async () => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (store as any).setSessionStatus('connected');
+        });
         renderModal(store);
 
         await act(async () => {
@@ -152,6 +166,29 @@ describe('IncomingCallModal', () => {
             expect.arrayContaining([
                 expect.objectContaining(clearedAction),
             ]),
+        );
+    });
+
+    it('Accept that fails to connect keeps the ringing call (no incomingCallCleared)', async () => {
+        const store = makeStore(
+            {status: 'idle'},
+            {byChannelID: {'ch-1': mockCall}},
+        );
+
+        // startConferenceConnection swallows connect errors and stays 'idle';
+        // the modal must not clear the call so the user can retry.
+        (startConferenceConnection as jest.Mock).mockResolvedValue(undefined);
+        renderModal(store);
+
+        await act(async () => {
+            fireEvent.click(screen.getByText('Accept'));
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const dispatched = (store as any).dispatchedActions as unknown[];
+        const clearedAction = incomingCallCleared({channelID: 'ch-1'});
+        expect(dispatched).not.toContainEqual(
+            expect.objectContaining(clearedAction),
         );
     });
 

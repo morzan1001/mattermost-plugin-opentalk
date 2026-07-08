@@ -70,8 +70,17 @@ export function useResizable(opts: ResizeOpts): UseResizableResult {
 
     const [size, setSize] = useState<Size>(() => {
         const stored = readStoredSize(storageKey);
-        return stored ?? defaultSize;
+        const base = stored ?? defaultSize;
+        return {width: Math.max(base.width, opts.minSize.width), height: base.height};
     });
+
+    // minSize.width is measured after first layout (0 until then). Raise the
+    // stored width up to it once it lands, otherwise the size stays pinned at
+    // the pre-measurement 0 and the first resize gesture starts from 0.
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSize((cur) => (cur.width < opts.minSize.width ? {...cur, width: opts.minSize.width} : cur));
+    }, [opts.minSize.width]);
 
     const [isResizing, setIsResizing] = useState(false);
 
@@ -92,6 +101,7 @@ export function useResizable(opts: ResizeOpts): UseResizableResult {
         }
         if (onPointerUpRef.current) {
             window.removeEventListener('pointerup', onPointerUpRef.current);
+            window.removeEventListener('pointercancel', onPointerUpRef.current);
             onPointerUpRef.current = null;
         }
     }, []);
@@ -121,17 +131,6 @@ export function useResizable(opts: ResizeOpts): UseResizableResult {
 
             setIsResizing(true);
 
-            const handlePointerMove = (ev: MouseEvent) => {
-                if (!resizeStartRef.current) {
-                    return;
-                }
-                const {pointerX, pointerY, startWidth, startHeight} = resizeStartRef.current;
-                const newWidth = startWidth + (ev.pageX - pointerX);
-                const newHeight = startHeight + (ev.pageY - pointerY);
-                const clamped = clampSize(newWidth, newHeight, opts);
-                setSize(clamped);
-            };
-
             const handlePointerUp = (ev: MouseEvent) => {
                 if (!resizeStartRef.current) {
                     return;
@@ -153,11 +152,30 @@ export function useResizable(opts: ResizeOpts): UseResizableResult {
                 removeWindowListeners();
             };
 
+            const handlePointerMove = (ev: MouseEvent) => {
+                if (!resizeStartRef.current) {
+                    return;
+                }
+
+                // Primary button released without a pointerup reaching us:
+                // finish instead of resizing forever against the cursor.
+                if ((ev.buttons & 1) === 0) {
+                    handlePointerUp(ev);
+                    return;
+                }
+                const {pointerX, pointerY, startWidth, startHeight} = resizeStartRef.current;
+                const newWidth = startWidth + (ev.pageX - pointerX);
+                const newHeight = startHeight + (ev.pageY - pointerY);
+                const clamped = clampSize(newWidth, newHeight, opts);
+                setSize(clamped);
+            };
+
             onPointerMoveRef.current = handlePointerMove;
             onPointerUpRef.current = handlePointerUp;
 
             window.addEventListener('pointermove', handlePointerMove);
             window.addEventListener('pointerup', handlePointerUp);
+            window.addEventListener('pointercancel', handlePointerUp);
         },
         [storageKey, opts, removeWindowListeners],
     );

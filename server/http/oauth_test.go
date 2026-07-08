@@ -69,6 +69,8 @@ func TestOAuthStart_RedirectsAndStoresState(t *testing.T) {
 	assert.True(t, strings.Contains(location, "/auth"), "redirect to authorization endpoint")
 	assert.Contains(t, location, "state=")
 	assert.Contains(t, location, "client_id=test-client")
+	assert.Contains(t, location, "code_challenge=")
+	assert.Contains(t, location, "code_challenge_method=S256")
 }
 
 func TestOAuthStart_RejectsMissingUserHeader(t *testing.T) {
@@ -128,7 +130,7 @@ func stubOIDCFullClient(t *testing.T) *oidc.Client {
 func TestOAuthCallback_ExchangesAndStoresUserInfo(t *testing.T) {
 	api := &plugintest.API{}
 	state := "state-xyz"
-	statePayload := []byte(`{"mm_user_id":"mm-user-1","created_at":"2026-05-05T12:00:00Z"}`)
+	statePayload := []byte(`{"mm_user_id":"mm-user-1","pkce_verifier":"pkce-verifier-1","created_at":"2026-05-05T12:00:00Z"}`)
 
 	api.On("KVGet", mock.MatchedBy(func(k string) bool {
 		return strings.HasPrefix(k, "oauth_state_")

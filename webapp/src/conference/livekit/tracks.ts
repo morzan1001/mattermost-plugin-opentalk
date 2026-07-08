@@ -31,7 +31,14 @@ export async function publishMic(room: Room, opts: MicOptions = {}): Promise<Loc
     } catch (err) {
         throw new MicPermissionDeniedError(err as Error);
     }
-    await room.localParticipant.publishTrack(track);
+    try {
+        await room.localParticipant.publishTrack(track);
+    } catch (err) {
+        // Publish failed (e.g. teardown/reconnect mid-acquire); release the
+        // device so the mic isn't left hot with no publication tracking it.
+        track.stop();
+        throw err;
+    }
     return track;
 }
 
@@ -67,7 +74,14 @@ export async function publishCam(room: Room, opts: CamOptions = {}): Promise<Loc
     } catch (err) {
         throw new CamPermissionDeniedError(err as Error);
     }
-    await room.localParticipant.publishTrack(track);
+    try {
+        await room.localParticipant.publishTrack(track);
+    } catch (err) {
+        // Publish failed (e.g. teardown/reconnect mid-acquire); release the
+        // device so the camera light isn't left on with no publication.
+        track.stop();
+        throw err;
+    }
     return track;
 }
 

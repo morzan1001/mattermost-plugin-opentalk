@@ -73,9 +73,9 @@ type MeetingDefaults struct {
 	InviteExpirationHours int
 }
 
-// OAuthStart begins the OIDC auth-code flow by issuing a CSRF-state, persisting
-// it to KV (with 10-min TTL via the OAuthState helper), and redirecting the
-// browser to the IdP's authorization endpoint.
+// OAuthStart begins the OIDC auth-code flow by issuing a CSRF-state and PKCE
+// verifier, persisting both to KV (with 10-min TTL via the OAuthState helper),
+// and redirecting the browser to the IdP's authorization endpoint.
 func (h *Handlers) OAuthStart(w nethttp.ResponseWriter, r *nethttp.Request) {
 	mmUserID := r.Header.Get("Mattermost-User-ID")
 	if mmUserID == "" {
@@ -83,11 +83,12 @@ func (h *Handlers) OAuthStart(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 	state := uuid.New().String()
-	if err := h.Store.SaveOAuthState(state, mmUserID); err != nil {
+	verifier := oidc.GenerateVerifier()
+	if err := h.Store.SaveOAuthState(state, mmUserID, verifier); err != nil {
 		h.internalError(w, "OAuthStart: SaveOAuthState", err, nethttp.StatusInternalServerError, "save state failed")
 		return
 	}
-	nethttp.Redirect(w, r, h.OIDC.AuthCodeURL(state), nethttp.StatusFound)
+	nethttp.Redirect(w, r, h.OIDC.AuthCodeURL(state, verifier), nethttp.StatusFound)
 }
 
 const successPage = `<!DOCTYPE html>
@@ -110,20 +111,20 @@ func (h *Handlers) OAuthCallback(w nethttp.ResponseWriter, r *nethttp.Request) {
 		nethttp.Error(w, "missing state or code", nethttp.StatusBadRequest)
 		return
 	}
-	mmUserID, err := h.Store.ConsumeOAuthState(state)
+	st, err := h.Store.ConsumeOAuthState(state)
 	if err != nil {
 		nethttp.Error(w, "invalid state", nethttp.StatusBadRequest)
 		return
 	}
 
-	tok, info, err := h.OIDC.Exchange(r.Context(), code)
+	tok, info, err := h.OIDC.Exchange(r.Context(), code, st.PKCEVerifier)
 	if err != nil {
 		h.internalError(w, "OAuthCallback: code exchange", err, nethttp.StatusBadGateway, "code exchange failed")
 		return
 	}
 
 	saveErr := h.Store.SaveUserInfo(h.EncryptionKey, &store.UserInfo{
-		MattermostUserID: mmUserID,
+		MattermostUserID: st.MattermostUserID,
 		OpenTalkSub:      info.Sub,
 		OpenTalkEmail:    info.Email,
 		AccessToken:      tok.AccessToken,
@@ -138,10 +139,10 @@ func (h *Handlers) OAuthCallback(w nethttp.ResponseWriter, r *nethttp.Request) {
 
 	if h.BroadcastFunc != nil {
 		h.BroadcastFunc("user_connected_state", map[string]any{
-			"mm_user_id": mmUserID,
+			"mm_user_id": st.MattermostUserID,
 			"connected":  true,
 			"email":      info.Email,
-		}, &model.WebsocketBroadcast{UserId: mmUserID})
+		}, &model.WebsocketBroadcast{UserId: st.MattermostUserID})
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

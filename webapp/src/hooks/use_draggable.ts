@@ -60,7 +60,10 @@ export function useDraggable(opts: {
 
     const [position, setPosition] = useState<Position>(() => {
         const stored = readStoredPosition(storageKey);
-        return stored ?? defaultPosition;
+
+        // Re-clamp on restore: the viewport may have shrunk since the position
+        // was saved, which would otherwise place the widget fully offscreen.
+        return stored ? clampPosition(stored.x, stored.y) : defaultPosition;
     });
 
     const [isDragging, setIsDragging] = useState(false);
@@ -82,6 +85,7 @@ export function useDraggable(opts: {
         }
         if (onPointerUpRef.current) {
             window.removeEventListener('pointerup', onPointerUpRef.current);
+            window.removeEventListener('pointercancel', onPointerUpRef.current);
             onPointerUpRef.current = null;
         }
     }, []);
@@ -111,17 +115,6 @@ export function useDraggable(opts: {
 
             setIsDragging(true);
 
-            const handlePointerMove = (ev: MouseEvent) => {
-                if (!dragStartRef.current) {
-                    return;
-                }
-                const {pointerX, pointerY, widgetX, widgetY} = dragStartRef.current;
-                const newX = widgetX + (ev.pageX - pointerX);
-                const newY = widgetY + (ev.pageY - pointerY);
-                const clamped = clampPosition(newX, newY);
-                setPosition(clamped);
-            };
-
             const handlePointerUp = (ev: MouseEvent) => {
                 if (!dragStartRef.current) {
                     return;
@@ -143,11 +136,31 @@ export function useDraggable(opts: {
                 removeWindowListeners();
             };
 
+            const handlePointerMove = (ev: MouseEvent) => {
+                if (!dragStartRef.current) {
+                    return;
+                }
+
+                // The primary button was released without a pointerup reaching
+                // us (released outside the window, or the event was dropped);
+                // finish the drag instead of sticking to the cursor.
+                if ((ev.buttons & 1) === 0) {
+                    handlePointerUp(ev);
+                    return;
+                }
+                const {pointerX, pointerY, widgetX, widgetY} = dragStartRef.current;
+                const newX = widgetX + (ev.pageX - pointerX);
+                const newY = widgetY + (ev.pageY - pointerY);
+                const clamped = clampPosition(newX, newY);
+                setPosition(clamped);
+            };
+
             onPointerMoveRef.current = handlePointerMove;
             onPointerUpRef.current = handlePointerUp;
 
             window.addEventListener('pointermove', handlePointerMove);
             window.addEventListener('pointerup', handlePointerUp);
+            window.addEventListener('pointercancel', handlePointerUp);
         },
         [storageKey, removeWindowListeners],
     );

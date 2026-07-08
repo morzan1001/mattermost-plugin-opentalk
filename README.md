@@ -17,10 +17,10 @@ A Mattermost server plugin that deeply integrates the OpenTalk video-conferencin
 
 ## Architecture
 
-- **Server (Go):** OAuth bridge against Keycloak, calls the OpenTalk Controller REST API on behalf of the user, posts custom posts with a join link and action buttons, sends push notifications for DM ringing, runs a reaper that ends orphaned meetings (heartbeat-based for webapp hosts, 30-minute grace for mobile-only hosts).
+- **Server (Go):** OIDC bridge against the identity provider OpenTalk uses, calls the OpenTalk Controller REST API on behalf of the user, posts custom posts with a join link and action buttons, sends push notifications for DM ringing, runs a reaper that ends orphaned meetings (kept alive by a heartbeat from any connected web participant, 30-minute grace before the first heartbeat for mobile-only hosts).
 - **Webapp (TS + React):** Channel-header button, custom post renderer, floating widget, expanded view, incoming-call modal, signaling client, and LiveKit client for the in-Mattermost conference UI.
 - **OpenTalk:** Room creation and auth via the Controller REST API, live signaling over Roomserver WebSocket, media over LiveKit.
-- **Auth:** Per-user OIDC authorization-code flow against Keycloak (the same realm that OpenTalk uses).
+- **Auth:** Per-user OIDC authorization-code flow (with PKCE) against the same identity provider OpenTalk uses — Keycloak, Authentik, or any OIDC IdP. Works with confidential clients (client secret) and public clients (PKCE, no secret).
 
 ## Build
 
@@ -37,14 +37,16 @@ This produces `dist/com.github.morzan1001.mattermost-plugin-opentalk-<version>.t
 
 ## Keycloak setup
 
-The plugin authenticates each Mattermost user via an **OIDC authorization-code flow** against the same Keycloak instance that OpenTalk uses. You need to create one **OIDC client** in the Keycloak realm of your OpenTalk deployment.
+The plugin authenticates each Mattermost user via an **OIDC authorization-code flow (with PKCE)** against the same Keycloak instance that OpenTalk uses. You need to create one **OIDC client** in the Keycloak realm of your OpenTalk deployment.
 
 > **Permissions required:** Realm-admin access. If you don't have it, forward this section to your OpenTalk operator.
+
+> **Other OIDC providers (e.g. Authentik):** the concept is identical — register a client/application with the redirect URI below and use its **issuer URL** as _OIDC Authority_. A **public client** needs no secret: leave _OIDC Client Secret_ empty; the plugin authenticates via PKCE. On Authentik, whose issuer is derived per application slug, the plugin can reuse the existing `opentalk` frontend client by adding the plugin's redirect URI to it, so tokens carry the issuer the OpenTalk controller trusts. Set _OIDC Authority_ to the exact issuer including any trailing slash.
 
 ### What the client does
 
 - Receives user browser redirects from the Mattermost plugin and issues OIDC auth codes.
-- Exchanges auth codes for access/refresh tokens (authenticated with a client secret).
+- Exchanges auth codes for access/refresh tokens (authenticated with a client secret, or via PKCE for public clients with no secret).
 - Issues refresh tokens (via the `offline_access` scope) so the plugin can renew tokens without prompting the user again.
 
 ### 1. Log in to the Keycloak Admin Console
@@ -57,7 +59,7 @@ Left nav: **Clients → Create client**.
 
 **General Settings:** Client type **OpenID Connect**, Client ID `mattermost-plugin-opentalk`, Name `Mattermost OpenTalk Plugin`.
 
-**Capability Config:** Enable **Client authentication** (confidential client with client secret) and **Standard flow** (authorization-code flow). Optionally enable **Service accounts roles** for the bot-model fallback. Leave the rest off.
+**Capability Config:** Enable **Standard flow** (authorization-code flow). For a confidential client, also enable **Client authentication** (client secret). For a public client, leave **Client authentication** off — the plugin uses PKCE and you leave _OIDC Client Secret_ empty below. Leave the rest off.
 
 **Login Settings:**
 
@@ -75,7 +77,7 @@ Save.
 
 ### 3. Copy the client secret
 
-Go to the **Credentials** tab and copy the **Client secret**. You will enter this value in the Mattermost System Console plugin settings (field: _OIDC Client Secret_).
+Go to the **Credentials** tab and copy the **Client secret**. You will enter this value in the Mattermost System Console plugin settings (field: _OIDC Client Secret_). Skip this step for a public client — leave _OIDC Client Secret_ empty and the plugin uses PKCE.
 
 ### 4. (Optional) Refresh token lifetime
 
@@ -91,7 +93,7 @@ After creating the client, enter the following in the Mattermost System Console 
 | OpenTalk Frontend URL | URL of the OpenTalk frontend, e.g. `https://opentalk.example` |
 | OIDC Authority | Issuer URL, e.g. `https://accounts.opentalk.example/auth/realms/opentalk` |
 | OIDC Client ID | `mattermost-plugin-opentalk` |
-| OIDC Client Secret | _Value from step 3_ |
+| OIDC Client Secret | _Value from step 3 — leave empty for a public (PKCE) client_ |
 | OIDC Scopes | `openid email profile offline_access` (default is fine) |
 
 Activate the plugin. An OpenTalk button should appear in the channel header; the first click starts the OAuth flow.
@@ -103,7 +105,7 @@ Activate the plugin. An OpenTalk button should appear in the channel header; the
 | `unauthorized_client` during smoke test | Direct access grants not enabled | Enable in Capability Config (step 2) |
 | `invalid_grant` + `Account is not fully set up` | Test user has pending required actions (e.g. Verify Email, Update Profile) | User details → clear _Required user actions_, set _Email verified_, fill in first/last/email |
 | `invalid_grant` (no account message) | Wrong username or password | Check the user's credentials |
-| `invalid_client` | Client authentication is `off` (public client) | Enable in Capability Config (step 2) |
+| `invalid_client` | Client type and secret don't match: confidential client with a wrong/empty secret, or a public client with a secret entered | Confidential → set the correct _OIDC Client Secret_; public → leave it empty (PKCE) |
 | Browser redirect lands on Keycloak error page | Redirect URI mismatch | Check Login Settings exactly — no trailing slash |
 | Plugin settings save fails with `OIDCAuthority must not be empty` | Issuer URL not entered | See plugin settings table above |
 | Plugin cannot load OIDC discovery | Issuer URL has wrong subpath (`/auth/` missing or extra) | Use exactly the URL shown in Keycloak's Realm Settings as _Issuer_ |

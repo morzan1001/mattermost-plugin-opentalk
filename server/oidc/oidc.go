@@ -46,12 +46,17 @@ func NewClient(ctx context.Context, cfg Config) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) AuthCodeURL(state string) string {
-	return c.oauth.AuthCodeURL(state)
+// GenerateVerifier returns a fresh PKCE code verifier for one auth-code flow.
+func GenerateVerifier() string {
+	return oauth2.GenerateVerifier()
 }
 
-func (c *Client) Exchange(ctx context.Context, code string) (*oauth2.Token, *UserInfo, error) {
-	tok, err := c.oauth.Exchange(ctx, code)
+func (c *Client) AuthCodeURL(state, pkceVerifier string) string {
+	return c.oauth.AuthCodeURL(state, oauth2.S256ChallengeOption(pkceVerifier))
+}
+
+func (c *Client) Exchange(ctx context.Context, code, pkceVerifier string) (*oauth2.Token, *UserInfo, error) {
+	tok, err := c.oauth.Exchange(ctx, code, oauth2.VerifierOption(pkceVerifier))
 	if err != nil {
 		return nil, nil, fmt.Errorf("oauth code exchange: %w", err)
 	}
