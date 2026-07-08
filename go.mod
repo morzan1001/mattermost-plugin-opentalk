@@ -2,6 +2,8 @@ module github.com/morzan1001/mattermost-plugin-opentalk
 
 go 1.26.3
 
+toolchain go1.26.4
+
 require (
 	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/google/uuid v1.6.0
