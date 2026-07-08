@@ -75,6 +75,7 @@ func TestMeetingsCreate_HappyPath(t *testing.T) {
 		},
 		HostUsernameOf:    func(_ string) string { return "alice" },
 		HostDisplayNameOf: func(_ string) string { return "Alice Tester" },
+		IsChannelMember:   func(_, _ string) bool { return true },
 	}
 
 	body := strings.NewReader(`{"channel_id":"ch-1","device_secret":"dev"}`)
@@ -121,7 +122,8 @@ func TestMeetingsCreate_RejectsMissingChannelOrDevice(t *testing.T) {
 
 func TestMeetingsCreate_PropagatesAccessTokenError(t *testing.T) {
 	h := &Handlers{
-		AccessTokenFor: func(string) (string, error) { return "", store.ErrNotFound },
+		AccessTokenFor:  func(string) (string, error) { return "", store.ErrNotFound },
+		IsChannelMember: func(_, _ string) bool { return true },
 	}
 	body := strings.NewReader(`{"channel_id":"ch","device_secret":"d"}`)
 	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings", body)
@@ -129,6 +131,18 @@ func TestMeetingsCreate_PropagatesAccessTokenError(t *testing.T) {
 	rr := httptest.NewRecorder()
 	h.MeetingsCreate(rr, req)
 	assert.Equal(t, nethttp.StatusUnauthorized, rr.Code)
+}
+
+func TestMeetingsCreate_RejectsNonMember(t *testing.T) {
+	h := &Handlers{
+		IsChannelMember: func(_, _ string) bool { return false },
+	}
+	body := strings.NewReader(`{"channel_id":"ch-private","device_secret":"d"}`)
+	req := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings", body)
+	req.Header.Set("Mattermost-User-ID", "outsider")
+	rr := httptest.NewRecorder()
+	h.MeetingsCreate(rr, req)
+	assert.Equal(t, nethttp.StatusForbidden, rr.Code)
 }
 
 // The host of the meeting takes the owner-only StartRoom endpoint.
@@ -476,9 +490,9 @@ func TestMeetingsPostActionDismiss_StillLive(t *testing.T) {
 	api.On("KVGet", mock.MatchedBy(func(k string) bool {
 		return strings.HasPrefix(k, "dismiss_")
 	})).Return([]byte(nil), nil)
-	api.On("KVSetWithExpiry", mock.MatchedBy(func(k string) bool {
+	api.On("KVSetWithOptions", mock.MatchedBy(func(k string) bool {
 		return strings.HasPrefix(k, "dismiss_")
-	}), mock.Anything, mock.AnythingOfType("int64")).Return(nil)
+	}), mock.Anything, mock.AnythingOfType("model.PluginKVSetOptions")).Return(true, (*model.AppError)(nil))
 
 	h := &Handlers{
 		Store:           store.New(api),
@@ -522,9 +536,9 @@ func TestMeetingsPostActionDismiss_FlipsMissed(t *testing.T) {
 	api.On("KVGet", mock.MatchedBy(func(k string) bool {
 		return strings.HasPrefix(k, "dismiss_")
 	})).Return([]byte(nil), nil)
-	api.On("KVSetWithExpiry", mock.MatchedBy(func(k string) bool {
+	api.On("KVSetWithOptions", mock.MatchedBy(func(k string) bool {
 		return strings.HasPrefix(k, "dismiss_")
-	}), mock.Anything, mock.AnythingOfType("int64")).Return(nil)
+	}), mock.Anything, mock.AnythingOfType("model.PluginKVSetOptions")).Return(true, (*model.AppError)(nil))
 	api.On("KVDelete", mock.MatchedBy(func(k string) bool {
 		return strings.HasPrefix(k, "meeting_") || strings.HasPrefix(k, "dismiss_")
 	})).Return(nil)

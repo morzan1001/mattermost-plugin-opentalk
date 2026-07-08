@@ -61,6 +61,7 @@
                      "default": "openid email profile offline_access"},
                     {"key": "TokenEncryptionKey", "type": "generated",
                      "display_name": "Token Encryption Key",
+                     "secret": true,
                      "help_text": "AES key used to encrypt OAuth tokens at rest. Auto-generated; rotate by clearing this field."}
                 ]
             },

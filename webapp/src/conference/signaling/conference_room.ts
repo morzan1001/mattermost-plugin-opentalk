@@ -115,6 +115,11 @@ export class ConferenceRoom {
 
         return this.auth.getTicket(roomID, channelID, deviceSecret).then(
             (r) => {
+                if (this.state !== 'authenticating') {
+                    // leave() was called while the ticket was in flight; abort
+                    // instead of opening a socket for an already-closed room.
+                    return Promise.resolve();
+                }
                 const ticket = r.ticket;
 
                 // Prefer a server-confirmed token from a prior joinSuccess
@@ -130,6 +135,12 @@ export class ConferenceRoom {
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.listener.on(CoreNamespace, 'joinSuccess', (payload: any) => {
+                    if (this.state !== 'connecting') {
+                        // A leave()/close raced the join; don't resurrect a
+                        // room the caller already tore down.
+                        return;
+                    }
+
                     // Server-confirmed resumption: only persist once the join
                     // has been accepted. Writing the ticket-time value would
                     // leave a stale token in localStorage if the join itself
@@ -236,6 +247,24 @@ export class ConferenceRoom {
                         this.emit('hand_lowered', {participantId: participant as string});
                     }
                 });
+
+                // control:update carries a full Participant, including the
+                // current hand_is_up. This is the only signal by which OTHER
+                // participants' hand state reaches us -- handRaised/handLowered
+                // above only confirm the local user's own action. Emit only on
+                // an explicit boolean so unrelated updates can't clear a hand.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(CoreNamespace, 'update', (payload: any) => {
+                    if (this.state !== 'connected') {
+                        return;
+                    }
+                    const ctrl = (payload.control ?? payload.participant ?? payload) as Record<string, unknown>;
+                    const handIsUp = ctrl.handIsUp ?? payload.handIsUp;
+                    const id = (payload.id ?? ctrl.id) as string | undefined;
+                    if (typeof handIsUp === 'boolean' && id) {
+                        this.emit(handIsUp ? 'hand_raised' : 'hand_lowered', {participantId: id});
+                    }
+                });
                 this.listener.on(ModerationNamespace, 'raiseHandsEnabled', () => {
                     this.emit('raise_hands_toggled', {enabled: true});
                 });
@@ -330,7 +359,12 @@ export class ConferenceRoom {
 
     public async leave(): Promise<void> {
         if (this.state !== 'connected') {
+            // Called before the join completed (idle/authenticating/connecting)
+            // or after a close. Abort any in-flight socket and unbind listeners
+            // so a late joinSuccess cannot resurrect the room.
             this.state = 'closed';
+            this.socket?.disconnect();
+            this.listener?.dispose();
             if (!this.closedEmitted) {
                 this.closedEmitted = true;
                 this.emit('closed', {code: 1000});

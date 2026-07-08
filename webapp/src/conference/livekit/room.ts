@@ -41,6 +41,14 @@ export class LiveKitRoom {
     public micTrack?: LocalAudioTrack;
     public camTrack?: LocalVideoTrack;
 
+    // In-flight publish guards: getUserMedia + publishTrack take several
+    // event-loop turns, so a check-then-await on micTrack/camTrack alone lets
+    // two concurrent enable calls each publish a track. The second one then
+    // leaks -- it stays published (hot mic) while the state only tracks the
+    // last assignment. Concurrent callers share the same pending publish.
+    private micPublish?: Promise<void>;
+    private camPublish?: Promise<void>;
+
     constructor() {
         this.room = new Room({adaptiveStream: true, dynacast: true});
         this.room.on(RoomEvent.Disconnected, () => this.emit('disconnected'));
@@ -73,7 +81,14 @@ export class LiveKitRoom {
         if (this.micTrack) {
             return;
         }
-        this.micTrack = await publishMic(this.room, opts);
+        if (!this.micPublish) {
+            this.micPublish = (async () => {
+                this.micTrack = await publishMic(this.room, opts);
+            })().finally(() => {
+                this.micPublish = undefined;
+            });
+        }
+        await this.micPublish;
     }
 
     public async disableMic(): Promise<void> {
@@ -92,7 +107,14 @@ export class LiveKitRoom {
         if (this.camTrack) {
             return;
         }
-        this.camTrack = await publishCam(this.room, opts);
+        if (!this.camPublish) {
+            this.camPublish = (async () => {
+                this.camTrack = await publishCam(this.room, opts);
+            })().finally(() => {
+                this.camPublish = undefined;
+            });
+        }
+        await this.camPublish;
     }
 
     public async disableCam(): Promise<void> {

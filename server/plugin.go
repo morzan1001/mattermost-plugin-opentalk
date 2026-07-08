@@ -176,13 +176,13 @@ func (p *Plugin) endMeetingFromReaper(am *store.ActiveMeeting) {
 
 // NotificationWillBePushed suppresses the standard MM push for our
 // custom_opentalk_meeting bot post -- we already send our own call-flavored
-// push from notifyMeetingStarted. The SenderId check is critical: without it
-// the hook also cancels our own plugin push (both carry the same PostId).
+// push from notifyMeetingStarted. Our own push carries no PostId (identified
+// by that omission, it returns early above); the standard bot-post push
+// carries the post id and its Type, and is the one we cancel here. A
+// SenderId guard cannot separate the two: both are authored by the bot, so
+// both carry SenderId == botUserID and the standard push would slip through.
 func (p *Plugin) NotificationWillBePushed(push *model.PushNotification, mmUserID string) (*model.PushNotification, string) {
 	if push == nil || push.PostId == "" {
-		return push, ""
-	}
-	if push.SenderId == p.botUserID {
 		return push, ""
 	}
 	pp, appErr := p.API.GetPost(push.PostId)
@@ -513,12 +513,14 @@ func (p *Plugin) notifyMeetingStarted(am *store.ActiveMeeting) {
 		if status != nil && status.Status == model.StatusDnd {
 			continue
 		}
+		// No PostId: the NotificationWillBePushed hook cancels the standard
+		// bot-post push by its post id + Type, and identifies this call push
+		// to keep by the absence of a PostId.
 		push := &model.PushNotification{
 			Version:     model.PushMessageV2,
 			Type:        model.PushTypeMessage,
 			TeamId:      ch.TeamId,
 			ChannelId:   am.ChannelID,
-			PostId:      am.PostID,
 			SenderId:    p.botUserID,
 			ChannelType: ch.Type,
 			Message: i18n.T(p.localeOf(uid), i18n.Translatable{

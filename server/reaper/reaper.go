@@ -5,6 +5,7 @@
 package reaper
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -98,9 +99,17 @@ func (r *Reaper) RunOnce() {
 // Returns true when this node holds the (time-bound) lease. Only the leader
 // runs the reaper's mutations, so each stale meeting is ended once cluster-
 // wide instead of once per node.
+//
+// The lease may only be taken when it is vacant (KVGet returns nil, either
+// never set or auto-expired past its TTL) or already ours. Passing the
+// just-read value as OldValue would let any node CAS-overwrite a live foreign
+// lease, so a non-nil value belonging to another node must bail.
 func (r *Reaper) acquireOrRenewLeader() bool {
 	raw, appErr := r.api.KVGet(leaderKey)
 	if appErr != nil {
+		return false
+	}
+	if raw != nil && !bytes.Equal(raw, r.nodeID) {
 		return false
 	}
 	ttlSeconds := int64(r.leaderTTL.Seconds())

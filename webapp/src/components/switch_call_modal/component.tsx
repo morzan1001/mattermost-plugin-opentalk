@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {useDispatch, useSelector, useStore} from 'react-redux';
 
 import {dismissIncomingCall} from '../../client/rest';
@@ -50,6 +50,14 @@ const SwitchCallModal: React.FC = () => {
 
     const [busy, setBusy] = useState(false);
 
+    // Persistent root component: busy survives between shows of this same
+    // instance. Reset it whenever a fresh call lands or the modal hides,
+    // otherwise both buttons stay disabled for the next ring after a switch.
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setBusy(false);
+    }, [call?.channelID, call?.roomID]);
+
     if (sessionStatus === 'idle' || call === null) {
         return null;
     }
@@ -78,6 +86,11 @@ const SwitchCallModal: React.FC = () => {
 
             const displayName = selectCurrentDisplayName(store.getState());
             await startConferenceConnection(call.roomID, call.channelID, displayName, store);
+            if (selectSessionStatus(store.getState()) === 'idle') {
+                // Connect failed and tore down; keep the ring for a retry.
+                setBusy(false);
+                return;
+            }
             dispatch(incomingCallCleared({channelID: call.channelID}));
         } catch (e) {
             // eslint-disable-next-line no-console

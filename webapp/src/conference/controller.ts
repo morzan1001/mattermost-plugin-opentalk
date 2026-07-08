@@ -175,9 +175,7 @@ function clearOpenTalkStatus(): void {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let activeStore: Store<any, Action> | null = null;
 
-type TearDownReason = 'leave' | 'closed' | 'error' | 'livekit';
-
-async function tearDownActiveConference(reason: TearDownReason): Promise<void> {
+async function tearDownActiveConference(): Promise<void> {
     if (tearingDown) {
         return;
     }
@@ -210,7 +208,12 @@ async function tearDownActiveConference(reason: TearDownReason): Promise<void> {
                 // already disconnecting
             }
         }
-        if (reason === 'leave' && c) {
+
+        // Always close the signaling room, not just on explicit leave. A
+        // LiveKit drop or a signaling error leaves the OpenTalk socket joined,
+        // so without this the user stays visible in the room after hangup.
+        // ConferenceRoom.leave() is a no-op when already closed.
+        if (c) {
             try {
                 await c.leave();
             } catch {
@@ -308,11 +311,14 @@ export async function startConferenceConnection(
     };
 
     client.on('closed', () => {
-        tearDownActiveConference('closed').catch(() => { /* swallow */ });
+        tearDownActiveConference().catch(() => { /* swallow */ });
     });
     client.on('error', (err) => {
-        dispatchConnectError(err.message);
-        tearDownActiveConference('error').catch(() => { /* swallow */ });
+        // Dispatch the error AFTER teardown: teardown's disconnected() resets
+        // the session to initial (clearing error), so an error dispatched
+        // before it would be wiped in the same tick and the user would see no
+        // feedback for a failed join.
+        tearDownActiveConference().finally(() => dispatchConnectError(err.message));
     });
 
     store.dispatch(connectStarted({channelID, roomID}));
@@ -322,8 +328,8 @@ export async function startConferenceConnection(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
+        await tearDownActiveConference();
         dispatchConnectError(e?.message ?? String(e));
-        await tearDownActiveConference('error');
     }
 }
 
@@ -355,7 +361,7 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
     });
 
     lk.on('disconnected', () => {
-        tearDownActiveConference('livekit').catch(() => { /* swallow */ });
+        tearDownActiveConference().catch(() => { /* swallow */ });
     });
 
     // Differentiate screen-share from camera: both have kind:'video' in LiveKit
@@ -423,7 +429,7 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
 }
 
 export async function leaveActiveConference(): Promise<void> {
-    await tearDownActiveConference('leave');
+    await tearDownActiveConference();
 }
 
 export async function endActiveMeeting(): Promise<void> {

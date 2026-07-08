@@ -119,15 +119,16 @@ const IncomingCallModal: React.FC = () => {
         }
         setBusy(true);
         ringtone.stop();
-        try {
-            await startConferenceConnection(call.roomID, call.channelID, currentDisplayName, store);
-            dispatch(incomingCallCleared({channelID: call.channelID}));
-        } catch (e) {
-            // eslint-disable-next-line no-console
-            console.warn('[opentalk] accept-call failed:', (e as Error).message);
+        await startConferenceConnection(call.roomID, call.channelID, currentDisplayName, store);
 
+        // startConferenceConnection swallows connect errors and tears itself
+        // back down to 'idle'. Only clear the ringing call once we actually
+        // reached a live session; on failure keep it so the user can retry.
+        if (selectSessionStatus(store.getState()) === 'idle') {
             setBusy(false);
+            return;
         }
+        dispatch(incomingCallCleared({channelID: call.channelID}));
     };
 
     // Keep the auto-decline pointed at the *current* onDecline closure even

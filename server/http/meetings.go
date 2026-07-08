@@ -58,6 +58,11 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 		return
 	}
 
+	if h.IsChannelMember == nil || !h.IsChannelMember(body.ChannelID, mmUserID) {
+		nethttp.Error(w, "forbidden", nethttp.StatusForbidden)
+		return
+	}
+
 	token, err := h.AccessTokenFor(mmUserID)
 	if err != nil {
 		h.internalError(w, "MeetingsCreate: access token", err, nethttp.StatusUnauthorized, "access token unavailable")
@@ -279,6 +284,19 @@ func (h *Handlers) MeetingsJoin(w nethttp.ResponseWriter, r *nethttp.Request) {
 	if startErr != nil {
 		h.internalError(w, "MeetingsJoin: Start", startErr, nethttp.StatusBadGateway, "start failed")
 		return
+	}
+
+	// Stop this user's OTHER sessions from ringing -- and their 30s
+	// auto-decline from firing -- now that they have answered on this device.
+	// Reuses incoming_call_dismissed purely as a per-user "no longer ringing"
+	// clear (UserId-scoped); it records no server-side dismissal, so it cannot
+	// flip the meeting to MISSED and kill the call the user just joined.
+	if h.BroadcastFunc != nil {
+		h.BroadcastFunc("incoming_call_dismissed", map[string]any{
+			"channel_id": body.ChannelID,
+			"room_id":    roomID,
+			"mm_user_id": mmUserID,
+		}, &model.WebsocketBroadcast{UserId: mmUserID})
 	}
 
 	resp := joinMeetingResponse{
