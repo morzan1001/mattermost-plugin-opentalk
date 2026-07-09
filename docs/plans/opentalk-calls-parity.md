@@ -57,9 +57,9 @@ Corrections (verified):
 - **force_mute / microphone restrictions live in the `livekit` namespace, not
   moderation.** Move to `modules/livekit.ts`:
   - OUT `livekit` `{action:'force_mute', participants:[id,...]}`; IN to muted
-    target `{message:'force_muted', moderator:<id>}`. On receiving `force_muted`
-    the client MUST stop its own mic (`disableMic()`); LiveKit does not auto-mute
-    the publisher.
+    target `{message:'force_muted', moderator:<id>}`. The server mutes the
+    published track server-side (LiveKit RoomService `mute_published_track`);
+    the client handler syncs the local mic button/device state.
   - OUT `livekit` `{action:'enable_microphone_restrictions',
     unrestricted_participants:[id,...]}` / `{action:'disable_microphone_restrictions'}`;
     IN `{message:'microphone_restrictions_enabled', unrestricted_participants}` /
