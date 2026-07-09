@@ -5,6 +5,7 @@ import {createStore} from 'redux';
 
 jest.mock('../../conference/controller', () => ({
     leaveActiveConference: jest.fn().mockResolvedValue(undefined),
+    endActiveMeeting: jest.fn().mockResolvedValue(undefined),
     toggleMic: jest.fn().mockResolvedValue(undefined),
     toggleCam: jest.fn().mockResolvedValue(undefined),
     toggleScreenShare: jest.fn().mockResolvedValue(undefined),
@@ -12,7 +13,7 @@ jest.mock('../../conference/controller', () => ({
 
 import MeetingMiniBar from './component';
 
-import {leaveActiveConference, toggleMic, toggleCam, toggleScreenShare} from '../../conference/controller';
+import {leaveActiveConference, endActiveMeeting, toggleMic, toggleCam, toggleScreenShare} from '../../conference/controller';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeStore(session: any) {
@@ -23,6 +24,7 @@ function makeStore(session: any) {
 
 beforeEach(() => {
     (leaveActiveConference as jest.Mock).mockClear();
+    (endActiveMeeting as jest.Mock).mockClear();
     (toggleMic as jest.Mock).mockClear();
     (toggleCam as jest.Mock).mockClear();
     (toggleScreenShare as jest.Mock).mockClear();
@@ -98,5 +100,28 @@ describe('MeetingMiniBar', () => {
         );
         fireEvent.click(screen.getByRole('button', {name: /Leave meeting/}));
         expect(leaveActiveConference).toHaveBeenCalled();
+    });
+
+    it('room owner leaving a non-DM channel is offered "End meeting for everyone"', () => {
+        render(
+            <Provider store={makeStore({status: 'connected', participantCount: 2, isHost: true, isRoomOwner: true, micEnabled: false, camEnabled: false, screenShareEnabled: false})}>
+                <MeetingMiniBar/>
+            </Provider>,
+        );
+        fireEvent.click(screen.getByRole('button', {name: /Leave or end meeting/}));
+        fireEvent.click(screen.getByRole('button', {name: 'End meeting for everyone'}));
+        expect(endActiveMeeting).toHaveBeenCalled();
+    });
+
+    it('promoted moderator (isHost but not room owner) only leaves, no end-for-everyone', () => {
+        render(
+            <Provider store={makeStore({status: 'connected', participantCount: 2, isHost: true, isRoomOwner: false, micEnabled: false, camEnabled: false, screenShareEnabled: false})}>
+                <MeetingMiniBar/>
+            </Provider>,
+        );
+        fireEvent.click(screen.getByRole('button', {name: /Leave/}));
+        expect(leaveActiveConference).toHaveBeenCalled();
+        expect(endActiveMeeting).not.toHaveBeenCalled();
+        expect(screen.queryByRole('button', {name: 'End meeting for everyone'})).not.toBeInTheDocument();
     });
 });

@@ -24,27 +24,6 @@ beforeEach(() => {
 });
 
 describe('useRingtone', () => {
-    it('start() creates one Audio element with loop and plays it', () => {
-        const {result} = renderHook(() => useRingtone());
-
-        act(() => {
-            result.current.start();
-        });
-
-        // FakeAudio instances live on the hook's internal ref; verify by
-        // calling start() a second time and asserting the play count grows
-        // by exactly one (no extra constructor call).
-        act(() => {
-            result.current.start();
-        });
-
-        // We can't read the ref directly from outside, so verify behaviour
-        // by checking that .play() was the one we expect.
-        // (Indirect: the only side-effect we can observe externally is the
-        // absence of errors on a second start().)
-        expect(true).toBe(true);
-    });
-
     it('stop() before start() is a no-op — no errors thrown', () => {
         const {result} = renderHook(() => useRingtone());
 

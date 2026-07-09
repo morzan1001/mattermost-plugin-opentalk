@@ -15,10 +15,6 @@ function formatDuration(elapsedSec: number): string {
     return `${minutes}:${paddedSec}`;
 }
 
-/**
- * Returns the elapsed time since `joinedAt` formatted as M:SS or H:MM:SS,
- * updated every second. Returns '' if `joinedAt` is undefined.
- */
 export function useMeetingDuration(joinedAt: number | undefined): string {
     const [now, setNow] = useState<number>(() => Date.now());
 

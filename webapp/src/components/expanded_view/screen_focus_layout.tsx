@@ -13,11 +13,10 @@ export const ScreenFocusLayout: React.FC = () => {
     const screenSharerId: string | undefined = order.find(
         (id: string) => Boolean(perParticipant[id]?.screenTrackId),
     );
-    if (screenSharerId === undefined) {
+    const screenTrackId = screenSharerId === undefined ? undefined : perParticipant[screenSharerId].screenTrackId;
+    if (screenSharerId === undefined || screenTrackId === undefined) {
         return <GridLayout/>;
     }
-
-    const screenTrackId: string = perParticipant[screenSharerId].screenTrackId;
 
     return (
         <div

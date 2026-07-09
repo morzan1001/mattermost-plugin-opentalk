@@ -1,29 +1,27 @@
-import {render, screen} from '@testing-library/react';
+import {render, screen, fireEvent} from '@testing-library/react';
 import React from 'react';
 import {Provider} from 'react-redux';
 import {createStore} from 'redux';
 
 import ExpandedView from './component';
 
+import {resetHand, leaveActiveConference, endActiveMeeting} from '../../conference/controller';
 import * as trackRegistry from '../../conference/livekit/track_registry';
 
 jest.mock('../../conference/controller', () => ({
     leaveActiveConference: jest.fn().mockResolvedValue(undefined),
+    endActiveMeeting: jest.fn().mockResolvedValue(undefined),
     toggleMic: jest.fn().mockResolvedValue(undefined),
     toggleCam: jest.fn().mockResolvedValue(undefined),
     toggleScreenShare: jest.fn().mockResolvedValue(undefined),
+    resetHand: jest.fn(),
 }));
 
-jest.mock('../../conference/livekit/track_registry', () => ({
-    get: jest.fn().mockImplementation((id: string) => ({
-        attach: jest.fn(),
-        detach: jest.fn(),
-        sid: id,
-    })),
-    register: jest.fn(),
-    unregister: jest.fn(),
-    clear: jest.fn(),
-}));
+jest.mock('../../conference/livekit/track_registry', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const {makeTrackRegistryMock} = require('../../test/track_registry_mock');
+    return makeTrackRegistryMock((id: string) => ({attach: jest.fn(), detach: jest.fn(), sid: id}));
+});
 
 import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
@@ -171,5 +169,87 @@ describe('ExpandedView', () => {
         expect(screen.getByTestId('layout-switcher-speaker')).toBeInTheDocument();
         expect(screen.getByTestId('layout-switcher-grid')).toBeInTheDocument();
         expect(screen.getByTestId('layout-switcher-screen-focus')).toBeInTheDocument();
+    });
+
+    describe('raised-hand queue strip', () => {
+        const raisedParticipants = {
+            byId: {
+                p1: {id: 'p1', displayName: 'Alice', handRaised: true},
+                p2: {id: 'p2', displayName: 'Bob', handRaised: true},
+            },
+            order: ['p1', 'p2'],
+        };
+
+        beforeEach(() => {
+            (resetHand as jest.Mock).mockClear();
+        });
+
+        it('renders one chip per raised participant', () => {
+            const store = makeStore({expanded: true, status: 'connected'}, {participants: raisedParticipants});
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            expect(screen.getByTestId('raised-hand-chip-p1')).toBeInTheDocument();
+            expect(screen.getByTestId('raised-hand-chip-p2')).toBeInTheDocument();
+        });
+
+        it('host chips are clickable and call resetHand with that participant\'s id', () => {
+            const store = makeStore({expanded: true, status: 'connected', isHost: true}, {participants: raisedParticipants});
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            fireEvent.click(screen.getByTestId('raised-hand-chip-p1'));
+            expect(resetHand).toHaveBeenCalledWith('p1');
+            expect(resetHand).not.toHaveBeenCalledWith('p2');
+        });
+
+        it('non-host chips are read-only and do not call resetHand on click', () => {
+            const store = makeStore({expanded: true, status: 'connected', isHost: false}, {participants: raisedParticipants});
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            const chip = screen.getByTestId('raised-hand-chip-p1');
+            expect(chip.tagName).not.toBe('BUTTON');
+            fireEvent.click(chip);
+            expect(resetHand).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('end-for-everyone gating', () => {
+        beforeEach(() => {
+            (leaveActiveConference as jest.Mock).mockClear();
+            (endActiveMeeting as jest.Mock).mockClear();
+        });
+
+        it('room owner leaving a non-DM channel is offered "End meeting for everyone"', () => {
+            const store = makeStore({expanded: true, status: 'connected', isHost: true, isRoomOwner: true});
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            fireEvent.click(screen.getByRole('button', {name: /Leave or end meeting/}));
+            fireEvent.click(screen.getByRole('button', {name: 'End meeting for everyone'}));
+            expect(endActiveMeeting).toHaveBeenCalled();
+        });
+
+        it('promoted moderator (isHost but not room owner) only leaves, no end-for-everyone', () => {
+            const store = makeStore({expanded: true, status: 'connected', isHost: true, isRoomOwner: false});
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            fireEvent.click(screen.getByRole('button', {name: /Leave/}));
+            expect(leaveActiveConference).toHaveBeenCalled();
+            expect(endActiveMeeting).not.toHaveBeenCalled();
+            expect(screen.queryByRole('button', {name: 'End meeting for everyone'})).not.toBeInTheDocument();
+        });
     });
 });

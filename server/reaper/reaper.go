@@ -95,15 +95,7 @@ func (r *Reaper) RunOnce() {
 	r.tick()
 }
 
-// acquireOrRenewLeader is a best-effort Mattermost-cluster leader election.
-// Returns true when this node holds the (time-bound) lease. Only the leader
-// runs the reaper's mutations, so each stale meeting is ended once cluster-
-// wide instead of once per node.
-//
-// The lease may only be taken when it is vacant (KVGet returns nil, either
-// never set or auto-expired past its TTL) or already ours. Passing the
-// just-read value as OldValue would let any node CAS-overwrite a live foreign
-// lease, so a non-nil value belonging to another node must bail.
+// acquireOrRenewLeader: best-effort cluster leader election via KV CAS so reaper mutations run once cluster-wide; a non-nil lease owned by another node must bail (passing it as OldValue would CAS-overwrite a live foreign lease).
 func (r *Reaper) acquireOrRenewLeader() bool {
 	raw, appErr := r.api.KVGet(leaderKey)
 	if appErr != nil {

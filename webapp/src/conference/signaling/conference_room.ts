@@ -5,7 +5,7 @@
 
 import {EventListener} from './event_listener';
 import {buildFrame} from './frame';
-import {CoreNamespace, type Participant} from './modules/core';
+import {CoreNamespace, type Participant, type ParticipantRole} from './modules/core';
 import {LivekitNamespace} from './modules/livekit';
 import {ModerationNamespace, type KickScope} from './modules/moderation';
 import {SignalingSocket} from './socket';
@@ -37,7 +37,7 @@ function clearResumption(roomID: string): void {
 }
 
 export interface AuthProvider {
-    getTicket(roomID: string, channelID: string, deviceSecret: string): Promise<{
+    getTicket(roomID: string, channelID: string, deviceSecret: string, resumption?: string): Promise<{
         ticket: string;
         resumption: string;
         roomserverURL: string;
@@ -54,6 +54,8 @@ type EventName =
     | 'hand_raised'
     | 'hand_lowered'
     | 'raise_hands_toggled'
+    | 'force_muted'
+    | 'role_updated'
     | 'closed'
     | 'error';
 
@@ -78,6 +80,8 @@ export class ConferenceRoom {
         hand_raised: [],
         hand_lowered: [],
         raise_hands_toggled: [],
+        force_muted: [],
+        role_updated: [],
         closed: [],
         error: [],
     };
@@ -113,7 +117,11 @@ export class ConferenceRoom {
         this.roomID = roomID;
         this.state = 'authenticating';
 
-        return this.auth.getTicket(roomID, channelID, deviceSecret).then(
+        // A prior session's resumption goes into the REST start body, not the
+        // join frame; the controller mints a fresh token in the response.
+        const storedResumption = readResumption(roomID);
+
+        return this.auth.getTicket(roomID, channelID, deviceSecret, storedResumption).then(
             (r) => {
                 if (this.state !== 'authenticating') {
                     // leave() was called while the ticket was in flight; abort
@@ -121,12 +129,7 @@ export class ConferenceRoom {
                     return Promise.resolve();
                 }
                 const ticket = r.ticket;
-
-                // Prefer a server-confirmed token from a prior joinSuccess
-                // over the fresh ticket-time value, so the first attempt of
-                // a reconnect re-presents the same resumption the server has
-                // already acknowledged.
-                const initialResumption = readResumption(roomID) || r.resumption || '';
+                const restResumption = r.resumption;
                 const roomserverURL = r.roomserverURL || this.defaultRoomserverURL;
 
                 this.state = 'connecting';
@@ -141,12 +144,11 @@ export class ConferenceRoom {
                         return;
                     }
 
-                    // Server-confirmed resumption: only persist once the join
-                    // has been accepted. Writing the ticket-time value would
-                    // leave a stale token in localStorage if the join itself
-                    // was rejected (joinBlocked, banned, etc.).
-                    if (typeof payload.resumption === 'string' && payload.resumption) {
-                        writeResumption(roomID, payload.resumption);
+                    // Persist the REST-issued resumption only after the join is
+                    // accepted; a rejected join (joinBlocked, banned) must not
+                    // leave a stale token behind.
+                    if (restResumption) {
+                        writeResumption(roomID, restResumption);
                     }
 
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -264,6 +266,49 @@ export class ConferenceRoom {
                     if (typeof handIsUp === 'boolean' && id) {
                         this.emit(handIsUp ? 'hand_raised' : 'hand_lowered', {participantId: id});
                     }
+
+                    // A role change on another participant reaches uninvolved
+                    // peers only through this update frame.
+                    const role = ctrl.role ?? payload.role;
+                    if (typeof role === 'string' && id) {
+                        this.setParticipantRole(id, role as ParticipantRole);
+                        this.emit('role_updated', {participantId: id, newRole: role as ParticipantRole});
+                    }
+                });
+
+                // Force-mute confirmation for the local user: LiveKit does not
+                // auto-mute the publisher, so the client stops its own mic.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(LivekitNamespace, 'forceMuted', (payload: any) => {
+                    this.emit('force_muted', {moderator: payload.moderator});
+                });
+
+                // Role change for the local user (frame targets self, no id).
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(CoreNamespace, 'roleUpdated', (payload: any) => {
+                    const newRole = payload.newRole as ParticipantRole;
+                    this.setParticipantRole(this.localId, newRole);
+                    this.emit('role_updated', {participantId: this.localId, newRole});
+                });
+
+                // Issuer-side confirmation that a target's role changed.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(CoreNamespace, 'moderatorRoleGranted', (payload: any) => {
+                    const target = payload.target as string;
+                    this.setParticipantRole(target, 'moderator');
+                    this.emit('role_updated', {participantId: target, newRole: 'moderator'});
+                });
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                this.listener.on(CoreNamespace, 'moderatorRoleRevoked', (payload: any) => {
+                    const target = payload.target as string;
+                    this.setParticipantRole(target, 'user');
+                    this.emit('role_updated', {participantId: target, newRole: 'user'});
+                });
+
+                // Sent to the participant whose hand a moderator reset; carries
+                // no id, so it is implicitly the local user.
+                this.listener.on(ModerationNamespace, 'raisedHandResetByModerator', () => {
+                    this.emit('hand_lowered', {participantId: this.localId});
                 });
 
                 // Join rejection / pre-join server errors: without these
@@ -291,6 +336,12 @@ export class ConferenceRoom {
                     failIfConnecting(`moderation_error: ${payload.error ?? 'unknown'}`);
                 });
 
+                // A waiting-room-enabled room answers join with inWaitingRoom
+                // instead of joinSuccess; without this connect() would hang.
+                this.listener.on(ModerationNamespace, 'inWaitingRoom', () => {
+                    failIfConnecting('in_waiting_room: waiting room is enabled but not supported yet');
+                });
+
                 this.listener.on(ModerationNamespace, 'raiseHandsEnabled', () => {
                     this.emit('raise_hands_toggled', {enabled: true});
                 });
@@ -299,10 +350,7 @@ export class ConferenceRoom {
                 });
 
                 this.socket.on('open', () => {
-                    this.socket?.send(buildFrame(CoreNamespace, 'join', {
-                        displayName,
-                        ...(initialResumption ? {resumption: initialResumption} : {}),
-                    }));
+                    this.socket?.send(buildFrame(CoreNamespace, 'join', {displayName}));
                 });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.socket.on('close', (e: any) => {
@@ -373,6 +421,62 @@ export class ConferenceRoom {
         this.socket.send(buildFrame(ModerationNamespace, 'enableRaiseHands', {}));
     }
 
+    public forceMute(participants: string[]): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(LivekitNamespace, 'forceMute', {participants}));
+    }
+
+    public kick(target: string): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(ModerationNamespace, 'kick', {target}));
+    }
+
+    public ban(target: string): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(ModerationNamespace, 'ban', {target}));
+    }
+
+    public grantModerator(target: string): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(CoreNamespace, 'grantModeratorRole', {target}));
+    }
+
+    public revokeModerator(target: string): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(CoreNamespace, 'revokeModeratorRole', {target}));
+    }
+
+    public resetRaisedHands(target?: string | string[]): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(ModerationNamespace, 'resetRaisedHands', target === undefined ? {} : {target}));
+    }
+
+    public grantScreenShare(participants: string[]): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(LivekitNamespace, 'grantScreenSharePermission', {participants}));
+    }
+
+    public revokeScreenShare(participants: string[]): void {
+        if (this.state !== 'connected' || !this.socket) {
+            return;
+        }
+        this.socket.send(buildFrame(LivekitNamespace, 'revokeScreenSharePermission', {participants}));
+    }
+
     /** Host-only: kick all participants out of the room. Used when ending the
      * meeting for everyone so connected peers are disconnected on the OpenTalk
      * side before the host leaves. */
@@ -398,11 +502,6 @@ export class ConferenceRoom {
             return;
         }
         this.state = 'leaving';
-        try {
-            this.socket?.send(buildFrame(CoreNamespace, 'leave', {}));
-        } catch {
-            // socket may already be closed; ignore
-        }
         this.socket?.disconnect();
         this.listener?.dispose();
         this.state = 'closed';
@@ -426,6 +525,10 @@ export class ConferenceRoom {
         for (const cb of snapshot) {
             cb(data);
         }
+    }
+
+    private setParticipantRole(id: string, role: ParticipantRole): void {
+        this.participants = this.participants.map((p) => (p.id === id ? {...p, role} : p));
     }
 
     // Flat shape for the self entry built in connect(), nested shape

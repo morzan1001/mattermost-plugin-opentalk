@@ -14,7 +14,12 @@ const config = {
             debug: false,
             shippedProposals: true,
         }],
-        ['@babel/preset-react'],
+        // Babel 8 defaults to runtime:'automatic' and derives development mode
+        // from BABEL_ENV/NODE_ENV, which the webpack build never sets — that
+        // emits jsxDEV against react/jsx-dev-runtime, undefined in production
+        // React. Pin the classic transform so JSX goes through the externals-
+        // mapped window.React regardless of ambient environment.
+        ['@babel/preset-react', {runtime: 'classic', development: false}],
 
         // onlyRemoveTypeImports:false keeps Babel 7's behaviour of eliding
         // imports used only as types even without an explicit `import type`.

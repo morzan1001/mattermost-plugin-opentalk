@@ -23,10 +23,6 @@ export function t(m: Translatable): string {
     return m[_moduleLocale];
 }
 
-/**
- * React hook — returns a `t` function bound to the current user's locale.
- * Re-renders when the locale changes.
- */
 export function useT(): (m: Translatable) => string {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const locale = useSelector((s: any) => {

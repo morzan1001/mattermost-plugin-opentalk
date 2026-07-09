@@ -20,6 +20,11 @@ export function selectIsHost(state: AnyState): boolean {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function selectIsRoomOwner(state: AnyState): boolean {
+    return state?.[stateKey]?.session?.isRoomOwner ?? false;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function selectLocalParticipantId(state: AnyState): string | undefined {
     return state?.[stateKey]?.session?.localParticipantId;
 }
@@ -41,7 +46,7 @@ export function selectJoinedAt(state: AnyState): number | undefined {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function selectSession(state: AnyState): import('../store/slice_session').SessionState {
-    return state?.[stateKey]?.session ?? {status: 'idle', participantCount: 0, micEnabled: false, camEnabled: false, screenShareEnabled: false, livekitConnected: false, isHost: false, expanded: false, minimized: false, raiseHandsEnabled: false};
+    return state?.[stateKey]?.session ?? {status: 'idle', participantCount: 0, micEnabled: false, camEnabled: false, screenShareEnabled: false, livekitConnected: false, isHost: false, isRoomOwner: false, expanded: false, minimized: false, raiseHandsEnabled: false};
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,6 +98,13 @@ export function selectActiveSpeakers(state: AnyState): string[] {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function selectIncomingCallsByChannelID(state: AnyState): Record<string, import('../store/slice_incoming_calls').IncomingCall> {
     return state?.[stateKey]?.incomingCalls?.byChannelID ?? {};
+}
+
+// Notice slice
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function selectNotice(state: AnyState): import('../store/slice_notice').NoticeState {
+    return state?.[stateKey]?.notice ?? {message: null, kind: 'error', seq: 0};
 }
 
 // Active meetings slice

@@ -9,20 +9,12 @@ import ChannelCallToast from './components/channel_call_toast/component';
 import {startMeetingAction} from './components/channel_header_button/action';
 import OpenTalkIcon from './components/channel_header_button/icon';
 import ExpandedView from './components/expanded_view/component';
-import MeetingMiniBar from './components/meeting_mini_bar/component';
-import PostTypeMeeting from './components/post_type_meeting/component';
-import manifest from './manifest';
-const pluginId: string = manifest.id;
-import reducer from './store/reducer';
-import {PluginRegistry} from './types/mattermost-webapp';
-import {setConnected} from './store/slice_oauth';
 import IncomingCallModal from './components/incoming_call_modal/component';
-import SwitchCallModal from './components/switch_call_modal/component';
+import MeetingMiniBar from './components/meeting_mini_bar/component';
+import NoticeBanner from './components/notice_banner/component';
+import PostTypeMeeting from './components/post_type_meeting/component';
 import ScreenPickerModal from './components/screen_picker_modal/component';
-import {incomingCallReceived, incomingCallCleared, incomingCallsReset} from './store/slice_incoming_calls';
-import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
-import {registerOpenTalkUserSettings, ringtoneSettingKey} from './user_settings';
-import {initDeviceCache} from './conference/livekit/devices';
+import SwitchCallModal from './components/switch_call_modal/component';
 import {
     setActiveStore,
     toggleMic,
@@ -32,7 +24,18 @@ import {
     endActiveMeeting,
     debugState,
 } from './conference/controller';
+import {initDeviceCache} from './conference/livekit/devices';
+import manifest from './manifest';
+import reducer from './store/reducer';
+import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
+import {incomingCallReceived, incomingCallCleared, incomingCallsReset} from './store/slice_incoming_calls';
+import {setConnected} from './store/slice_oauth';
+import type {PluginRegistry} from './types/mattermost-webapp';
+import {registerOpenTalkUserSettings, ringtoneSettingKey} from './user_settings';
 import {setModuleLocale} from './util/i18n';
+import {PLUGIN_STATE_KEY} from './util/selectors';
+
+const pluginId: string = manifest.id;
 
 interface ConnectedStateMessage {
     data: {
@@ -258,6 +261,24 @@ export default class Plugin {
         );
         registerOpenTalkUserSettings(registry);
 
+        // Leave the local call when the current user is removed from the
+        // meeting's channel, so a kicked/removed user is not left in a ghost
+        // session in a channel they can no longer access.
+        registry.registerWebSocketEventHandler?.(
+            'user_removed',
+            (msg: {data?: {channel_id?: string; user_id?: string}}) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const s: any = store.getState();
+                const myId = s?.entities?.users?.currentUserId;
+                const removedUserId = msg?.data?.user_id;
+                const channelID = msg?.data?.channel_id;
+                const session = s?.[PLUGIN_STATE_KEY]?.session;
+                if (removedUserId === myId && session?.status !== 'idle' && session?.channelID === channelID) {
+                    leaveActiveConference();
+                }
+            },
+        );
+
         registry.registerPostTypeComponent?.('custom_opentalk_meeting', PostTypeMeeting);
         registry.registerRootComponent?.(MeetingMiniBar);
         registry.registerRootComponent?.(AudioRenderer);
@@ -266,6 +287,7 @@ export default class Plugin {
         registry.registerRootComponent?.(SwitchCallModal);
         registry.registerRootComponent?.(ChannelCallToast);
         registry.registerRootComponent?.(ScreenPickerModal);
+        registry.registerRootComponent?.(NoticeBanner);
 
         const headerIcon = React.createElement(OpenTalkIcon);
         registry.registerChannelHeaderButtonAction?.(
@@ -275,14 +297,24 @@ export default class Plugin {
             'OpenTalk-Meeting starten',
         );
 
-        // Seed OAuth state immediately — the WS broadcast only delivers
+        // Re-seed the connection snapshot after a websocket reconnect: the
+        // custom WS events deliver deltas, not snapshots, so a network blip or
+        // laptop-sleep would otherwise leave a stale connection state.
+        const seedConnectionStatus = async () => {
+            try {
+                const me = await getConnectionStatus();
+                store.dispatch(setConnected(me.connected, me.email));
+            } catch {
+                // Non-fatal: the header button falls back to "please connect first".
+            }
+        };
+        registry.registerReconnectHandler?.(() => {
+            seedConnectionStatus();
+        });
+
+        // Seed OAuth state immediately on load — the WS broadcast only delivers
         // state changes, not the current snapshot on page load.
-        try {
-            const me = await getConnectionStatus();
-            store.dispatch(setConnected(me.connected, me.email));
-        } catch {
-            // Non-fatal: the header button falls back to "please connect first".
-        }
+        await seedConnectionStatus();
     }
 
     public uninitialize(): void {

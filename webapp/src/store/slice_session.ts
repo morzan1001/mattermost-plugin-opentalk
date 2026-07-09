@@ -11,6 +11,7 @@ const ACTION_TYPES = {
     SET_EXPANDED: 'opentalk/session/set_expanded',
     SET_MINIMIZED: 'opentalk/session/set_minimized',
     SET_RAISE_HANDS_ENABLED: 'opentalk/session/set_raise_hands_enabled',
+    SET_IS_HOST: 'opentalk/session/set_is_host',
 } as const;
 
 export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'leaving';
@@ -26,6 +27,11 @@ export interface SessionState {
     screenShareEnabled: boolean;
     livekitConnected: boolean;
     isHost: boolean;
+
+    // Room ownership is fixed at connect (OpenTalk is_room_owner = the MM meeting
+    // creator). Unlike isHost, a mid-call moderator promotion does not set it, so
+    // only the owner may end the meeting for everyone.
+    isRoomOwner: boolean;
     expanded: boolean;
     minimized: boolean;
     joinedAt?: number;
@@ -44,6 +50,7 @@ const initial: SessionState = {
     screenShareEnabled: false,
     livekitConnected: false,
     isHost: false,
+    isRoomOwner: false,
     expanded: false,
     minimized: false,
     joinedAt: undefined,
@@ -54,7 +61,7 @@ const initial: SessionState = {
 export function connectStarted(payload: {channelID: string; roomID: string}) {
     return {type: ACTION_TYPES.CONNECT_STARTED, payload};
 }
-export function connected(payload: {participantCount: number; isHost?: boolean; localParticipantId?: string}) {
+export function connected(payload: {participantCount: number; isHost?: boolean; isRoomOwner?: boolean; localParticipantId?: string}) {
     return {type: ACTION_TYPES.CONNECTED, payload};
 }
 export function participantsChanged(payload: {participantCount: number}) {
@@ -87,6 +94,9 @@ export function setMinimized(value: boolean) {
 export function setRaiseHandsEnabled(value: boolean) {
     return {type: ACTION_TYPES.SET_RAISE_HANDS_ENABLED, payload: {value}};
 }
+export function setIsHost(value: boolean) {
+    return {type: ACTION_TYPES.SET_IS_HOST, payload: {value}};
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAction = {type: string; payload?: any};
@@ -106,6 +116,7 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
             status: 'connected',
             participantCount: action.payload.participantCount,
             isHost: action.payload.isHost === true,
+            isRoomOwner: action.payload.isRoomOwner === true,
             localParticipantId: action.payload.localParticipantId,
             error: undefined,
             joinedAt: Date.now(),
@@ -130,6 +141,8 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
         return {...state, minimized: action.payload.value};
     case ACTION_TYPES.SET_RAISE_HANDS_ENABLED:
         return {...state, raiseHandsEnabled: action.payload.value};
+    case ACTION_TYPES.SET_IS_HOST:
+        return {...state, isHost: action.payload.value};
     default:
         return state;
     }

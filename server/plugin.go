@@ -111,12 +111,16 @@ func (p *Plugin) OnActivate() error {
 		60*time.Second, 5*time.Minute)
 	p.reaper.Start()
 
+	serverLocale := "en"
+	if cfg := p.API.GetConfig(); cfg != nil && cfg.LocalizationSettings.DefaultServerLocale != nil {
+		serverLocale = *cfg.LocalizationSettings.DefaultServerLocale
+	}
 	if err := p.API.RegisterCommand(&model.Command{
 		Trigger:          command.Trigger,
 		AutoComplete:     true,
 		AutoCompleteDesc: "OpenTalk plugin commands",
-		AutoCompleteHint: "[connect|disconnect|info|help]",
-		AutocompleteData: command.AutocompleteData(),
+		AutoCompleteHint: "[connect|disconnect|info|start|dial-in|end|join|ring|help]",
+		AutocompleteData: command.AutocompleteData(serverLocale),
 	}); err != nil {
 		return fmt.Errorf("register command: %w", err)
 	}
@@ -165,7 +169,7 @@ func (p *Plugin) OnDeactivate() error {
 func (p *Plugin) endMeetingFromReaper(am *store.ActiveMeeting) {
 	if am.PostID != "" {
 		if pp, appErr := p.API.GetPost(am.PostID); appErr == nil && pp != nil {
-			post.ApplyEndedStatus(pp, time.Now().UTC())
+			post.ApplyEndedStatus(pp, time.Now().UTC(), p.localeOf(am.HostUserID))
 			_ = p.client.Post.UpdatePost(pp)
 		}
 	}
@@ -196,6 +200,18 @@ func (p *Plugin) NotificationWillBePushed(push *model.PushNotification, mmUserID
 		return nil, "opentalk plugin owns this notification"
 	}
 	return push, ""
+}
+
+// UserHasBeenDeactivated purges the deactivated user's encrypted UserInfo so a
+// live OIDC refresh token does not linger in the KV store after the account is
+// gone. Best-effort; failures are logged.
+func (p *Plugin) UserHasBeenDeactivated(_ *plugin.Context, user *model.User) {
+	if user == nil {
+		return
+	}
+	if err := p.store.DeleteUserInfo(user.Id); err != nil {
+		p.API.LogWarn("[opentalk] UserHasBeenDeactivated: DeleteUserInfo failed", "user", user.Id, "err", err.Error())
+	}
 }
 
 func (p *Plugin) getOIDCClient() *oidc.Client {

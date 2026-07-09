@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
@@ -19,9 +18,8 @@ import (
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
-// stubOIDCClient spins up a minimal OIDC IdP and returns a real *oidc.Client
-// pointed at it. The IdP doesn't issue tokens here — Task 8 only needs
-// AuthCodeURL.
+// stubOIDCClient serves only the discovery document (no /token or /userinfo) —
+// enough for tests that need AuthCodeURL only.
 func stubOIDCClient(t *testing.T) *oidc.Client {
 	t.Helper()
 	var srv *httptest.Server
@@ -180,7 +178,6 @@ func TestOAuthCallback_ExchangesAndStoresUserInfo(t *testing.T) {
 	assert.Equal(t, "alice@example.com", broadcastedPayload["email"])
 	require.NotNil(t, broadcastedScope, "broadcast scope must be set")
 	assert.Equal(t, "mm-user-1", broadcastedScope.UserId, "user_connected_state must be user-scoped")
-	_ = time.Second // keep import
 }
 
 func TestOAuthCallback_RejectsMissingStateOrCode(t *testing.T) {

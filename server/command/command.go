@@ -94,3 +94,20 @@ func ephemeral(msg string) *model.CommandResponse {
 		Text:         msg,
 	}
 }
+
+// requireActiveMeeting loads the channel's active meeting, or returns an ephemeral
+// response (no meeting, or lookup failed) for the caller to send back. notFound lets
+// each subcommand phrase the "no meeting" case in its own words.
+func (h *Handler) requireActiveMeeting(channelID, locale string, notFound i18n.Translatable) (*store.ActiveMeeting, *model.CommandResponse) {
+	am, err := h.Store.LoadActiveMeeting(h.EncryptionKey, channelID)
+	if err == store.ErrNotFound {
+		return nil, ephemeral(i18n.T(locale, notFound))
+	}
+	if err != nil {
+		return nil, ephemeral(fmt.Sprintf(i18n.T(locale, i18n.Translatable{
+			DE: "Lookup fehlgeschlagen: %v",
+			EN: "Lookup failed: %v",
+		}), err))
+	}
+	return am, nil
+}

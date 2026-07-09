@@ -1,6 +1,7 @@
 import {
     selectSessionStatus,
     selectIsHost,
+    selectIsRoomOwner,
     selectLocalParticipantId,
     selectIsExpanded,
     selectIsMinimized,
@@ -56,6 +57,24 @@ describe('selectIsHost', () => {
 
     it('returns false for null state', () => {
         expect(selectIsHost(null)).toBe(false);
+    });
+});
+
+describe('selectIsRoomOwner', () => {
+    it('returns true when isRoomOwner is true', () => {
+        expect(selectIsRoomOwner(withSession({isRoomOwner: true}))).toBe(true);
+    });
+
+    it('returns false when isRoomOwner is false', () => {
+        expect(selectIsRoomOwner(withSession({isRoomOwner: false}))).toBe(false);
+    });
+
+    it('returns false when isRoomOwner is absent (moderator promoted mid-call, not the owner)', () => {
+        expect(selectIsRoomOwner(withSession({isHost: true}))).toBe(false);
+    });
+
+    it('returns false for null state', () => {
+        expect(selectIsRoomOwner(null)).toBe(false);
     });
 });
 

@@ -344,9 +344,6 @@ func TestMeetingsJoin_RejectsMissingUserHeader(t *testing.T) {
 	assert.Equal(t, nethttp.StatusUnauthorized, rr.Code)
 }
 
-// TestMeetingsHeartbeat_FlipsHostHeartbeatReceivedOnFirstCall verifies that
-// the heartbeat handler flips HostHeartbeatReceived to true on the first
-// successful host call and persists the meeting back to KV.
 func TestMeetingsHeartbeat_FlipsHostHeartbeatReceived(t *testing.T) {
 	api := &plugintest.API{}
 
@@ -594,9 +591,6 @@ func TestMeetingsPostActionDismiss_FlipsMissed(t *testing.T) {
 	assert.Equal(t, "MISSED", resp.Update.GetProp("status"))
 }
 
-// TestEndMeetingFor_DeleteInviteFailureIsNonFatal verifies that a failure from
-// DeleteInvite does not prevent the local KV record from being deleted or the
-// meeting_ended broadcast from firing.
 func TestEndMeetingFor_DeleteInviteFailureIsNonFatal(t *testing.T) {
 	// Stub OpenTalk server that rejects all DELETE requests.
 	otSrv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {

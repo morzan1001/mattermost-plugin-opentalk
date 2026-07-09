@@ -27,6 +27,7 @@ beforeEach(() => {
     (global as any).WebSocket = FakeWebSocket;
     (global as any).fetch = mockFetch;
     mockFetch.mockReset();
+    window.localStorage.clear();
 });
 
 function emit(ws: FakeWebSocket, raw: object) {
@@ -92,7 +93,7 @@ describe('OpenTalkConferenceClient', () => {
         ]);
     });
 
-    it('leave() sends core.leave + closes WS', async () => {
+    it('leave() closes the WS without sending a leave frame', async () => {
         mockFetch.mockResolvedValue({
             ok: true,
             json: async () => ({ticket: 'tk', resumption: 'rs', roomserver_url: 'wss://rs.example'}),
@@ -105,9 +106,9 @@ describe('OpenTalkConferenceClient', () => {
         emit(ws, {namespace: 'control', payload: {message: 'join_success', id: 'self-id', display_name: 'self-name', participants: []}});
         await connect;
 
+        const sentBefore = ws.sent.length;
         await client.leave();
-        const lastSent = JSON.parse(ws.sent[ws.sent.length - 1]);
-        expect(lastSent).toEqual({namespace: 'control', payload: {action: 'leave'}});
+        expect(ws.sent.length).toBe(sentBefore);
         expect(ws.readyState).toBe(3);
         expect(client.getState()).toBe('closed');
     });

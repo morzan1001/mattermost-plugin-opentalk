@@ -17,11 +17,7 @@ export function subscribeScreenPicker(cb: Listener): () => void {
     return () => listeners.delete(cb);
 }
 
-/**
- * Resolves the currently-pending picker promise (or no-op if none).
- * Called by the picker modal when the user clicks a tile, cancels, or
- * presses ESC.
- */
+// id is null when the user cancels or presses ESC.
 export function resolveScreenPicker(id: string | null): void {
     if (!pendingResolver) {
         return;
@@ -33,10 +29,7 @@ export function resolveScreenPicker(id: string | null): void {
     notify();
 }
 
-/**
- * Opens the picker with the given list of sources and returns a Promise
- * that resolves with the chosen source-id (or null if the user cancels).
- */
+// Resolves to null if the user cancels.
 export function pickScreenSource(sources: DesktopSource[]): Promise<string | null> {
     // If already open, cancel the previous picker so we don't leak listeners.
     if (pendingResolver) {

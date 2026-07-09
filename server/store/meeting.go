@@ -235,23 +235,6 @@ func (s *Store) AddDismissal(channelID, roomID, mmUserID string) ([]string, erro
 	return nil, fmt.Errorf("AddDismissal: CAS contention on %s", key)
 }
 
-// LoadDismissals returns the set of user-IDs that have dismissed the call
-// in (channelID, roomID). Returns nil, nil when no dismissals have been recorded.
-func (s *Store) LoadDismissals(channelID, roomID string) ([]string, error) {
-	raw, err := s.Get(dismissalKey(channelID, roomID))
-	if err != nil {
-		if err == ErrNotFound {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var set []string
-	if err := json.Unmarshal(raw, &set); err != nil {
-		return nil, err
-	}
-	return set, nil
-}
-
 // DeleteDismissals removes the dismissal set for (channelID, roomID).
 func (s *Store) DeleteDismissals(channelID, roomID string) error {
 	return s.Delete(dismissalKey(channelID, roomID))

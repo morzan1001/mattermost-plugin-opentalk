@@ -65,20 +65,6 @@ export const MicOffIcon: React.FC = () => (
     </svg>
 );
 
-export const CameraIcon: React.FC = () => (
-    <svg {...baseProps}>
-        <path d='m22 8-6 4 6 4V8Z'/>
-        <rect
-            width='14'
-            height='12'
-            x='2'
-            y='6'
-            rx='2'
-            ry='2'
-        />
-    </svg>
-);
-
 export const CameraOffIcon: React.FC = () => (
     <svg {...baseProps}>
         <line
@@ -115,18 +101,6 @@ export const ScreenShareOffIcon: React.FC = () => (
 export const PhoneIcon: React.FC = () => (
     <svg {...baseProps}>
         <path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z'/>
-    </svg>
-);
-
-export const PhoneOffIcon: React.FC = () => (
-    <svg {...baseProps}>
-        <path d='M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91'/>
-        <line
-            x1='22'
-            x2='2'
-            y1='2'
-            y2='22'
-        />
     </svg>
 );
 
@@ -209,6 +183,54 @@ export const HandIcon: React.FC<{size?: number}> = ({size = 20}) => (
         <path d='M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2'/>
         <path d='M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8'/>
         <path d='M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15'/>
+    </svg>
+);
+
+export const MoreVerticalIcon: React.FC<{size?: number}> = ({size = 20}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth={2}
+        strokeLinecap='round'
+        strokeLinejoin='round'
+    >
+        <circle
+            cx='12'
+            cy='12'
+            r='1'
+            fill='currentColor'
+        />
+        <circle
+            cx='12'
+            cy='5'
+            r='1'
+            fill='currentColor'
+        />
+        <circle
+            cx='12'
+            cy='19'
+            r='1'
+            fill='currentColor'
+        />
+    </svg>
+);
+
+export const CrownIcon: React.FC<{size?: number}> = ({size = 20}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth={2}
+        strokeLinecap='round'
+        strokeLinejoin='round'
+    >
+        <path d='M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z'/>
+        <path d='M5 21h14'/>
     </svg>
 );
 

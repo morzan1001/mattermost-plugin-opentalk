@@ -24,6 +24,14 @@ func (h *Handlers) internalError(w nethttp.ResponseWriter, logTag string, err er
 	nethttp.Error(w, publicMsg, status)
 }
 
+// localeOf is a nil-safe wrapper around the LocaleOf dependency.
+func (h *Handlers) localeOf(mmUserID string) string {
+	if h.LocaleOf == nil {
+		return ""
+	}
+	return h.LocaleOf(mmUserID)
+}
+
 type createMeetingRequest struct {
 	ChannelID    string `json:"channel_id"`
 	DeviceSecret string `json:"device_secret"`
@@ -371,7 +379,7 @@ func (h *Handlers) endMeetingFor(am *store.ActiveMeeting) (*model.Post, error) {
 	var updated *model.Post
 	if am.PostID != "" && h.PostGetter != nil && h.PostUpdater != nil {
 		if p, getErr := h.PostGetter(am.PostID); getErr == nil && p != nil {
-			post.ApplyEndedStatus(p, time.Now().UTC())
+			post.ApplyEndedStatus(p, time.Now().UTC(), h.localeOf(am.HostUserID))
 			if uErr := h.PostUpdater(p); uErr == nil {
 				updated = p
 			}
@@ -545,7 +553,7 @@ func (h *Handlers) dismissFor(am *store.ActiveMeeting, mmUserID string) (*model.
 	var updated *model.Post
 	if am.PostID != "" && h.PostGetter != nil && h.PostUpdater != nil {
 		if pp, ge := h.PostGetter(am.PostID); ge == nil && pp != nil {
-			post.ApplyMissedStatus(pp, time.Now().UTC())
+			post.ApplyMissedStatus(pp, time.Now().UTC(), h.localeOf(am.HostUserID))
 			if uErr := h.PostUpdater(pp); uErr == nil {
 				updated = pp
 			}

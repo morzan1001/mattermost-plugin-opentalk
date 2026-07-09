@@ -1,10 +1,10 @@
 import React from 'react';
 import {useSelector, useDispatch} from 'react-redux';
 
-import {toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand} from '../../conference/controller';
+import {toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand, muteAll} from '../../conference/controller';
 import {setExpanded} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {selectIsHost, selectLocalParticipantId, selectMicEnabled, selectCamEnabled, selectScreenShareEnabled, selectParticipantsById} from '../../util/selectors';
+import {selectIsHost, selectIsRoomOwner, selectLocalParticipantId, selectMicEnabled, selectCamEnabled, selectScreenShareEnabled, selectParticipantsById} from '../../util/selectors';
 import {
     MicIcon,
     MicOffIcon,
@@ -18,7 +18,7 @@ import {
     ExpandIcon,
 } from '../icons';
 
-export const baseButtonStyle: React.CSSProperties = {
+const baseButtonStyle: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -33,25 +33,25 @@ export const baseButtonStyle: React.CSSProperties = {
     transition: 'background 120ms',
 };
 
-export const activeButtonStyle: React.CSSProperties = {
+const activeButtonStyle: React.CSSProperties = {
     ...baseButtonStyle,
     background: '#2d8cff',
     color: 'white',
 };
 
-export const dangerButtonStyle: React.CSSProperties = {
+const dangerButtonStyle: React.CSSProperties = {
     ...baseButtonStyle,
     background: '#e3354c',
     color: 'white',
 };
 
-export const mutedDangerButtonStyle: React.CSSProperties = {
+const mutedDangerButtonStyle: React.CSSProperties = {
     ...baseButtonStyle,
     background: 'rgba(227, 53, 76, 0.18)',
     color: '#ff7a8a',
 };
 
-export const mutedButtonStyle: React.CSSProperties = {
+const mutedButtonStyle: React.CSSProperties = {
     ...baseButtonStyle,
     background: 'rgba(255,255,255,0.04)',
     color: 'rgba(255,255,255,0.55)',
@@ -77,6 +77,7 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
     const camEnabled = useSelector(selectCamEnabled);
     const screenShareEnabled = useSelector(selectScreenShareEnabled);
     const isHost = useSelector(selectIsHost);
+    const isRoomOwner = useSelector(selectIsRoomOwner);
     const localId = useSelector(selectLocalParticipantId);
     const byId = useSelector(selectParticipantsById);
     const isRaised = localId ? Boolean(byId[localId]?.handRaised) : false;
@@ -123,6 +124,19 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                 <HandIcon/>
             </button>
 
+            {isHost && (
+                <button
+                    type='button'
+                    data-testid='controls-mute-all'
+                    style={mutedButtonStyle}
+                    onClick={() => muteAll()}
+                    title={t({de: 'Alle stummschalten', en: 'Mute all'})}
+                    aria-label={t({de: 'Alle stummschalten', en: 'Mute all'})}
+                >
+                    <MicOffIcon/>
+                </button>
+            )}
+
             <div style={{width: 1, height: 24, background: 'rgba(255,255,255,0.1)', margin: '0 4px'}}/>
 
             <button
@@ -151,8 +165,8 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                 type='button'
                 style={dangerButtonStyle}
                 onClick={onLeave}
-                title={isHost ? t({de: 'Verlassen / Meeting beenden', en: 'Leave / End meeting'}) : t({de: 'Meeting verlassen', en: 'Leave meeting'})}
-                aria-label={isHost ? t({de: 'Verlassen oder Meeting beenden', en: 'Leave or end meeting'}) : t({de: 'Meeting verlassen', en: 'Leave meeting'})}
+                title={isRoomOwner ? t({de: 'Verlassen / Meeting beenden', en: 'Leave / End meeting'}) : t({de: 'Meeting verlassen', en: 'Leave meeting'})}
+                aria-label={isRoomOwner ? t({de: 'Verlassen oder Meeting beenden', en: 'Leave or end meeting'}) : t({de: 'Meeting verlassen', en: 'Leave meeting'})}
             >
                 <HangupIcon/>
             </button>

@@ -3,41 +3,21 @@
  * SPDX-FileCopyrightText: OpenTalk GmbH <mail@opentalk.eu>
  */
 
-import type {ParticipantRole} from './core';
-
 export const ModerationNamespace = 'moderation' as const;
 export type ModerationNamespace = typeof ModerationNamespace;
 
-/**
- * Mirrors upstream `KickScope`. Wire values are snake_case
- * (`users_and_guests`); we keep camelCase here and rely on the socket layer
- * to convert.
- */
-export type KickScope = 'all' | 'guests' | 'usersAndGuests';
+// The socket layer snake-cases keys and the `action` value only; other string
+// values pass through verbatim, so these must be the wire literals upstream
+// KickScope expects.
+export type KickScope = 'all' | 'guests' | 'users_and_guests';
 
-/**
- * Mirrors upstream `ModerationError` (19 variants).
- */
+// Upstream moderation `Error` enum (tag `error`, snake_case wire values).
 export type ModerationError =
-    | 'cannotChangeNameOfRegisteredUsers'
-    | 'invalidDisplayName'
-    | 'insufficientPermissions'
-    | 'unknownParticipant'
-    | 'unknownParticipants'
-    | 'alreadyBanned'
-    | 'alreadyUnbanned'
-    | 'cannotBanRoomOwner'
-    | 'cannotBanGuests'
-    | 'cannotBanSelf'
-    | 'cannotChangeRoomOwnerRole'
-    | 'roleAlreadyAssigned'
-    | 'notWaiting'
-    | 'notAccepted'
-    | 'cannotSendRoomOwnerToWaitingRoom'
-    | 'cannotKickRoomOwner'
-    | 'internal'
-    | 'conflictingTask'
-    | 'livekitUnavailable';
+    | 'cannot_ban_guest'
+    | 'cannot_send_room_owner_to_waiting_room'
+    | 'cannot_change_name_of_registered_users'
+    | 'invalid_display_name'
+    | 'insufficient_permissions';
 
 // ---------- Outgoing ----------
 
@@ -49,17 +29,6 @@ export interface ModerationKick {
 export interface ModerationBan {
     action: 'ban';
     target: string;
-}
-
-export interface ModerationUnban {
-    action: 'unban';
-    target: string;
-}
-
-export interface ModerationUpdateRole {
-    action: 'updateRole';
-    participantId: string;
-    newRole: ParticipantRole;
 }
 
 export interface ModerationDebrief {
@@ -86,32 +55,9 @@ export interface ModerationChangeDisplayName {
     newName: string;
 }
 
-export interface ModerationDisableDisplayNameChangeRestrictions {
-    action: 'disableDisplayNameChangeRestrictions';
-}
-
-export interface ModerationEnableDisplayNameChangeRestrictions {
-    action: 'enableDisplayNameChangeRestrictions';
-    unrestrictedParticipants: string[];
-}
-
 export interface ModerationAccept {
     action: 'accept';
     target: string;
-}
-
-export interface ModerationMute {
-    action: 'mute';
-    participants?: string[];
-}
-
-export interface ModerationEnableMicrophoneRestrictions {
-    action: 'enableMicrophoneRestrictions';
-    unrestrictedParticipants: string[];
-}
-
-export interface ModerationDisableMicrophoneRestrictions {
-    action: 'disableMicrophoneRestrictions';
 }
 
 export interface ModerationEnableRaiseHands {
@@ -124,25 +70,18 @@ export interface ModerationDisableRaiseHands {
 
 export interface ModerationResetRaisedHands {
     action: 'resetRaisedHands';
-    target?: string[];
+    target?: string | string[];
 }
 
 export type ModerationOutgoing =
     | ModerationKick
     | ModerationBan
-    | ModerationUnban
-    | ModerationUpdateRole
     | ModerationDebrief
     | ModerationEnableWaitingRoom
     | ModerationDisableWaitingRoom
     | ModerationSendToWaitingRoom
     | ModerationChangeDisplayName
-    | ModerationDisableDisplayNameChangeRestrictions
-    | ModerationEnableDisplayNameChangeRestrictions
     | ModerationAccept
-    | ModerationMute
-    | ModerationEnableMicrophoneRestrictions
-    | ModerationDisableMicrophoneRestrictions
     | ModerationEnableRaiseHands
     | ModerationDisableRaiseHands
     | ModerationResetRaisedHands;
@@ -157,26 +96,6 @@ export interface ModerationBanned {
     action: 'banned';
 }
 
-export interface ModerationParticipantBanned {
-    action: 'participantBanned';
-    participantId: string;
-    displayName: string;
-    avatarUrl: string;
-    bannedBy: string;
-    bannedAt: string;
-}
-
-export interface ModerationParticipantUnbanned {
-    action: 'participantUnbanned';
-    participantId: string;
-}
-
-export interface ModerationRoleUpdated {
-    action: 'roleUpdated';
-    participantId: string;
-    newRole: ParticipantRole;
-}
-
 export interface ModerationDebriefingStarted {
     action: 'debriefingStarted';
     issuedBy: string;
@@ -188,6 +107,20 @@ export interface ModerationWaitingRoomEnabled {
 
 export interface ModerationWaitingRoomDisabled {
     action: 'waitingRoomDisabled';
+}
+
+export interface ModerationInWaitingRoom {
+    action: 'inWaitingRoom';
+}
+
+export interface ModerationJoinedWaitingRoom {
+    action: 'joinedWaitingRoom';
+    id: string;
+    control?: Record<string, unknown>;
+}
+
+export interface ModerationLeftWaitingRoom {
+    action: 'leftWaitingRoom';
     id: string;
 }
 
@@ -199,11 +132,6 @@ export interface ModerationAccepted {
     action: 'accepted';
 }
 
-export interface ModerationParticipantAccepted {
-    action: 'participantAccepted';
-    participantId: string;
-}
-
 export interface ModerationDisplayNameChanged {
     action: 'displayNameChanged';
     target: string;
@@ -212,26 +140,9 @@ export interface ModerationDisplayNameChanged {
     newName: string;
 }
 
-export interface ModerationDisplayNameChangeRestrictionsDisabled {
-    action: 'displayNameChangeRestrictionsDisabled';
-}
-
-export interface ModerationDisplayNameChangeRestrictionsEnabled {
-    action: 'displayNameChangeRestrictionsEnabled';
-}
-
-export interface ModerationMuted {
-    action: 'muted';
-    moderator: string;
-}
-
-export interface ModerationMicrophoneRestrictionsEnabled {
-    action: 'microphoneRestrictionsEnabled';
-    unrestrictedParticipants: string[];
-}
-
-export interface ModerationMicrophoneRestrictionsDisabled {
-    action: 'microphoneRestrictionsDisabled';
+export interface ModerationSessionEnded {
+    action: 'sessionEnded';
+    issuedBy: string;
 }
 
 export interface ModerationErrorMessage {
@@ -252,27 +163,21 @@ export interface ModerationRaiseHandsDisabled {
 export interface ModerationRaisedHandResetByModerator {
     action: 'raisedHandResetByModerator';
     issuedBy: string;
-    participants: string[];
 }
 
 export type ModerationIncoming =
     | ModerationKicked
     | ModerationBanned
-    | ModerationParticipantBanned
-    | ModerationParticipantUnbanned
-    | ModerationRoleUpdated
     | ModerationDebriefingStarted
     | ModerationWaitingRoomEnabled
     | ModerationWaitingRoomDisabled
+    | ModerationInWaitingRoom
+    | ModerationJoinedWaitingRoom
+    | ModerationLeftWaitingRoom
     | ModerationSentToWaitingRoom
     | ModerationAccepted
-    | ModerationParticipantAccepted
     | ModerationDisplayNameChanged
-    | ModerationDisplayNameChangeRestrictionsDisabled
-    | ModerationDisplayNameChangeRestrictionsEnabled
-    | ModerationMuted
-    | ModerationMicrophoneRestrictionsEnabled
-    | ModerationMicrophoneRestrictionsDisabled
+    | ModerationSessionEnded
     | ModerationErrorMessage
     | ModerationRaiseHandsEnabled
     | ModerationRaiseHandsDisabled

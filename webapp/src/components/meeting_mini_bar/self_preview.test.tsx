@@ -13,12 +13,11 @@ const mockAttach = jest.fn();
 const mockDetach = jest.fn();
 let mockGetImpl: (id: string) => unknown = (id) => ({attach: mockAttach, detach: mockDetach, sid: id});
 
-jest.mock('../../conference/livekit/track_registry', () => ({
-    get: jest.fn().mockImplementation((id: string) => mockGetImpl(id)),
-    register: jest.fn(),
-    unregister: jest.fn(),
-    clear: jest.fn(),
-}));
+jest.mock('../../conference/livekit/track_registry', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const {makeTrackRegistryMock} = require('../../test/track_registry_mock');
+    return makeTrackRegistryMock((id: string) => mockGetImpl(id));
+});
 
 interface SessionOpts {
     camEnabled?: boolean;

@@ -1,13 +1,13 @@
 import {startMeetingAction} from './action';
 
 const mockFetch = jest.fn();
-const mockAlert = jest.fn();
+const mockOpen = jest.fn();
 
 beforeEach(() => {
     (global as any).fetch = mockFetch;
-    (global as any).alert = mockAlert;
+    (global as any).open = mockOpen;
     mockFetch.mockReset();
-    mockAlert.mockReset();
+    mockOpen.mockReset();
 
     const store: Record<string, any> = {};
     (global as any).localStorage = {
@@ -37,10 +37,13 @@ function makeStore(connected: boolean) {
 }
 
 describe('startMeetingAction', () => {
-    it('alerts when not connected and skips fetch', async () => {
-        const action = startMeetingAction(makeStore(false));
+    it('opens the connect flow when not connected and skips fetch', async () => {
+        const store = makeStore(false);
+        const action = startMeetingAction(store);
         await action({id: 'ch-1'});
-        expect(mockAlert).toHaveBeenCalled();
+        expect(mockOpen).toHaveBeenCalled();
+        expect(mockOpen.mock.calls[0][0]).toContain('/oauth/start');
+        expect(store.dispatch).toHaveBeenCalled();
         expect(mockFetch).not.toHaveBeenCalled();
     });
 
@@ -61,15 +64,19 @@ describe('startMeetingAction', () => {
         expect(body.device_secret.length).toBe(64); // 32 bytes hex
     });
 
-    it('alerts on fetch error', async () => {
+    it('dispatches an error notice on fetch error', async () => {
         mockFetch.mockResolvedValue({
             ok: false,
             status: 500,
             text: async () => 'boom',
         });
-        const action = startMeetingAction(makeStore(true));
+        const store = makeStore(true);
+        const action = startMeetingAction(store);
         await action({id: 'ch-1'});
-        expect(mockAlert).toHaveBeenCalled();
-        expect(mockAlert.mock.calls[0][0]).toContain('500');
+        const noticeCall = store.dispatch.mock.calls.find(
+            (c: any[]) => c[0]?.type === 'opentalk/notice/set',
+        );
+        expect(noticeCall).toBeDefined();
+        expect(noticeCall[0].payload.message).toContain('500');
     });
 });

@@ -6,30 +6,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestBuildHelp_DE_ContainsGermanMarker verifies that the German variant is
-// returned for locale "de" and contains at least one German keyword.
 func TestBuildHelp_DE_ContainsGermanMarker(t *testing.T) {
 	text := buildHelp("de")
 	assert.Contains(t, text, "verbinde", "German help should contain 'verbinde'")
 }
 
-// TestBuildHelp_EN_ContainsEnglishMarker verifies that the English variant is
-// returned for locale "en" and contains an English keyword.
 func TestBuildHelp_EN_ContainsEnglishMarker(t *testing.T) {
 	text := buildHelp("en")
 	assert.Contains(t, text, "link", "English help should contain 'link'")
 }
 
-// TestBuildHelp_EmptyLocale_FallsBackToEnglish verifies that an empty locale
-// string resolves to English (the i18n package default).
 func TestBuildHelp_EmptyLocale_FallsBackToEnglish(t *testing.T) {
 	text := buildHelp("")
 	assert.Contains(t, text, "link", "empty locale should fall back to English")
 	assert.NotContains(t, text, "verbinde", "empty locale should not return German")
 }
 
-// TestBuildHelp_DE_Prefix verifies "de-AT" and "de_CH" sub-locales also yield
-// German, matching i18n.isGerman's prefix rules.
 func TestBuildHelp_DE_SubLocale_IsGerman(t *testing.T) {
 	for _, loc := range []string{"de-AT", "de-CH", "de_DE"} {
 		text := buildHelp(loc)

@@ -1,7 +1,8 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useRef} from 'react';
 import {useSelector} from 'react-redux';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
+import {useAttachTrack} from '../../hooks/use_attach_track';
 import type {ParticipantInfo} from '../../store/slice_participants';
 import {selectParticipantOrder, selectParticipantsById, selectTracksPerParticipant, selectLocalParticipantId} from '../../util/selectors';
 
@@ -59,27 +60,7 @@ function initialsOf(name: string | undefined): string {
 
 const VideoTile: React.FC<{trackId: string; participantId: string}> = ({trackId, participantId}) => {
     const elRef = useRef<HTMLVideoElement | null>(null);
-
-    useEffect(() => {
-        const track = trackRegistry.get(trackId);
-        const el = elRef.current;
-        if (!track || !el) {
-            return undefined;
-        }
-        try {
-            track.attach(el);
-        } catch (e) {
-            // eslint-disable-next-line no-console
-            console.warn('[opentalk] tile video track.attach failed:', e);
-        }
-        return () => {
-            try {
-                track.detach(el);
-            } catch (e) {
-                /* swallow */
-            }
-        };
-    }, [trackId]);
+    useAttachTrack(trackId, elRef, 'tile video');
 
     return (
         <video

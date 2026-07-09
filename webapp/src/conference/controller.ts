@@ -3,12 +3,13 @@ import type {Store, Action} from 'redux';
 import {OpenTalkConferenceClient} from './client';
 import {isElectron, getDesktopSources, captureDesktopStream} from './livekit/desktop_capturer';
 import {getMuteOnJoin} from './livekit/devices';
-import {LiveKitRoom} from './livekit/room';
+import {LiveKitRoom, participantIdFromIdentity} from './livekit/room';
 import {pickScreenSource} from './livekit/screen_picker';
 import * as trackRegistry from './livekit/track_registry';
 import type {Participant} from './signaling/modules/core';
 
 import {getOrCreateDeviceSecret, heartbeat} from '../client/rest';
+import {noticeSet} from '../store/slice_notice';
 import {
     participantAdded,
     participantRemoved,
@@ -17,6 +18,8 @@ import {
     participantsReset,
     handRaised,
     handLowered,
+    participantMediaChanged,
+    participantRoleChanged,
     type ParticipantInfo,
 } from '../store/slice_participants';
 import {
@@ -30,6 +33,7 @@ import {
     setScreenShareEnabled,
     setLivekitConnected,
     setRaiseHandsEnabled,
+    setIsHost,
 } from '../store/slice_session';
 import {
     trackSubscribed,
@@ -134,6 +138,7 @@ async function setOpenTalkStatusAsync(epoch: number): Promise<void> {
     if (prior && prior.emoji !== OPENTALK_STATUS_EMOJI) {
         writePriorStatus(prior);
     }
+
     // MM 6+ rejects custom-status PUTs with a duration but no expires_at
     // (400 Bad Request). Send both.
     const expiresAt = new Date(Date.now() + (4 * 60 * 60 * 1000)).toISOString();
@@ -264,6 +269,7 @@ export async function startConferenceConnection(
         store.dispatch(connected({
             participantCount: data.participants.length,
             isHost,
+            isRoomOwner: isHost,
             localParticipantId,
         }));
 
@@ -307,6 +313,22 @@ export async function startConferenceConnection(
     client.on('raise_hands_toggled', ({enabled}) => {
         store.dispatch(setRaiseHandsEnabled(enabled));
     });
+    client.on('force_muted', () => {
+        // The server force-mutes the publisher's track via LiveKit RoomService;
+        // this syncs the mic button and releases the local device.
+        if (!activeLiveKit) {
+            return;
+        }
+        activeLiveKit.disableMic().catch(() => { /* already muted / no track */ });
+        store.dispatch(setMicEnabled(false));
+    });
+    client.on('role_updated', ({participantId, newRole}) => {
+        store.dispatch(participantRoleChanged({id: participantId, role: newRole}));
+        const localId = store.getState()?.[PLUGIN_STATE_KEY]?.session?.localParticipantId;
+        if (participantId === localId) {
+            store.dispatch(setIsHost(newRole === 'moderator'));
+        }
+    });
     client.on('participant_left', ({id}) => {
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
         store.dispatch(participantRemoved({id}));
@@ -318,6 +340,13 @@ export async function startConferenceConnection(
         }
         connectErrorDispatched = true;
         store.dispatch(connectError({error: message}));
+
+        // Surface it: teardown resets the session to idle and the widget
+        // vanishes, so the error would otherwise be invisible.
+        store.dispatch(noticeSet({
+            kind: 'error',
+            message: `${t({de: 'Meeting-Beitritt fehlgeschlagen', en: 'Could not join the meeting'})}: ${message}`,
+        }));
     };
 
     client.on('closed', () => {
@@ -397,7 +426,7 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         }
         trackRegistry.register(trackId, sub.track);
         store.dispatch(trackSubscribed({
-            participantId: sub.participant.identity,
+            participantId: participantIdFromIdentity(sub.participant.identity),
             kind: trackKindOf(sub),
             trackId,
         }));
@@ -410,7 +439,7 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
             trackRegistry.unregister(trackId);
         }
         store.dispatch(trackUnsubscribed({
-            participantId: sub.participant.identity,
+            participantId: participantIdFromIdentity(sub.participant.identity),
             kind: trackKindOf(sub),
         }));
     });
@@ -418,6 +447,23 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
     lk.on('active_speakers_changed', (speakers: unknown) => {
         store.dispatch(activeSpeakersChanged({speakers: speakers as string[]}));
         store.dispatch(speakingChanged({speakers: speakers as string[]}));
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    lk.on('track_muted', (data: any) => {
+        const source = data?.source as string | undefined;
+        if (source === 'microphone') {
+            store.dispatch(participantMediaChanged({id: data.participantId, muted: data.muted}));
+
+            // Server-side force-mute of our own track drives the mic button even
+            // when the force_muted signaling frame never arrives. Idempotent
+            // with the user's own mute.
+            if (data.muted && data.participantId === lk.getLocalIdentity()) {
+                store.dispatch(setMicEnabled(false));
+            }
+        } else if (source === 'camera') {
+            store.dispatch(participantMediaChanged({id: data.participantId, cameraOff: data.muted}));
+        }
     });
 
     // OS share-controls / dismissed-tab stops the screen track outside our
@@ -443,12 +489,13 @@ export async function leaveActiveConference(): Promise<void> {
 }
 
 export async function endActiveMeeting(): Promise<void> {
-    if (!activeStore) {
+    const store = activeStore;
+    if (!store) {
         await leaveActiveConference();
         return;
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const channelID: string | undefined = activeStore.getState()?.[PLUGIN_STATE_KEY]?.session?.channelID;
+    const channelID: string | undefined = store.getState()?.[PLUGIN_STATE_KEY]?.session?.channelID;
 
     // Kick all participants on the OpenTalk side before we leave. Best-effort:
     // failure must not block teardown.
@@ -459,7 +506,7 @@ export async function endActiveMeeting(): Promise<void> {
         return;
     }
     try {
-        await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/end', {
+        const res = await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/end', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -468,7 +515,16 @@ export async function endActiveMeeting(): Promise<void> {
             credentials: 'include',
             body: JSON.stringify({channel_id: channelID}),
         });
+        if (!res.ok) {
+            throw new Error(`endMeeting failed: ${res.status}`);
+        }
     } catch (err) {
+        // The server-side meeting stays "in progress" until the reaper; surface
+        // it so the user knows the channel is still blocked for a restart.
+        store.dispatch(noticeSet({
+            kind: 'error',
+            message: t({de: 'Meeting konnte nicht beendet werden', en: 'Failed to end the meeting'}),
+        }));
         // eslint-disable-next-line no-console
         console.warn('[opentalk] endActiveMeeting failed:', (err as Error).message);
     }
@@ -666,6 +722,71 @@ export function lowerLocalHand(): void {
         return;
     }
     activeClient.lowerHand();
+}
+
+export function forceMute(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.forceMute([participantId]);
+}
+
+export function muteAll(): void {
+    if (!activeClient) {
+        return;
+    }
+    const selfId = activeStore?.getState()?.[PLUGIN_STATE_KEY]?.session?.localParticipantId;
+    const others = activeClient.getParticipants().map((p) => p.id).filter((id) => id !== selfId);
+    activeClient.forceMute(others);
+}
+
+export function kick(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.kick(participantId);
+}
+
+export function ban(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.ban(participantId);
+}
+
+export function grantModerator(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.grantModerator(participantId);
+}
+
+export function revokeModerator(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.revokeModerator(participantId);
+}
+
+export function resetHand(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.resetRaisedHands(participantId);
+}
+
+export function grantScreenShare(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.grantScreenShare([participantId]);
+}
+
+export function revokeScreenShare(participantId: string): void {
+    if (!activeClient) {
+        return;
+    }
+    activeClient.revokeScreenShare([participantId]);
 }
 
 // eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention

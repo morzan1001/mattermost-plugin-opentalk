@@ -1,17 +1,3 @@
-/**
- * controller.test.ts
- *
- * Strategy:
- *   - Mock OpenTalkConferenceClient and LiveKitRoom with tiny EventEmitter shims.
- *     The shims expose a "trigger" function (no underscore) via a module-level
- *     registry so tests can fire events without violating no-underscore-dangle.
- *   - Mock rest / desktop / livekit helpers so no real I/O happens.
- *   - Use a lightweight Redux store (createStore + plain reducer) to inspect
- *     dispatched actions.
- *   - Call _reset() in beforeEach to wipe the module-level singletons.
- *   - Use jest.useFakeTimers() for the heartbeat setInterval.
- */
-
 // eslint-disable-next-line import/order
 import {createStore} from 'redux';
 
@@ -64,6 +50,14 @@ jest.mock('./client', () => {
         lowerHand = jest.fn();
         enableRaiseHands = jest.fn();
         sendDebrief = jest.fn();
+        forceMute = jest.fn();
+        kick = jest.fn();
+        ban = jest.fn();
+        grantModerator = jest.fn();
+        revokeModerator = jest.fn();
+        resetRaisedHands = jest.fn();
+        grantScreenShare = jest.fn();
+        revokeScreenShare = jest.fn();
         getParticipants = jest.fn().mockReturnValue([]);
         getState = jest.fn().mockReturnValue('connected');
     }
@@ -101,7 +95,6 @@ jest.mock('./livekit/room', () => {
         disableMic = jest.fn().mockResolvedValue(undefined);
         enableCam = jest.fn().mockResolvedValue(undefined);
         disableCam = jest.fn().mockResolvedValue(undefined);
-        enableScreenShare = jest.fn().mockResolvedValue(undefined);
         enableScreenShareFromStream = jest.fn().mockResolvedValue(undefined);
         disableScreenShare = jest.fn().mockResolvedValue(undefined);
         isMicEnabled = jest.fn().mockReturnValue(false);
@@ -112,7 +105,10 @@ jest.mock('./livekit/room', () => {
         camTrack: unknown = undefined;
     }
 
-    return {LiveKitRoom: MockLiveKitRoom};
+    return {
+        LiveKitRoom: MockLiveKitRoom,
+        participantIdFromIdentity: (identity: string) => identity.split(':')[0],
+    };
 });
 
 // ── other mocks ───────────────────────────────────────────────────────────
@@ -155,6 +151,15 @@ import {
     toggleScreenShare,
     raiseLocalHand,
     lowerLocalHand,
+    forceMute,
+    muteAll,
+    kick,
+    ban,
+    grantModerator,
+    revokeModerator,
+    resetHand,
+    grantScreenShare,
+    revokeScreenShare,
     _reset, // eslint-disable-line no-underscore-dangle
 } from './controller';
 import {isElectron, getDesktopSources, captureDesktopStream} from './livekit/desktop_capturer';
@@ -186,6 +191,18 @@ function makeTestStore(channelID?: string) {
     const store = createStore(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (state: any = {[PLUGIN_KEY]: {session: {channelID}}}, action: AnyAction) => {
+            dispatched.push(action);
+            return state;
+        },
+    );
+    return store;
+}
+
+function makeTestStoreWithSession(session: Record<string, unknown>) {
+    dispatched = [];
+    const store = createStore(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (state: any = {[PLUGIN_KEY]: {session}}, action: AnyAction) => {
             dispatched.push(action);
             return state;
         },
@@ -426,6 +443,30 @@ describe('endActiveMeeting', () => {
         );
         expect(endCall).toBeDefined();
         expect(endCall![1].method).toBe('POST');
+    });
+
+    it('surfaces a notice and still leaves when the end REST call fails', async () => {
+        const store = makeTestStore('ch-end');
+        setActiveStore(store);
+
+        startConferenceConnection('room-1', 'ch-end', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: true});
+
+        const clientRef = c();
+        mockFetch.mockResolvedValue({ok: false, status: 403, json: async () => ({})});
+        dispatched = [];
+
+        await endActiveMeeting();
+
+        // Local leave still completed.
+        expect(clientRef.leave).toHaveBeenCalled();
+        expect(dispatched.map((a) => a.type)).toContain('opentalk/session/disconnected');
+
+        const notice = dispatched.find((a) => a.type === 'opentalk/notice/set');
+        expect(notice).toBeDefined();
+        expect(notice?.payload?.kind).toBe('error');
+        expect(notice?.payload?.message).toBe('Failed to end the meeting');
     });
 });
 
@@ -675,5 +716,153 @@ describe('hand_raised / hand_lowered / raise_hands_toggled events', () => {
 
         const action = dispatched.find((a) => a.type === 'opentalk/session/set_raise_hands_enabled');
         expect(action?.payload?.value).toBe(false);
+    });
+});
+
+describe('host moderation actions', () => {
+    async function connectHost() {
+        const store = makeTestStoreWithSession({localParticipantId: 'p-self'});
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'p-self', displayName: 'Alice'}], isHost: true});
+        return store;
+    }
+
+    it('forwards each moderation action to the client', async () => {
+        await connectHost();
+        forceMute('p2');
+        kick('p2');
+        ban('p2');
+        grantModerator('p2');
+        revokeModerator('p2');
+        resetHand('p2');
+        grantScreenShare('p2');
+        revokeScreenShare('p2');
+
+        expect(c().forceMute).toHaveBeenCalledWith(['p2']);
+        expect(c().kick).toHaveBeenCalledWith('p2');
+        expect(c().ban).toHaveBeenCalledWith('p2');
+        expect(c().grantModerator).toHaveBeenCalledWith('p2');
+        expect(c().revokeModerator).toHaveBeenCalledWith('p2');
+        expect(c().resetRaisedHands).toHaveBeenCalledWith('p2');
+        expect(c().grantScreenShare).toHaveBeenCalledWith(['p2']);
+        expect(c().revokeScreenShare).toHaveBeenCalledWith(['p2']);
+    });
+
+    it('muteAll sends one forceMute with all non-self ids', async () => {
+        await connectHost();
+        c().getParticipants.mockReturnValue([{id: 'p-self'}, {id: 'p2'}, {id: 'p3'}]);
+
+        muteAll();
+
+        expect(c().forceMute).toHaveBeenCalledTimes(1);
+        expect(c().forceMute).toHaveBeenCalledWith(['p2', 'p3']);
+    });
+
+    it('is a no-op when there is no active client', () => {
+        // _reset() in beforeEach cleared activeClient.
+        expect(() => kick('p2')).not.toThrow();
+        expect(() => muteAll()).not.toThrow();
+    });
+});
+
+describe('force_muted / role_updated client events', () => {
+    it('force_muted disables the local mic and dispatches setMicEnabled(false)', async () => {
+        const store = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {
+            participants: [{id: 'self', displayName: 'Alice'}],
+            isHost: false,
+            livekit: {url: 'wss://lk.example', token: 'tok'},
+        });
+        await Promise.resolve();
+
+        dispatched = [];
+        c().trigger('force_muted', {moderator: 'mod-1'});
+
+        expect(lkRoom().disableMic).toHaveBeenCalled();
+        expect(dispatched.find((a) => a.type === 'opentalk/session/set_mic_enabled')?.payload?.value).toBe(false);
+    });
+
+    it('role_updated for self dispatches participantRoleChanged and setIsHost', async () => {
+        const store = makeTestStoreWithSession({localParticipantId: 'p-self'});
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'p-self', displayName: 'Alice'}], isHost: false});
+
+        dispatched = [];
+        c().trigger('role_updated', {participantId: 'p-self', newRole: 'moderator'});
+
+        expect(dispatched.find((a) => a.type === 'opentalk/participants/role_changed')?.payload).toEqual({id: 'p-self', role: 'moderator'});
+        expect(dispatched.find((a) => a.type === 'opentalk/session/set_is_host')?.payload?.value).toBe(true);
+    });
+
+    it('role_updated for another id dispatches role change but leaves isHost untouched', async () => {
+        const store = makeTestStoreWithSession({localParticipantId: 'p-self'});
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'p-self', displayName: 'Alice'}], isHost: true});
+
+        dispatched = [];
+        c().trigger('role_updated', {participantId: 'p-other', newRole: 'moderator'});
+
+        expect(dispatched.find((a) => a.type === 'opentalk/participants/role_changed')?.payload).toEqual({id: 'p-other', role: 'moderator'});
+        expect(dispatched.find((a) => a.type === 'opentalk/session/set_is_host')).toBeUndefined();
+    });
+});
+
+describe('LiveKit track events', () => {
+    async function connectWithLiveKit() {
+        const store = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {
+            participants: [{id: 'self', displayName: 'Alice'}],
+            isHost: false,
+            livekit: {url: 'wss://lk.example', token: 'tok'},
+        });
+        await Promise.resolve();
+        return store;
+    }
+
+    it('normalizes the LiveKit identity to the bare participant id on track_subscribed', async () => {
+        await connectWithLiveKit();
+        dispatched = [];
+        lkRoom().trigger('track_subscribed', {
+            participant: {identity: 'uuid-remote:conn-9'},
+            publication: {trackSid: 't1', source: 'camera'},
+            track: {kind: 'video', sid: 't1'},
+        });
+        const sub = dispatched.find((a) => a.type === 'opentalk/tracks/subscribed');
+        expect(sub?.payload?.participantId).toBe('uuid-remote');
+    });
+
+    it('normalizes the LiveKit identity to the bare participant id on track_unsubscribed', async () => {
+        await connectWithLiveKit();
+        dispatched = [];
+        lkRoom().trigger('track_unsubscribed', {
+            participant: {identity: 'uuid-remote:conn-9'},
+            publication: {trackSid: 't1', source: 'camera'},
+            track: {kind: 'video', sid: 't1'},
+        });
+        const unsub = dispatched.find((a) => a.type === 'opentalk/tracks/unsubscribed');
+        expect(unsub?.payload?.participantId).toBe('uuid-remote');
+    });
+
+    it('disables the mic button when the local mic track is muted server-side', async () => {
+        await connectWithLiveKit();
+        lkRoom().getLocalIdentity.mockReturnValue('local-id');
+        dispatched = [];
+        lkRoom().trigger('track_muted', {participantId: 'local-id', source: 'microphone', muted: true});
+        expect(dispatched.find((a) => a.type === 'opentalk/session/set_mic_enabled')?.payload?.value).toBe(false);
+    });
+
+    it('leaves the mic button untouched when a remote mic track is muted', async () => {
+        await connectWithLiveKit();
+        lkRoom().getLocalIdentity.mockReturnValue('local-id');
+        dispatched = [];
+        lkRoom().trigger('track_muted', {participantId: 'remote-id', source: 'microphone', muted: true});
+        expect(dispatched.find((a) => a.type === 'opentalk/session/set_mic_enabled')).toBeUndefined();
     });
 });

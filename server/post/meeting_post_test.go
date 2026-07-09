@@ -69,7 +69,7 @@ func TestApplyEndedStatus_UpdatesProps(t *testing.T) {
 		CreatedAt:  time.Now().Add(-15 * time.Minute),
 	}, "https://o.example", "u", "u", "", false)
 
-	ApplyEndedStatus(p, time.Now())
+	ApplyEndedStatus(p, time.Now(), "en")
 	assert.Equal(t, "ENDED", p.GetProp("status"))
 	assert.NotNil(t, p.GetProp("ended_at"))
 	assert.NotNil(t, p.GetProp("duration_seconds"))
@@ -82,7 +82,7 @@ func TestApplyMissedStatus_SetsStatus(t *testing.T) {
 		InviteCode: "i",
 	}, "https://o.example", "u", "u", "", false)
 	now := time.Now()
-	ApplyMissedStatus(p, now)
+	ApplyMissedStatus(p, now, "en")
 	assert.Equal(t, "MISSED", p.GetProp("status"))
 	assert.Equal(t, now.Unix(), p.GetProp("ended_at"))
 }

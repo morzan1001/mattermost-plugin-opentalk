@@ -10,11 +10,12 @@ jest.mock('../../conference/controller', () => ({
     leaveActiveConference: jest.fn().mockResolvedValue(undefined),
     raiseLocalHand: jest.fn(),
     lowerLocalHand: jest.fn(),
+    muteAll: jest.fn(),
 }));
 
 import {ControlsBar} from './component';
 
-import {toggleMic} from '../../conference/controller';
+import {toggleMic, muteAll} from '../../conference/controller';
 import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;
@@ -36,6 +37,7 @@ function makeStore(session: any = {}) {
 
 beforeEach(() => {
     (toggleMic as jest.Mock).mockClear();
+    (muteAll as jest.Mock).mockClear();
 });
 
 describe('ControlsBar', () => {
@@ -102,6 +104,63 @@ describe('ControlsBar', () => {
         );
         fireEvent.click(screen.getByTitle('Leave meeting'));
         expect(onLeave).toHaveBeenCalled();
+    });
+
+    it('does not render the mute-all button for a non-host', () => {
+        const store = makeStore({isHost: false});
+        render(
+            <Provider store={store}>
+                <ControlsBar
+                    showExpand={false}
+                    onLeave={jest.fn()}
+                    onMinimize={jest.fn()}
+                />
+            </Provider>,
+        );
+        expect(screen.queryByTestId('controls-mute-all')).not.toBeInTheDocument();
+    });
+
+    it('renders the mute-all button for a host and calls muteAll on click', () => {
+        const store = makeStore({isHost: true});
+        render(
+            <Provider store={store}>
+                <ControlsBar
+                    showExpand={false}
+                    onLeave={jest.fn()}
+                    onMinimize={jest.fn()}
+                />
+            </Provider>,
+        );
+        const button = screen.getByTestId('controls-mute-all');
+        fireEvent.click(button);
+        expect(muteAll).toHaveBeenCalled();
+    });
+
+    it('labels the hangup button with the end option only for the room owner', () => {
+        const owner = makeStore({isHost: true, isRoomOwner: true});
+        const {unmount} = render(
+            <Provider store={owner}>
+                <ControlsBar
+                    showExpand={false}
+                    onLeave={jest.fn()}
+                    onMinimize={jest.fn()}
+                />
+            </Provider>,
+        );
+        expect(screen.getByTitle('Leave / End meeting')).toBeInTheDocument();
+        unmount();
+
+        const promotedModerator = makeStore({isHost: true, isRoomOwner: false});
+        render(
+            <Provider store={promotedModerator}>
+                <ControlsBar
+                    showExpand={false}
+                    onLeave={jest.fn()}
+                    onMinimize={jest.fn()}
+                />
+            </Provider>,
+        );
+        expect(screen.getByTitle('Leave meeting')).toBeInTheDocument();
     });
 
     it('clicking Minimize calls the onMinimize prop', () => {

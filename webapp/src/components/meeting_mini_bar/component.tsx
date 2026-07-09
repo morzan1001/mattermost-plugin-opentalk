@@ -10,7 +10,7 @@ import {useMeetingDuration} from '../../hooks/use_meeting_duration';
 import {useResizable} from '../../hooks/use_resizable';
 import {setMinimized} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {selectChannelType, selectIsHost, selectIsMinimized, selectLocalParticipantId, selectSession, selectParticipantOrder} from '../../util/selectors';
+import {selectChannelType, selectIsRoomOwner, selectIsMinimized, selectLocalParticipantId, selectSession, selectParticipantOrder} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 import {LeaveCallModal} from '../leave_call_modal';
 
@@ -18,7 +18,7 @@ const MeetingMiniBar: React.FC = () => {
     const dispatch = useDispatch();
     const t = useT();
     const session = useSelector(selectSession);
-    const isHost = useSelector(selectIsHost);
+    const isRoomOwner = useSelector(selectIsRoomOwner);
     const isMinimized = useSelector(selectIsMinimized);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const channelType = useSelector((s: any) => selectChannelType(s, session.channelID));
@@ -79,11 +79,13 @@ const MeetingMiniBar: React.FC = () => {
     }
 
     const onLeaveClick = () => {
-        // DM hosts end the meeting outright -- "leave just for me" would
-        // strand an empty room in KV until the reaper, blocking re-rings.
-        if (isHost && isDM) {
+        // Only the room owner can end for everyone; the server end-endpoint
+        // authorizes the meeting creator, not mid-call moderators. DM owners end
+        // outright -- "leave just for me" would strand an empty room in KV until
+        // the reaper, blocking re-rings.
+        if (isRoomOwner && isDM) {
             endActiveMeeting();
-        } else if (isHost) {
+        } else if (isRoomOwner) {
             setShowLeavePrompt(true);
         } else {
             leaveActiveConference();
@@ -166,7 +168,6 @@ const MeetingMiniBar: React.FC = () => {
                     />
                 </div>
 
-                {/* Main content row */}
                 <div
                     ref={rowRef}
                     style={{
