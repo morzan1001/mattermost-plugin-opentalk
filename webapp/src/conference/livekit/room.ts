@@ -27,6 +27,12 @@ interface TrackSubscribedData {
     participant: RemoteParticipant;
 }
 
+// The roomserver builds LiveKit identities as "<participant_id>:<connection_id>";
+// the bare id (a UUID, no colon) is what Redux and the tiles key on.
+export function participantIdFromIdentity(identity: string): string {
+    return identity.split(':')[0];
+}
+
 type Listener<T = unknown> = (data: T) => void;
 
 export class LiveKitRoom {
@@ -60,19 +66,19 @@ export class LiveKitRoom {
 
             // Seed the initial mute state (e.g. a participant who joined muted
             // never fires a TrackMuted event).
-            this.emit('track_muted', {participantId: participant.identity, source: publication.source, muted: publication.isMuted});
+            this.emit('track_muted', {participantId: participantIdFromIdentity(participant.identity), source: publication.source, muted: publication.isMuted});
         });
         this.room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
             this.emit('track_unsubscribed', {track, publication, participant} as TrackSubscribedData);
         });
         this.room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
-            this.emit('active_speakers_changed', speakers.map((s) => s.identity));
+            this.emit('active_speakers_changed', speakers.map((s) => participantIdFromIdentity(s.identity)));
         });
         this.room.on(RoomEvent.TrackMuted, (publication, participant) => {
-            this.emit('track_muted', {participantId: participant.identity, source: publication.source, muted: true});
+            this.emit('track_muted', {participantId: participantIdFromIdentity(participant.identity), source: publication.source, muted: true});
         });
         this.room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
-            this.emit('track_muted', {participantId: participant.identity, source: publication.source, muted: false});
+            this.emit('track_muted', {participantId: participantIdFromIdentity(participant.identity), source: publication.source, muted: false});
         });
         this.room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
             // A full reconnect republishes local tracks, unpublishing each one
@@ -183,7 +189,7 @@ export class LiveKitRoom {
     }
 
     public getLocalIdentity(): string {
-        return this.room.localParticipant.identity;
+        return participantIdFromIdentity(this.room.localParticipant.identity);
     }
 
     public getLocalScreenTrack(): LocalVideoTrack | undefined {

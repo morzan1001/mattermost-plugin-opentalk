@@ -3,7 +3,7 @@ import type {Store, Action} from 'redux';
 import {OpenTalkConferenceClient} from './client';
 import {isElectron, getDesktopSources, captureDesktopStream} from './livekit/desktop_capturer';
 import {getMuteOnJoin} from './livekit/devices';
-import {LiveKitRoom} from './livekit/room';
+import {LiveKitRoom, participantIdFromIdentity} from './livekit/room';
 import {pickScreenSource} from './livekit/screen_picker';
 import * as trackRegistry from './livekit/track_registry';
 import type {Participant} from './signaling/modules/core';
@@ -314,8 +314,8 @@ export async function startConferenceConnection(
         store.dispatch(setRaiseHandsEnabled(enabled));
     });
     client.on('force_muted', () => {
-        // LiveKit does not auto-mute the publisher on a moderator force-mute;
-        // stop the local mic and reflect it in Redux.
+        // The server force-mutes the publisher's track via LiveKit RoomService;
+        // this syncs the mic button and releases the local device.
         if (!activeLiveKit) {
             return;
         }
@@ -426,7 +426,7 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         }
         trackRegistry.register(trackId, sub.track);
         store.dispatch(trackSubscribed({
-            participantId: sub.participant.identity,
+            participantId: participantIdFromIdentity(sub.participant.identity),
             kind: trackKindOf(sub),
             trackId,
         }));
@@ -439,7 +439,7 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
             trackRegistry.unregister(trackId);
         }
         store.dispatch(trackUnsubscribed({
-            participantId: sub.participant.identity,
+            participantId: participantIdFromIdentity(sub.participant.identity),
             kind: trackKindOf(sub),
         }));
     });
@@ -454,6 +454,13 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         const source = data?.source as string | undefined;
         if (source === 'microphone') {
             store.dispatch(participantMediaChanged({id: data.participantId, muted: data.muted}));
+
+            // Server-side force-mute of our own track drives the mic button even
+            // when the force_muted signaling frame never arrives. Idempotent
+            // with the user's own mute.
+            if (data.muted && data.participantId === lk.getLocalIdentity()) {
+                store.dispatch(setMicEnabled(false));
+            }
         } else if (source === 'camera') {
             store.dispatch(participantMediaChanged({id: data.participantId, cameraOff: data.muted}));
         }

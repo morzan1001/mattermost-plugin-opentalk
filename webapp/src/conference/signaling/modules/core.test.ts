@@ -35,11 +35,6 @@ describe('core module types', () => {
         expect(f.payload.action).toBe('join');
     });
 
-    it('typechecks a leave frame', () => {
-        const f = buildFrame(CoreNamespace, 'leave', {});
-        expect(f.payload.action).toBe('leave');
-    });
-
     it('Participant has minimal MVP fields', () => {
         const p: Participant = {id: 'u1', displayName: 'alice'};
         expect(p.id).toBe('u1');

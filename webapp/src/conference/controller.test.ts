@@ -105,7 +105,10 @@ jest.mock('./livekit/room', () => {
         camTrack: unknown = undefined;
     }
 
-    return {LiveKitRoom: MockLiveKitRoom};
+    return {
+        LiveKitRoom: MockLiveKitRoom,
+        participantIdFromIdentity: (identity: string) => identity.split(':')[0],
+    };
 });
 
 // ── other mocks ───────────────────────────────────────────────────────────
@@ -806,5 +809,60 @@ describe('force_muted / role_updated client events', () => {
 
         expect(dispatched.find((a) => a.type === 'opentalk/participants/role_changed')?.payload).toEqual({id: 'p-other', role: 'moderator'});
         expect(dispatched.find((a) => a.type === 'opentalk/session/set_is_host')).toBeUndefined();
+    });
+});
+
+describe('LiveKit track events', () => {
+    async function connectWithLiveKit() {
+        const store = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {
+            participants: [{id: 'self', displayName: 'Alice'}],
+            isHost: false,
+            livekit: {url: 'wss://lk.example', token: 'tok'},
+        });
+        await Promise.resolve();
+        return store;
+    }
+
+    it('normalizes the LiveKit identity to the bare participant id on track_subscribed', async () => {
+        await connectWithLiveKit();
+        dispatched = [];
+        lkRoom().trigger('track_subscribed', {
+            participant: {identity: 'uuid-remote:conn-9'},
+            publication: {trackSid: 't1', source: 'camera'},
+            track: {kind: 'video', sid: 't1'},
+        });
+        const sub = dispatched.find((a) => a.type === 'opentalk/tracks/subscribed');
+        expect(sub?.payload?.participantId).toBe('uuid-remote');
+    });
+
+    it('normalizes the LiveKit identity to the bare participant id on track_unsubscribed', async () => {
+        await connectWithLiveKit();
+        dispatched = [];
+        lkRoom().trigger('track_unsubscribed', {
+            participant: {identity: 'uuid-remote:conn-9'},
+            publication: {trackSid: 't1', source: 'camera'},
+            track: {kind: 'video', sid: 't1'},
+        });
+        const unsub = dispatched.find((a) => a.type === 'opentalk/tracks/unsubscribed');
+        expect(unsub?.payload?.participantId).toBe('uuid-remote');
+    });
+
+    it('disables the mic button when the local mic track is muted server-side', async () => {
+        await connectWithLiveKit();
+        lkRoom().getLocalIdentity.mockReturnValue('local-id');
+        dispatched = [];
+        lkRoom().trigger('track_muted', {participantId: 'local-id', source: 'microphone', muted: true});
+        expect(dispatched.find((a) => a.type === 'opentalk/session/set_mic_enabled')?.payload?.value).toBe(false);
+    });
+
+    it('leaves the mic button untouched when a remote mic track is muted', async () => {
+        await connectWithLiveKit();
+        lkRoom().getLocalIdentity.mockReturnValue('local-id');
+        dispatched = [];
+        lkRoom().trigger('track_muted', {participantId: 'remote-id', source: 'microphone', muted: true});
+        expect(dispatched.find((a) => a.type === 'opentalk/session/set_mic_enabled')).toBeUndefined();
     });
 });

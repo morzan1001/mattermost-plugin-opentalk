@@ -6,36 +6,18 @@
 export const ModerationNamespace = 'moderation' as const;
 export type ModerationNamespace = typeof ModerationNamespace;
 
-/**
- * Mirrors upstream `KickScope`. Wire values are snake_case
- * (`users_and_guests`); we keep camelCase here and rely on the socket layer
- * to convert.
- */
-export type KickScope = 'all' | 'guests' | 'usersAndGuests';
+// The socket layer snake-cases keys and the `action` value only; other string
+// values pass through verbatim, so these must be the wire literals upstream
+// KickScope expects.
+export type KickScope = 'all' | 'guests' | 'users_and_guests';
 
-/**
- * Mirrors upstream `ModerationError` (19 variants).
- */
+// Upstream moderation `Error` enum (tag `error`, snake_case wire values).
 export type ModerationError =
-    | 'cannotChangeNameOfRegisteredUsers'
-    | 'invalidDisplayName'
-    | 'insufficientPermissions'
-    | 'unknownParticipant'
-    | 'unknownParticipants'
-    | 'alreadyBanned'
-    | 'alreadyUnbanned'
-    | 'cannotBanRoomOwner'
-    | 'cannotBanGuests'
-    | 'cannotBanSelf'
-    | 'cannotChangeRoomOwnerRole'
-    | 'roleAlreadyAssigned'
-    | 'notWaiting'
-    | 'notAccepted'
-    | 'cannotSendRoomOwnerToWaitingRoom'
-    | 'cannotKickRoomOwner'
-    | 'internal'
-    | 'conflictingTask'
-    | 'livekitUnavailable';
+    | 'cannot_ban_guest'
+    | 'cannot_send_room_owner_to_waiting_room'
+    | 'cannot_change_name_of_registered_users'
+    | 'invalid_display_name'
+    | 'insufficient_permissions';
 
 // ---------- Outgoing ----------
 
@@ -73,15 +55,6 @@ export interface ModerationChangeDisplayName {
     newName: string;
 }
 
-export interface ModerationDisableDisplayNameChangeRestrictions {
-    action: 'disableDisplayNameChangeRestrictions';
-}
-
-export interface ModerationEnableDisplayNameChangeRestrictions {
-    action: 'enableDisplayNameChangeRestrictions';
-    unrestrictedParticipants: string[];
-}
-
 export interface ModerationAccept {
     action: 'accept';
     target: string;
@@ -108,8 +81,6 @@ export type ModerationOutgoing =
     | ModerationDisableWaitingRoom
     | ModerationSendToWaitingRoom
     | ModerationChangeDisplayName
-    | ModerationDisableDisplayNameChangeRestrictions
-    | ModerationEnableDisplayNameChangeRestrictions
     | ModerationAccept
     | ModerationEnableRaiseHands
     | ModerationDisableRaiseHands
@@ -161,25 +132,12 @@ export interface ModerationAccepted {
     action: 'accepted';
 }
 
-export interface ModerationParticipantAccepted {
-    action: 'participantAccepted';
-    participantId: string;
-}
-
 export interface ModerationDisplayNameChanged {
     action: 'displayNameChanged';
     target: string;
     issuedBy: string;
     oldName: string;
     newName: string;
-}
-
-export interface ModerationDisplayNameChangeRestrictionsDisabled {
-    action: 'displayNameChangeRestrictionsDisabled';
-}
-
-export interface ModerationDisplayNameChangeRestrictionsEnabled {
-    action: 'displayNameChangeRestrictionsEnabled';
 }
 
 export interface ModerationSessionEnded {
@@ -218,10 +176,7 @@ export type ModerationIncoming =
     | ModerationLeftWaitingRoom
     | ModerationSentToWaitingRoom
     | ModerationAccepted
-    | ModerationParticipantAccepted
     | ModerationDisplayNameChanged
-    | ModerationDisplayNameChangeRestrictionsDisabled
-    | ModerationDisplayNameChangeRestrictionsEnabled
     | ModerationSessionEnded
     | ModerationErrorMessage
     | ModerationRaiseHandsEnabled

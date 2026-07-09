@@ -29,8 +29,8 @@ type ConferenceEvent =
     | 'error';
 
 const restAuth: AuthProvider = {
-    async getTicket(roomID, channelID, deviceSecret) {
-        const r = await joinMeeting(roomID, channelID, deviceSecret);
+    async getTicket(roomID, channelID, deviceSecret, resumption) {
+        const r = await joinMeeting(roomID, channelID, deviceSecret, resumption);
         return {
             ticket: r.ticket,
             resumption: r.resumption,

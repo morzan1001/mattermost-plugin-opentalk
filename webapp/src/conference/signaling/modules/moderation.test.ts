@@ -48,8 +48,20 @@ describe('moderation module types', () => {
         expect(f.payload.action).toBe('debrief');
     });
 
+    it('debrief serializes the kick_scope value verbatim (only keys are snake-cased)', () => {
+        const wire = sentWireFrame(
+            ModerationNamespace,
+            'debrief',
+            {kickScope: 'users_and_guests'} satisfies Omit<Extract<ModerationOutgoing, {action: 'debrief'}>, 'action'>,
+        );
+        expect(wire).toEqual({
+            namespace: 'moderation',
+            payload: {action: 'debrief', kick_scope: 'users_and_guests'},
+        });
+    });
+
     it('typechecks an error incoming frame with ModerationError enum value', () => {
-        const m: ModerationIncoming = {action: 'error', error: 'insufficientPermissions'};
+        const m: ModerationIncoming = {action: 'error', error: 'insufficient_permissions'};
         expect(m.action).toBe('error');
     });
 

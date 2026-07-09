@@ -21,14 +21,6 @@ export interface Participant {
 
 export type JoinBlockedReason = 'participantLimitReached';
 
-export type DisconnectReason =
-    | 'leave'
-    | 'connectionLost'
-    | 'kicked'
-    | 'banned'
-    | 'internalError'
-    | 'sentToWaitingRoom';
-
 export type RoomCloseReason =
     | 'gracefulShutdown'
     | 'immediateShutdown'
@@ -41,10 +33,6 @@ export type RoomCloseReason =
 export interface CoreJoin {
     action: 'join';
     displayName: string;
-}
-
-export interface CoreLeave {
-    action: 'leave';
 }
 
 export interface CoreEnterRoom {
@@ -71,7 +59,6 @@ export interface CoreRevokeModeratorRole {
 
 export type CoreOutgoing =
     | CoreJoin
-    | CoreLeave
     | CoreEnterRoom
     | CoreRaiseHand
     | CoreLowerHand
@@ -93,23 +80,9 @@ export interface CoreJoinSuccess {
     [extra: string]: unknown;
 }
 
-export interface CoreParticipantConnected {
-    action: 'participantConnected';
-    participantId: string;
-    connectionId?: string;
-    peerData?: Record<string, unknown>;
-}
-
 export interface CoreJoinBlocked {
     action: 'joinBlocked';
     reason: JoinBlockedReason;
-}
-
-export interface CoreParticipantDisconnected {
-    action: 'participantDisconnected';
-    participantId: string;
-    connectionId?: string;
-    reason: DisconnectReason;
 }
 
 export interface CoreClosing {
@@ -152,9 +125,7 @@ export interface CoreRoleUpdated {
 
 export type CoreIncoming =
     | CoreJoinSuccess
-    | CoreParticipantConnected
     | CoreJoinBlocked
-    | CoreParticipantDisconnected
     | CoreClosing
     | CoreRoomParametersChanged
     | CoreHandRaised

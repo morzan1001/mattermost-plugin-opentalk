@@ -18,6 +18,7 @@ jest.mock('livekit-client', () => {
                 publishTrack: mockPublishTrack,
                 unpublishTrack: mockUnpublishTrack,
                 setScreenShareEnabled: mockSetScreenShareEnabled,
+                identity: 'local-self:conn-1',
                 get isScreenShareEnabled() {
                     return mockIsScreenShareEnabled;
                 },
@@ -28,13 +29,15 @@ jest.mock('livekit-client', () => {
             TrackSubscribed: 'track_subscribed',
             TrackUnsubscribed: 'track_unsubscribed',
             ActiveSpeakersChanged: 'active_speakers_changed',
+            TrackMuted: 'track_muted',
+            TrackUnmuted: 'track_unmuted',
         },
         createLocalAudioTrack: (...args: unknown[]) => mockCreateLocalAudioTrack(...args),
         createLocalVideoTrack: (...args: unknown[]) => mockCreateLocalVideoTrack(...args),
     };
 });
 
-import {LiveKitRoom} from './room';
+import {LiveKitRoom, participantIdFromIdentity} from './room';
 
 beforeEach(() => {
     mockRoomOn.mockReset();
@@ -175,6 +178,36 @@ describe('LiveKitRoom cam API', () => {
         const r = new LiveKitRoom();
         await r.disableCam();
         expect(mockUnpublishTrack).not.toHaveBeenCalled();
+    });
+});
+
+describe('LiveKit identity normalization', () => {
+    it('participantIdFromIdentity strips the connection-id suffix', () => {
+        expect(participantIdFromIdentity('uuid-1:conn-a')).toBe('uuid-1');
+        expect(participantIdFromIdentity('uuid-1')).toBe('uuid-1');
+    });
+
+    it('getLocalIdentity returns the bare participant id', () => {
+        const r = new LiveKitRoom();
+        expect(r.getLocalIdentity()).toBe('local-self');
+    });
+
+    it('active_speakers_changed maps identities to bare participant ids', () => {
+        const r = new LiveKitRoom();
+        const speakers: string[] = [];
+        r.on('active_speakers_changed', (s) => speakers.push(...(s as string[])));
+        const handler = mockRoomOn.mock.calls.find((cc) => cc[0] === 'active_speakers_changed')?.[1];
+        handler([{identity: 'uuid-a:conn-x'}, {identity: 'uuid-b'}]);
+        expect(speakers).toEqual(['uuid-a', 'uuid-b']);
+    });
+
+    it('track_muted emits the bare participant id', () => {
+        const r = new LiveKitRoom();
+        const events: Array<{participantId: string}> = [];
+        r.on('track_muted', (d) => events.push(d as {participantId: string}));
+        const handler = mockRoomOn.mock.calls.find((cc) => cc[0] === 'track_muted')?.[1];
+        handler({source: 'microphone'}, {identity: 'uuid-c:conn-y'});
+        expect(events[events.length - 1].participantId).toBe('uuid-c');
     });
 });
 

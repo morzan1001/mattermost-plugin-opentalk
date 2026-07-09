@@ -37,7 +37,7 @@ function clearResumption(roomID: string): void {
 }
 
 export interface AuthProvider {
-    getTicket(roomID: string, channelID: string, deviceSecret: string): Promise<{
+    getTicket(roomID: string, channelID: string, deviceSecret: string, resumption?: string): Promise<{
         ticket: string;
         resumption: string;
         roomserverURL: string;
@@ -117,7 +117,11 @@ export class ConferenceRoom {
         this.roomID = roomID;
         this.state = 'authenticating';
 
-        return this.auth.getTicket(roomID, channelID, deviceSecret).then(
+        // A prior session's resumption goes into the REST start body, not the
+        // join frame; the controller mints a fresh token in the response.
+        const storedResumption = readResumption(roomID);
+
+        return this.auth.getTicket(roomID, channelID, deviceSecret, storedResumption).then(
             (r) => {
                 if (this.state !== 'authenticating') {
                     // leave() was called while the ticket was in flight; abort
@@ -125,12 +129,7 @@ export class ConferenceRoom {
                     return Promise.resolve();
                 }
                 const ticket = r.ticket;
-
-                // Prefer a server-confirmed token from a prior joinSuccess
-                // over the fresh ticket-time value, so the first attempt of
-                // a reconnect re-presents the same resumption the server has
-                // already acknowledged.
-                const initialResumption = readResumption(roomID) || r.resumption || '';
+                const restResumption = r.resumption;
                 const roomserverURL = r.roomserverURL || this.defaultRoomserverURL;
 
                 this.state = 'connecting';
@@ -145,12 +144,11 @@ export class ConferenceRoom {
                         return;
                     }
 
-                    // Server-confirmed resumption: only persist once the join
-                    // has been accepted. Writing the ticket-time value would
-                    // leave a stale token in localStorage if the join itself
-                    // was rejected (joinBlocked, banned, etc.).
-                    if (typeof payload.resumption === 'string' && payload.resumption) {
-                        writeResumption(roomID, payload.resumption);
+                    // Persist the REST-issued resumption only after the join is
+                    // accepted; a rejected join (joinBlocked, banned) must not
+                    // leave a stale token behind.
+                    if (restResumption) {
+                        writeResumption(roomID, restResumption);
                     }
 
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -338,6 +336,12 @@ export class ConferenceRoom {
                     failIfConnecting(`moderation_error: ${payload.error ?? 'unknown'}`);
                 });
 
+                // A waiting-room-enabled room answers join with inWaitingRoom
+                // instead of joinSuccess; without this connect() would hang.
+                this.listener.on(ModerationNamespace, 'inWaitingRoom', () => {
+                    failIfConnecting('in_waiting_room: waiting room is enabled but not supported yet');
+                });
+
                 this.listener.on(ModerationNamespace, 'raiseHandsEnabled', () => {
                     this.emit('raise_hands_toggled', {enabled: true});
                 });
@@ -346,10 +350,7 @@ export class ConferenceRoom {
                 });
 
                 this.socket.on('open', () => {
-                    this.socket?.send(buildFrame(CoreNamespace, 'join', {
-                        displayName,
-                        ...(initialResumption ? {resumption: initialResumption} : {}),
-                    }));
+                    this.socket?.send(buildFrame(CoreNamespace, 'join', {displayName}));
                 });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.socket.on('close', (e: any) => {
@@ -501,11 +502,6 @@ export class ConferenceRoom {
             return;
         }
         this.state = 'leaving';
-        try {
-            this.socket?.send(buildFrame(CoreNamespace, 'leave', {}));
-        } catch {
-            // socket may already be closed; ignore
-        }
         this.socket?.disconnect();
         this.listener?.dispose();
         this.state = 'closed';

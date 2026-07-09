@@ -23,6 +23,7 @@ class FakeWebSocket {
 beforeEach(() => {
     FakeWebSocket.instances = [];
     (global as any).WebSocket = FakeWebSocket;
+    window.localStorage.clear();
 });
 
 function makeFakeAuth(overrides: Partial<{ticket: string; resumption: string; roomserverURL: string}> = {}): AuthProvider {
@@ -72,7 +73,7 @@ describe('ConferenceRoom', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(auth.getTicket).toHaveBeenCalledWith('room-1', 'ch-1', 'dev-1');
+        expect(auth.getTicket).toHaveBeenCalledWith('room-1', 'ch-1', 'dev-1', undefined);
         const ws = getWS();
         expect(ws.url).toBe('wss://rs.example/signaling');
 
@@ -83,7 +84,7 @@ describe('ConferenceRoom', () => {
         expect(room.getState()).toBe('connected');
     });
 
-    it('sends core.join frame after socket opens', async () => {
+    it('sends core.join frame with only display_name (resumption goes via REST)', async () => {
         const room = new ConferenceRoom(makeFakeAuth(), 'wss://default-rs.example');
         room.connect('room-1', 'ch-1', 'alice', 'dev-1');
         await Promise.resolve();
@@ -92,11 +93,39 @@ describe('ConferenceRoom', () => {
         const ws = getWS();
         ws.onopen?.({} as Event);
 
-        // Sent payload should be snake_cased {namespace: 'control', payload: {action: 'join', display_name: 'alice'}}.
-        // The resumption token is persisted after getTicket resolves and is included in the join frame.
+        // The control join command carries only display_name; a resumption key
+        // would be silently dropped by the server.
         expect(ws.sent.length).toBe(1);
         const sent = JSON.parse(ws.sent[0]);
-        expect(sent).toEqual({namespace: 'control', payload: {action: 'join', display_name: 'alice', resumption: 'resumption-1'}});
+        expect(sent).toEqual({namespace: 'control', payload: {action: 'join', display_name: 'alice'}});
+    });
+
+    it('passes a stored resumption token to getTicket for the REST join', async () => {
+        window.localStorage.setItem('opentalk:resumption:room-1', 'stored-token');
+        const auth = makeFakeAuth();
+        const room = new ConferenceRoom(auth, 'wss://rs.example');
+        room.connect('room-1', 'ch-1', 'alice', 'dev-1');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(auth.getTicket).toHaveBeenCalledWith('room-1', 'ch-1', 'dev-1', 'stored-token');
+    });
+
+    it('persists the REST-returned resumption token after joinSuccess', async () => {
+        const auth = makeFakeAuth({resumption: 'fresh-token'});
+        const room = new ConferenceRoom(auth, 'wss://rs.example');
+        const connectPromise = room.connect('room-1', 'ch-1', 'alice', 'dev-1');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(window.localStorage.getItem('opentalk:resumption:room-1')).toBeNull();
+
+        const ws = getWS();
+        ws.onopen?.({} as Event);
+        emit(ws, {namespace: 'control', payload: {message: 'join_success', id: 'self-id', display_name: 'self-name', participants: []}});
+        await connectPromise;
+
+        expect(window.localStorage.getItem('opentalk:resumption:room-1')).toBe('fresh-token');
     });
 
     it('emits "connected" with participants on joinSuccess', async () => {
@@ -190,7 +219,7 @@ describe('ConferenceRoom', () => {
         ]);
     });
 
-    it('leave() sends core.leave and disconnects the socket', async () => {
+    it('leave() disconnects the socket without sending a leave frame', async () => {
         const room = new ConferenceRoom(makeFakeAuth(), 'wss://rs.example');
         room.connect('room-1', 'ch-1', 'alice', 'dev-1');
         await Promise.resolve();
@@ -199,13 +228,24 @@ describe('ConferenceRoom', () => {
         ws.onopen?.({} as Event);
         emit(ws, {namespace: 'control', payload: {message: 'join_success', id: 'self-id', display_name: 'self-name', participants: []}});
 
+        const sentBefore = ws.sent.length;
         await room.leave();
 
-        // Last sent message should be the leave frame.
-        const lastSent = JSON.parse(ws.sent[ws.sent.length - 1]);
-        expect(lastSent).toEqual({namespace: 'control', payload: {action: 'leave'}});
+        // No leave frame exists in the control protocol; leaving is a WS close.
+        expect(ws.sent.length).toBe(sentBefore);
         expect(ws.readyState).toBe(3);
         expect(room.getState()).toBe('closed');
+    });
+
+    it('rejects connect() when the server sends inWaitingRoom instead of joinSuccess', async () => {
+        const room = new ConferenceRoom(makeFakeAuth(), 'wss://rs.example');
+        const connectPromise = room.connect('room-1', 'ch-1', 'alice', 'dev-1');
+        await Promise.resolve();
+        await Promise.resolve();
+        const ws = getWS();
+        ws.onopen?.({} as Event);
+        emit(ws, {namespace: 'moderation', payload: {message: 'in_waiting_room'}});
+        await expect(connectPromise).rejects.toThrow(/in_waiting_room/);
     });
 
     it('emits "closed" when WebSocket closes', async () => {
