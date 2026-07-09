@@ -75,7 +75,6 @@ const ExpandedView: React.FC = () => {
                     fontFamily: 'Inter, system-ui, sans-serif',
                 }}
             >
-                {/* header */}
                 <div
                     style={{
                         height: 56,
@@ -152,14 +151,12 @@ const ExpandedView: React.FC = () => {
                     </div>
                 )}
 
-                {/* layout body */}
                 <div style={{flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden'}}>
                     {mode === 'speaker' && <SpeakerLayout/>}
                     {mode === 'grid' && <GridLayout/>}
                     {mode === 'screen-focus' && <ScreenFocusLayout/>}
                 </div>
 
-                {/* controls-bar footer */}
                 <div
                     style={{
                         flexShrink: 0,

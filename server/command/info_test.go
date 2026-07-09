@@ -25,8 +25,6 @@ func encryptedUserInfo(t *testing.T, info *store.UserInfo) []byte {
 	return enc
 }
 
-// TestInfo_NotConnected_EN verifies the English "not connected" response when
-// the user has no stored UserInfo (KVGet → nil).
 func TestInfo_NotConnected_EN(t *testing.T) {
 	api := &plugintest.API{}
 	api.On("KVGet", mock.AnythingOfType("string")).Return([]byte(nil), nil)
@@ -53,8 +51,6 @@ func TestInfo_NotConnected_DE(t *testing.T) {
 	assert.Contains(t, resp.Text, "nicht mit OpenTalk verbunden")
 }
 
-// TestInfo_Connected_EN verifies that a connected user sees their OpenTalk
-// email address and sub in the English response.
 func TestInfo_Connected_EN(t *testing.T) {
 	info := &store.UserInfo{
 		MattermostUserID: "u1",
@@ -81,8 +77,6 @@ func TestInfo_Connected_EN(t *testing.T) {
 	assert.Contains(t, resp.Text, "Connected as")
 }
 
-// TestInfo_Connected_DE verifies that a connected user sees a German response
-// including "Verbunden als".
 func TestInfo_Connected_DE(t *testing.T) {
 	info := &store.UserInfo{
 		MattermostUserID: "u1",

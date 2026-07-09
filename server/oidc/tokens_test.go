@@ -2,9 +2,6 @@ package oidc
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -28,40 +25,15 @@ func TestEnsureFreshToken_ReturnsExistingIfNotExpired(t *testing.T) {
 }
 
 func TestEnsureFreshToken_RefreshesIfExpired(t *testing.T) {
-	var srv *httptest.Server
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/.well-known/openid-configuration":
-			json.NewEncoder(w).Encode(map[string]any{
-				"issuer":                                srv.URL,
-				"authorization_endpoint":                srv.URL + "/auth",
-				"token_endpoint":                        srv.URL + "/token",
-				"userinfo_endpoint":                     srv.URL + "/userinfo",
-				"jwks_uri":                              srv.URL + "/jwks",
-				"id_token_signing_alg_values_supported": []string{"RS256"},
-			})
-		case "/token":
-			json.NewEncoder(w).Encode(map[string]any{
-				"access_token":  "fresh-jwt",
-				"refresh_token": "rotated-refresh-jwt",
-				"token_type":    "Bearer",
-				"expires_in":    300,
-			})
-		case "/userinfo":
-			json.NewEncoder(w).Encode(map[string]string{"sub": "x", "email": "y"})
-		case "/jwks":
-			json.NewEncoder(w).Encode(map[string]any{"keys": []any{}})
-		}
-	}))
+	srv, _ := mockOIDCServer(t, map[string]any{
+		"access_token":  "fresh-jwt",
+		"refresh_token": "rotated-refresh-jwt",
+		"token_type":    "Bearer",
+		"expires_in":    300,
+	})
 	defer srv.Close()
 
-	client, err := NewClient(context.Background(), Config{
-		Issuer: srv.URL, ClientID: "id", ClientSecret: "secret",
-		RedirectURL: "http://localhost/callback",
-		Scopes:      []string{"openid"},
-	})
-	require.NoError(t, err)
+	client := newTestClient(t, srv)
 
 	info := &store.UserInfo{
 		AccessToken:  "expired",
@@ -79,34 +51,12 @@ func TestEnsureFreshToken_RefreshesIfExpired(t *testing.T) {
 }
 
 func TestEnsureFreshToken_RefreshesEagerlyWithinLeeway(t *testing.T) {
-	var srv *httptest.Server
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/.well-known/openid-configuration":
-			json.NewEncoder(w).Encode(map[string]any{
-				"issuer":                                srv.URL,
-				"authorization_endpoint":                srv.URL + "/auth",
-				"token_endpoint":                        srv.URL + "/token",
-				"userinfo_endpoint":                     srv.URL + "/userinfo",
-				"jwks_uri":                              srv.URL + "/jwks",
-				"id_token_signing_alg_values_supported": []string{"RS256"},
-			})
-		case "/token":
-			json.NewEncoder(w).Encode(map[string]any{
-				"access_token": "fresh-jwt", "token_type": "Bearer", "expires_in": 300,
-			})
-		case "/jwks":
-			json.NewEncoder(w).Encode(map[string]any{"keys": []any{}})
-		}
-	}))
+	srv, _ := mockOIDCServer(t, map[string]any{
+		"access_token": "fresh-jwt", "token_type": "Bearer", "expires_in": 300,
+	})
 	defer srv.Close()
 
-	client, err := NewClient(context.Background(), Config{
-		Issuer: srv.URL, ClientID: "id", ClientSecret: "secret",
-		RedirectURL: "http://localhost/callback", Scopes: []string{"openid"},
-	})
-	require.NoError(t, err)
+	client := newTestClient(t, srv)
 
 	// 10 seconds away from expiry — within 30s leeway, must refresh.
 	info := &store.UserInfo{

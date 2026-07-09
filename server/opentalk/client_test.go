@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -88,5 +87,4 @@ func TestDoRequest_NoTokenSendsNoAuthHeader(t *testing.T) {
 	err := c.doRequest(http.MethodPost, "/v1/anonymous", "", map[string]string{"k": "v"}, nil)
 	require.NoError(t, err)
 	assert.Empty(t, receivedAuth, "no token => no Authorization header")
-	_ = strings.TrimSpace
 }

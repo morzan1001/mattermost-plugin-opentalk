@@ -1,7 +1,7 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useMemo, useRef, useState} from 'react';
 import {useSelector} from 'react-redux';
 
-import * as trackRegistry from '../../conference/livekit/track_registry';
+import {useAttachTrack} from '../../hooks/use_attach_track';
 import {useT} from '../../util/i18n';
 import {selectSessionStatus, selectTracksPerParticipant} from '../../util/selectors';
 
@@ -13,31 +13,13 @@ interface RemoteAudio {
 const AudioElement: React.FC<{trackId: string; onBlocked: () => void}> = ({trackId, onBlocked}) => {
     const elRef = useRef<HTMLAudioElement | null>(null);
 
-    useEffect(() => {
-        const track = trackRegistry.get(trackId);
-        const el = elRef.current;
-        if (!track || !el) {
-            return undefined;
-        }
-        try {
-            track.attach(el);
-        } catch (e) {
-            // eslint-disable-next-line no-console
-            console.warn('[opentalk] track.attach failed:', e);
-        }
-
-        // Autoplay may be blocked until the user interacts with the page; surface
-        // a recovery prompt instead of silently having no remote audio.
-        // (Promise.resolve guards environments where play() returns undefined.)
+    // Autoplay may be blocked until the user interacts with the page; surface
+    // a recovery prompt instead of silently having no remote audio.
+    // (Promise.resolve guards environments where play() returns undefined.)
+    const onAttached = useCallback((el: HTMLAudioElement) => {
         Promise.resolve(el.play()).catch(() => onBlocked());
-        return () => {
-            try {
-                track.detach(el);
-            } catch (e) {
-                /* track might already be detached */
-            }
-        };
-    }, [trackId, onBlocked]);
+    }, [onBlocked]);
+    useAttachTrack(trackId, elRef, 'audio', onAttached);
 
     return (
         <audio

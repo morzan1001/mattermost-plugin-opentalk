@@ -22,10 +22,6 @@ function readStoredMode(): LayoutMode {
     return 'speaker';
 }
 
-/**
- * Persistent layout-mode selection for the Expanded-View.
- * Reads from localStorage on mount; setter persists immediately.
- */
 export function useLayoutMode(): [LayoutMode, (mode: LayoutMode) => void] {
     const [mode, setMode] = useState<LayoutMode>(() => readStoredMode());
 

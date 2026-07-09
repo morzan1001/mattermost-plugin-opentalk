@@ -2,7 +2,6 @@ const ACTION_TYPES = {
     STARTED: 'opentalk/active_meetings/started',
     ENDED: 'opentalk/active_meetings/ended',
     DISMISSED: 'opentalk/active_meetings/dismissed',
-    RESET: 'opentalk/active_meetings/reset',
 } as const;
 
 export interface ActiveMeeting {
@@ -29,9 +28,6 @@ export function activeMeetingEnded(payload: {channelID: string}) {
 }
 export function activeMeetingDismissed(payload: {channelID: string}) {
     return {type: ACTION_TYPES.DISMISSED, payload};
-}
-export function activeMeetingsReset() {
-    return {type: ACTION_TYPES.RESET};
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -72,8 +68,6 @@ export function activeMeetingsReducer(state: ActiveMeetingsState = initial, acti
             },
         };
     }
-    case ACTION_TYPES.RESET:
-        return initial;
     default:
         return state;
     }

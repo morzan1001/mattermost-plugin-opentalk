@@ -67,8 +67,6 @@ func setupAPIWithMeetings(t *testing.T, meetings []*store.ActiveMeeting) *plugin
 // Tests
 // ---------------------------------------------------------------------------
 
-// TestRunOnce_EmptyStore verifies that when ListActiveMeetings returns an empty
-// list, RunOnce does nothing (no call to the end callback).
 func TestRunOnce_EmptyStore(t *testing.T) {
 	api := &plugintest.API{}
 	mockLeaderAcquire(api)
@@ -85,8 +83,6 @@ func TestRunOnce_EmptyStore(t *testing.T) {
 	assert.Empty(t, ended, "empty store: no meetings should be ended")
 }
 
-// TestRunOnce_FreshMeeting_NotEnded verifies that a meeting whose LastHeartbeat
-// is recent (within the staleness window) is NOT passed to the end callback.
 func TestRunOnce_FreshMeeting_NotEnded(t *testing.T) {
 	fresh := &store.ActiveMeeting{
 		ChannelID:             "ch-fresh",
@@ -108,8 +104,6 @@ func TestRunOnce_FreshMeeting_NotEnded(t *testing.T) {
 	assert.Empty(t, ended, "fresh meeting should not be ended")
 }
 
-// TestRunOnce_StaleMeeting_Ended verifies that a meeting whose LastHeartbeat
-// is older than the staleness threshold IS passed to the end callback.
 func TestRunOnce_StaleMeeting_Ended(t *testing.T) {
 	stale := &store.ActiveMeeting{
 		ChannelID:             "ch-stale",
@@ -138,8 +132,6 @@ func TestRunOnce_StaleMeeting_Ended(t *testing.T) {
 	assert.Equal(t, "ch-stale", ended[0].ChannelID)
 }
 
-// TestRunOnce_MixedMeetings_OnlyStaleEnded verifies the mixed case: given one
-// fresh and one stale meeting, only the stale one is ended.
 func TestRunOnce_MixedMeetings_OnlyStaleEnded(t *testing.T) {
 	now := time.Now().UTC()
 	fresh := &store.ActiveMeeting{
@@ -175,9 +167,6 @@ func TestRunOnce_MixedMeetings_OnlyStaleEnded(t *testing.T) {
 	assert.Equal(t, "ch-2", ended[0].ChannelID)
 }
 
-// TestRunOnce_ListActiveMeetingsError_LogsWarnDoesNotPanic verifies that when
-// the store's ListActiveMeetings returns an error (KVList fails), RunOnce logs
-// a warning via API.LogWarn and does not panic or call the end callback.
 func TestRunOnce_ListActiveMeetingsError_LogsWarnDoesNotPanic(t *testing.T) {
 	api := &plugintest.API{}
 	mockLeaderAcquire(api)
@@ -201,8 +190,6 @@ func TestRunOnce_ListActiveMeetingsError_LogsWarnDoesNotPanic(t *testing.T) {
 	api.AssertCalled(t, "LogWarn", mock.AnythingOfType("string"), mock.Anything, mock.Anything)
 }
 
-// TestStartStop_Idempotent verifies that calling Start() twice and Stop() twice
-// does not panic and that the mutex state is consistent.
 func TestStartStop_Idempotent(t *testing.T) {
 	api := &plugintest.API{}
 	api.On("KVGet", leaderKey).Return([]byte(nil), (*model.AppError)(nil)).Maybe()

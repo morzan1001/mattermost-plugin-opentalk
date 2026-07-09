@@ -768,13 +768,6 @@ export function resetHand(participantId: string): void {
     activeClient.resetRaisedHands(participantId);
 }
 
-export function resetAllHands(): void {
-    if (!activeClient) {
-        return;
-    }
-    activeClient.resetRaisedHands();
-}
-
 export function grantScreenShare(participantId: string): void {
     if (!activeClient) {
         return;

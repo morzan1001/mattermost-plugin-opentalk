@@ -1,17 +1,3 @@
-/**
- * controller.test.ts
- *
- * Strategy:
- *   - Mock OpenTalkConferenceClient and LiveKitRoom with tiny EventEmitter shims.
- *     The shims expose a "trigger" function (no underscore) via a module-level
- *     registry so tests can fire events without violating no-underscore-dangle.
- *   - Mock rest / desktop / livekit helpers so no real I/O happens.
- *   - Use a lightweight Redux store (createStore + plain reducer) to inspect
- *     dispatched actions.
- *   - Call _reset() in beforeEach to wipe the module-level singletons.
- *   - Use jest.useFakeTimers() for the heartbeat setInterval.
- */
-
 // eslint-disable-next-line import/order
 import {createStore} from 'redux';
 
@@ -109,7 +95,6 @@ jest.mock('./livekit/room', () => {
         disableMic = jest.fn().mockResolvedValue(undefined);
         enableCam = jest.fn().mockResolvedValue(undefined);
         disableCam = jest.fn().mockResolvedValue(undefined);
-        enableScreenShare = jest.fn().mockResolvedValue(undefined);
         enableScreenShareFromStream = jest.fn().mockResolvedValue(undefined);
         disableScreenShare = jest.fn().mockResolvedValue(undefined);
         isMicEnabled = jest.fn().mockReturnValue(false);
@@ -170,7 +155,6 @@ import {
     grantModerator,
     revokeModerator,
     resetHand,
-    resetAllHands,
     grantScreenShare,
     revokeScreenShare,
     _reset, // eslint-disable-line no-underscore-dangle
@@ -749,7 +733,6 @@ describe('host moderation actions', () => {
         grantModerator('p2');
         revokeModerator('p2');
         resetHand('p2');
-        resetAllHands();
         grantScreenShare('p2');
         revokeScreenShare('p2');
 
@@ -759,7 +742,6 @@ describe('host moderation actions', () => {
         expect(c().grantModerator).toHaveBeenCalledWith('p2');
         expect(c().revokeModerator).toHaveBeenCalledWith('p2');
         expect(c().resetRaisedHands).toHaveBeenCalledWith('p2');
-        expect(c().resetRaisedHands).toHaveBeenCalledWith();
         expect(c().grantScreenShare).toHaveBeenCalledWith(['p2']);
         expect(c().revokeScreenShare).toHaveBeenCalledWith(['p2']);
     });

@@ -168,7 +168,6 @@ const MeetingMiniBar: React.FC = () => {
                     />
                 </div>
 
-                {/* Main content row */}
                 <div
                     ref={rowRef}
                     style={{

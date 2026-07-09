@@ -184,12 +184,6 @@ describe('LiveKitRoom screenshare API', () => {
         mockIsScreenShareEnabled = false;
     });
 
-    it('enableScreenShare calls setScreenShareEnabled(true)', async () => {
-        const r = new LiveKitRoom();
-        await r.enableScreenShare();
-        expect(mockSetScreenShareEnabled).toHaveBeenCalledWith(true);
-    });
-
     it('disableScreenShare calls setScreenShareEnabled(false)', async () => {
         const r = new LiveKitRoom();
         await r.disableScreenShare();

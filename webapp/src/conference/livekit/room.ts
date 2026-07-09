@@ -146,10 +146,6 @@ export class LiveKitRoom {
         return Boolean(this.camTrack);
     }
 
-    public async enableScreenShare(): Promise<void> {
-        await this.room.localParticipant.setScreenShareEnabled(true);
-    }
-
     public async disableScreenShare(): Promise<void> {
         await this.room.localParticipant.setScreenShareEnabled(false);
     }

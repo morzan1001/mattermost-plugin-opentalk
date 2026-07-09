@@ -14,17 +14,3 @@ export function buildFrame<A extends string, P extends object>(namespace: string
         payload: {action, ...payload} as {action: A} & P,
     };
 }
-
-export function isFrame(x: unknown): x is SignalingFrame {
-    if (typeof x !== 'object' || x === null) {
-        return false;
-    }
-    const f = x as Partial<SignalingFrame>;
-    if (typeof f.namespace !== 'string') {
-        return false;
-    }
-    if (typeof f.payload !== 'object' || f.payload === null) {
-        return false;
-    }
-    return typeof (f.payload as {action?: unknown}).action === 'string';
-}

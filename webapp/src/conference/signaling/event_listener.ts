@@ -91,5 +91,3 @@ export class EventListener {
         this.anyListeners.clear();
     }
 }
-
-export type {NormalizedFrame};

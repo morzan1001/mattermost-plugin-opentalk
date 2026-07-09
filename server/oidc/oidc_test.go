@@ -16,8 +16,18 @@ import (
 // mockOIDCServer spins up a minimal OIDC IdP for tests:
 // /.well-known/openid-configuration, /token, /userinfo, /jwks.
 // The returned url.Values captures the form of the last /token request.
-func mockOIDCServer(t *testing.T) (*httptest.Server, *url.Values) {
+// An optional tokenResp overrides the default /token JSON body.
+func mockOIDCServer(t *testing.T, tokenResp ...map[string]any) (*httptest.Server, *url.Values) {
 	t.Helper()
+	token := map[string]any{
+		"access_token":  "access-jwt",
+		"refresh_token": "refresh-jwt",
+		"token_type":    "Bearer",
+		"expires_in":    300,
+	}
+	if len(tokenResp) > 0 {
+		token = tokenResp[0]
+	}
 	tokenForm := &url.Values{}
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -35,12 +45,7 @@ func mockOIDCServer(t *testing.T) (*httptest.Server, *url.Values) {
 		case "/token":
 			_ = r.ParseForm()
 			*tokenForm = r.PostForm
-			json.NewEncoder(w).Encode(map[string]any{
-				"access_token":  "access-jwt",
-				"refresh_token": "refresh-jwt",
-				"token_type":    "Bearer",
-				"expires_in":    300,
-			})
+			json.NewEncoder(w).Encode(token)
 		case "/userinfo":
 			json.NewEncoder(w).Encode(map[string]string{
 				"sub":   "kc-sub-1",

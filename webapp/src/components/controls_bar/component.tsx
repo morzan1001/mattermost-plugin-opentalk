@@ -18,7 +18,7 @@ import {
     ExpandIcon,
 } from '../icons';
 
-export const baseButtonStyle: React.CSSProperties = {
+const baseButtonStyle: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -33,25 +33,25 @@ export const baseButtonStyle: React.CSSProperties = {
     transition: 'background 120ms',
 };
 
-export const activeButtonStyle: React.CSSProperties = {
+const activeButtonStyle: React.CSSProperties = {
     ...baseButtonStyle,
     background: '#2d8cff',
     color: 'white',
 };
 
-export const dangerButtonStyle: React.CSSProperties = {
+const dangerButtonStyle: React.CSSProperties = {
     ...baseButtonStyle,
     background: '#e3354c',
     color: 'white',
 };
 
-export const mutedDangerButtonStyle: React.CSSProperties = {
+const mutedDangerButtonStyle: React.CSSProperties = {
     ...baseButtonStyle,
     background: 'rgba(227, 53, 76, 0.18)',
     color: '#ff7a8a',
 };
 
-export const mutedButtonStyle: React.CSSProperties = {
+const mutedButtonStyle: React.CSSProperties = {
     ...baseButtonStyle,
     background: 'rgba(255,255,255,0.04)',
     color: 'rgba(255,255,255,0.55)',

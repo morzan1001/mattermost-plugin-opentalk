@@ -17,16 +17,11 @@ jest.mock('../../conference/controller', () => ({
     resetHand: jest.fn(),
 }));
 
-jest.mock('../../conference/livekit/track_registry', () => ({
-    get: jest.fn().mockImplementation((id: string) => ({
-        attach: jest.fn(),
-        detach: jest.fn(),
-        sid: id,
-    })),
-    register: jest.fn(),
-    unregister: jest.fn(),
-    clear: jest.fn(),
-}));
+jest.mock('../../conference/livekit/track_registry', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const {makeTrackRegistryMock} = require('../../test/track_registry_mock');
+    return makeTrackRegistryMock((id: string) => ({attach: jest.fn(), detach: jest.fn(), sid: id}));
+});
 
 import {PLUGIN_STATE_KEY} from '../../util/selectors';
 

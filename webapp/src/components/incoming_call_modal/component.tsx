@@ -267,17 +267,14 @@ const IncomingCallModal: React.FC = () => {
                     )}
                 </div>
 
-                {/* Host name */}
                 <div style={{fontSize: 18, fontWeight: 700, marginBottom: 4}}>
                     {`${call.hostName} ${t({de: 'ruft an', en: 'is calling'})}`}
                 </div>
 
-                {/* Subtitle */}
                 <div style={{fontSize: 13, opacity: 0.6, marginBottom: 20}}>
                     {t({de: 'klingelt …', en: 'ringing …'})}
                 </div>
 
-                {/* Buttons */}
                 <div
                     style={{
                         display: 'flex',

@@ -1,32 +1,12 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useRef} from 'react';
 import {useSelector} from 'react-redux';
 
-import * as trackRegistry from '../../conference/livekit/track_registry';
+import {useAttachTrack} from '../../hooks/use_attach_track';
 import {selectLocalParticipantId, selectCamEnabled, selectTracksPerParticipant} from '../../util/selectors';
 
 const SelfPreviewInner: React.FC<{trackId: string}> = ({trackId}) => {
     const elRef = useRef<HTMLVideoElement | null>(null);
-
-    useEffect(() => {
-        const track = trackRegistry.get(trackId);
-        const el = elRef.current;
-        if (!track || !el) {
-            return undefined;
-        }
-        try {
-            track.attach(el);
-        } catch (e) {
-            // eslint-disable-next-line no-console
-            console.warn('[opentalk] self-preview attach failed:', e);
-        }
-        return () => {
-            try {
-                track.detach(el);
-            } catch (e) {
-                /* swallow */
-            }
-        };
-    }, [trackId]);
+    useAttachTrack(trackId, elRef, 'self-preview');
 
     return (
         <video

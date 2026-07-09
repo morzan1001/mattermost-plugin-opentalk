@@ -3,7 +3,6 @@ import {
     activeMeetingStarted,
     activeMeetingEnded,
     activeMeetingDismissed,
-    activeMeetingsReset,
     type ActiveMeetingsState,
 } from './slice_active_meetings';
 
@@ -69,15 +68,6 @@ describe('activeMeetingsReducer', () => {
     it('is a no-op when DISMISSED on absent channelID', () => {
         const state = activeMeetingsReducer(initial, activeMeetingDismissed({channelID: 'nonexistent'}));
         expect(state).toBe(initial);
-    });
-
-    it('empties the map on RESET', () => {
-        let state = activeMeetingsReducer(initial, activeMeetingStarted(am1));
-        state = activeMeetingsReducer(state, activeMeetingStarted(am2));
-        expect(Object.keys(state.byChannelID)).toHaveLength(2);
-
-        state = activeMeetingsReducer(state, activeMeetingsReset());
-        expect(state.byChannelID).toEqual({});
     });
 
     it('handles multiple meetings independently', () => {
