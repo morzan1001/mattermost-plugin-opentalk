@@ -44,8 +44,12 @@ export const MicIcon: React.FC = () => (
     </svg>
 );
 
-export const MicOffIcon: React.FC = () => (
-    <svg {...baseProps}>
+export const MicOffIcon: React.FC<{size?: number}> = ({size = 20}) => (
+    <svg
+        {...baseProps}
+        width={size}
+        height={size}
+    >
         <line
             x1='2'
             x2='22'

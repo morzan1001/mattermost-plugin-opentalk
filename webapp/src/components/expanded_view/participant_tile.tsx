@@ -9,7 +9,7 @@ import {selectParticipantsById, selectPinnedParticipantId, selectTracksPerPartic
 import {CrownIcon, HandIcon, MicOffIcon, PinIcon, PinOffIcon} from '../icons';
 import {ParticipantMenu} from '../participant_menu/component';
 
-function initialsOf(name: string | undefined): string {
+export function initialsOf(name: string | undefined): string {
     const safe = (name ?? '').trim();
     if (!safe) {
         return '';
