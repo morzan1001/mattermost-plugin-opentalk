@@ -138,3 +138,11 @@ export function selectChannelType(state: AnyState, channelId: string | undefined
     }
     return state?.entities?.channels?.channels?.[channelId]?.type as string | undefined;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function selectChannelDisplayName(state: AnyState, channelId: string | undefined): string | undefined {
+    if (!channelId) {
+        return undefined;
+    }
+    return state?.entities?.channels?.channels?.[channelId]?.display_name as string | undefined;
+}

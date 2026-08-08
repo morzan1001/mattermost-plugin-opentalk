@@ -51,7 +51,7 @@ const mutedDangerButtonStyle: React.CSSProperties = {
     color: '#ff7a8a',
 };
 
-const mutedButtonStyle: React.CSSProperties = {
+export const mutedButtonStyle: React.CSSProperties = {
     ...baseButtonStyle,
     background: 'rgba(255,255,255,0.04)',
     color: 'rgba(255,255,255,0.55)',

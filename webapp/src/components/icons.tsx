@@ -282,6 +282,63 @@ export const PinOffIcon: React.FC<{size?: number}> = ({size = 16}) => (
     </svg>
 );
 
+export const PanelIcon: React.FC<{size?: number}> = ({size = 20}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth='2'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+    >
+        <rect
+            x='3'
+            y='4'
+            width='18'
+            height='16'
+            rx='2'
+        />
+        <line
+            x1='15'
+            y1='4'
+            x2='15'
+            y2='20'
+        />
+    </svg>
+);
+
+export const FullscreenIcon: React.FC<{size?: number}> = ({size = 20}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth='2'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+    >
+        <path d='M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M16 21h3a2 2 0 0 0 2-2v-3M8 21H5a2 2 0 0 1-2-2v-3'/>
+    </svg>
+);
+
+export const FullscreenExitIcon: React.FC<{size?: number}> = ({size = 20}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth='2'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+    >
+        <path d='M8 3v3a2 2 0 0 1-2 2H3M16 3v3a2 2 0 0 0 2 2h3M16 21v-3a2 2 0 0 1 2-2h3M8 21v-3a2 2 0 0 0-2-2H3'/>
+    </svg>
+);
+
 export const OpenTalkLogoIcon: React.FC<{size?: number}> = ({size = 24}) => (
     <svg
         width={size}

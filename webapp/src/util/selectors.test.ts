@@ -8,6 +8,7 @@ import {
     selectCurrentDisplayName,
     selectPinnedParticipantId,
     selectScreenSharerId,
+    selectChannelDisplayName,
     PLUGIN_STATE_KEY,
 } from './selectors';
 
@@ -109,6 +110,14 @@ describe('selectScreenSharerId', () => {
         }};
         expect(selectScreenSharerId(state)).toBe('p2');
         expect(selectScreenSharerId({})).toBeUndefined();
+    });
+});
+
+describe('selectChannelDisplayName', () => {
+    it('selectChannelDisplayName reads the Mattermost channel entity', () => {
+        const state = {entities: {channels: {channels: {c1: {display_name: 'Team'}}}}};
+        expect(selectChannelDisplayName(state, 'c1')).toBe('Team');
+        expect(selectChannelDisplayName(state, undefined)).toBeUndefined();
     });
 });
 
