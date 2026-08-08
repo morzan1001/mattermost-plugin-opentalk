@@ -21,9 +21,10 @@ jest.mock('../../conference/livekit/track_registry', () => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeStore(participants: any, tracks: any = {}) {
+    const resolved = Array.isArray(participants) ? makeParticipants(participants) : participants;
     return createStore(() => ({
         [stateKey]: {
-            participants,
+            participants: resolved,
             tracks: {perParticipant: {}, ...tracks},
         },
     }));
@@ -94,5 +95,17 @@ describe('GridLayout', () => {
         );
         expect(screen.getByTestId('grid-layout')).toBeInTheDocument();
         expect(screen.queryByTestId('grid-layout-empty')).not.toBeInTheDocument();
+    });
+
+    it('renders the grid with explicit measured columns', () => {
+        // ResizeObserver is absent in jsdom, so the fit stays zero-sized; the grid
+        // must still render one tile per participant without throwing.
+        const store = makeStore(['p1', 'p2', 'p3']);
+        const {container} = render(<Provider store={store}><GridLayout/></Provider>);
+        const grid = container.querySelector('[data-testid="grid-layout"]') as HTMLElement;
+        expect(grid.style.display).toBe('grid');
+        expect(grid.style.gridTemplateColumns).toMatch(/^repeat\(\d+,\s*\d+(\.\d+)?px\)$/);
+        expect(grid.style.gridTemplateColumns).not.toContain('auto-fit');
+        expect(screen.getAllByTestId(/^participant-tile-/)).toHaveLength(3);
     });
 });

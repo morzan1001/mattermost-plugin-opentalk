@@ -1,4 +1,5 @@
 import {useEffect, useRef, useState} from 'react';
+import type React from 'react';
 
 export interface GridFit {
     columns: number;
@@ -33,7 +34,7 @@ export function bestGridFit(count: number, width: number, height: number, gap: n
     return best;
 }
 
-export function useGridDimensions(count: number, gap = 8): {containerRef: React.RefObject<HTMLDivElement | null>; fit: GridFit} {
+export function useGridDimensions(count: number, gap = 8): {containerRef: React.MutableRefObject<HTMLDivElement | null>; fit: GridFit} {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [size, setSize] = useState<{width: number; height: number}>({width: 0, height: 0});
 

@@ -3,12 +3,14 @@ import {useSelector} from 'react-redux';
 
 import {ParticipantTile} from './participant_tile';
 
+import {useGridDimensions} from '../../hooks/use_grid_dimensions';
 import {useT} from '../../util/i18n';
 import {selectParticipantOrder} from '../../util/selectors';
 
 export const GridLayout: React.FC = () => {
     const t = useT();
     const order = useSelector(selectParticipantOrder);
+    const {containerRef, fit} = useGridDimensions(order.length);
 
     if (order.length === 0) {
         return (
@@ -32,24 +34,27 @@ export const GridLayout: React.FC = () => {
 
     return (
         <div
+            ref={containerRef}
             data-testid='grid-layout'
             style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gridTemplateColumns: `repeat(${fit.columns}, ${fit.tileWidth}px)`,
                 gap: 8,
                 padding: 16,
                 width: '100%',
                 height: '100%',
-                overflow: 'auto',
+                alignContent: 'center',
+                justifyContent: 'center',
                 boxSizing: 'border-box',
+                overflow: 'hidden',
             }}
         >
             {order.map((id: string) => (
                 <ParticipantTile
                     key={id}
                     participantId={id}
-                    width='100%'
-                    height={140}
+                    width={fit.tileWidth}
+                    height={fit.tileHeight}
                 />
             ))}
         </div>
