@@ -6,7 +6,7 @@ import {createStore} from 'redux';
 // mock factories can use it to hand instances back to tests.
 jest.mock('./controller.test.helpers', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const reg: {client: any; lk: any} = {client: null, lk: null};
+    const reg: {client: any; lk: any; livekitConnectError: Error | null} = {client: null, lk: null, livekitConnectError: null};
     return {
         reg,
         setClient(c: unknown) {
@@ -89,7 +89,7 @@ jest.mock('./livekit/room', () => {
             (this.listeners[ev] || []).slice().forEach((cb: (x: unknown) => void) => cb(d));
         }
 
-        connect = jest.fn().mockResolvedValue(undefined);
+        connect = jest.fn().mockImplementation(() => (helpers.reg.livekitConnectError ? Promise.reject(helpers.reg.livekitConnectError) : Promise.resolve()));
         disconnect = jest.fn().mockResolvedValue(undefined);
         enableMic = jest.fn().mockResolvedValue(undefined);
         disableMic = jest.fn().mockResolvedValue(undefined);
@@ -223,6 +223,7 @@ beforeEach(() => {
     _reset(); // eslint-disable-line no-underscore-dangle
     helpers.reg.client = null;
     helpers.reg.lk = null;
+    helpers.reg.livekitConnectError = null;
     dispatched = [];
     mockFetch.mockReset();
     mockFetch.mockResolvedValue({ok: true, json: async () => ({})});
@@ -263,6 +264,36 @@ describe('startConferenceConnection', () => {
         const prevLen = dispatched.length;
         startConferenceConnection('room-1', 'ch-1', 'Alice', store);
         expect(dispatched.length).toBe(prevLen);
+    });
+});
+
+describe('"livekit_credentials" client event', () => {
+    it('surfaces a notice when the media connection cannot be established', async () => {
+        const store = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+
+        helpers.reg.livekitConnectError = new Error('could not establish pc connection');
+        c().trigger('livekit_credentials', {url: 'wss://livekit.example', token: 'tok'});
+        await Promise.resolve();
+        await Promise.resolve();
+
+        const notice = dispatched.find((a) => a.type === 'opentalk/notice/set');
+        expect(notice?.payload?.kind).toBe('error');
+        expect(notice?.payload?.message).toContain('Audio');
+        expect(dispatched.some((a) => a.type === 'opentalk/session/set_livekit_connected' && a.payload?.value === false)).toBe(true);
+    });
+
+    it('dispatches no notice when the media connection succeeds', async () => {
+        const store = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+
+        c().trigger('livekit_credentials', {url: 'wss://livekit.example', token: 'tok'});
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(dispatched.find((a) => a.type === 'opentalk/notice/set')).toBeUndefined();
     });
 });
 
