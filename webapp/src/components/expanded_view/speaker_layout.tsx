@@ -4,13 +4,14 @@ import {useSelector} from 'react-redux';
 import {ParticipantTile} from './participant_tile';
 
 import {useT} from '../../util/i18n';
-import {selectParticipantOrder, selectParticipantsById, selectActiveSpeakers} from '../../util/selectors';
+import {selectParticipantOrder, selectParticipantsById, selectActiveSpeakers, selectPinnedParticipantId} from '../../util/selectors';
 
 export const SpeakerLayout: React.FC = () => {
     const t = useT();
     const order = useSelector(selectParticipantOrder);
     const byId = useSelector(selectParticipantsById);
     const activeSpeakers = useSelector(selectActiveSpeakers);
+    const pinnedId = useSelector(selectPinnedParticipantId);
 
     if (order.length === 0) {
         return (
@@ -33,7 +34,7 @@ export const SpeakerLayout: React.FC = () => {
     }
 
     const activeSpeakerId = activeSpeakers.find((id: string) => byId[id] != null);
-    const speakerId: string = activeSpeakerId ?? order[0];
+    const speakerId: string = (pinnedId && byId[pinnedId] ? pinnedId : undefined) ?? activeSpeakerId ?? order[0];
 
     const otherIds: string[] = order.filter((id: string) => id !== speakerId);
 
@@ -42,7 +43,10 @@ export const SpeakerLayout: React.FC = () => {
             data-testid='speaker-layout'
             style={{display: 'flex', width: '100%', height: '100%', gap: 8, padding: 16, boxSizing: 'border-box'}}
         >
-            <div style={{flex: 1, minWidth: 0}}>
+            <div
+                data-testid='speaker-layout-main'
+                style={{flex: 1, minWidth: 0}}
+            >
                 <ParticipantTile
                     participantId={speakerId}
                     width='100%'
@@ -50,7 +54,7 @@ export const SpeakerLayout: React.FC = () => {
                 />
             </div>
             {otherIds.length > 0 && (
-                <div style={{width: 200, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', flexShrink: 0}}>
+                <div style={{width: 'clamp(160px, 15%, 260px)', display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', flexShrink: 0}}>
                     {otherIds.map((id) => (
                         <ParticipantTile
                             key={id}

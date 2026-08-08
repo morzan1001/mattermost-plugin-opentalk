@@ -20,11 +20,12 @@ jest.mock('../../conference/livekit/track_registry', () => {
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeStore(participants: any, tracks: any = {}) {
+function makeStore(participants: any, tracks: any = {}, session: any = {}) {
     return createStore(() => ({
         [stateKey]: {
             participants,
             tracks: {perParticipant: {}, activeSpeakers: [], ...tracks},
+            session,
         },
     }));
 }
@@ -138,5 +139,20 @@ describe('SpeakerLayout', () => {
         const tiles = screen.getAllByTestId(/^participant-tile-(?!(video|muted|moderator|pin)-)/);
         expect(tiles).toHaveLength(4);
         expect(tiles[0].getAttribute('data-testid')).toBe('participant-tile-p1');
+    });
+
+    it('shows the pinned participant in the main slot instead of the active speaker', () => {
+        const store = makeStore(
+            makeParticipants(['p1', 'p2']),
+            {activeSpeakers: ['p1']},
+            {pinnedParticipantId: 'p2'},
+        );
+        render(
+            <Provider store={store}>
+                <SpeakerLayout/>
+            </Provider>,
+        );
+        const main = screen.getByTestId('speaker-layout-main');
+        expect(main.querySelector('[data-testid="participant-tile-p2"]')).not.toBeNull();
     });
 });

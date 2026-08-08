@@ -4,15 +4,13 @@ import {useSelector} from 'react-redux';
 import {GridLayout} from './grid_layout';
 import {ParticipantTile} from './participant_tile';
 
-import {selectParticipantOrder, selectTracksPerParticipant} from '../../util/selectors';
+import {selectParticipantOrder, selectScreenSharerId, selectTracksPerParticipant} from '../../util/selectors';
 
 export const ScreenFocusLayout: React.FC = () => {
     const order = useSelector(selectParticipantOrder);
     const perParticipant = useSelector(selectTracksPerParticipant);
+    const screenSharerId = useSelector(selectScreenSharerId);
 
-    const screenSharerId: string | undefined = order.find(
-        (id: string) => Boolean(perParticipant[id]?.screenTrackId),
-    );
     const screenTrackId = screenSharerId === undefined ? undefined : perParticipant[screenSharerId].screenTrackId;
     if (screenSharerId === undefined || screenTrackId === undefined) {
         return <GridLayout/>;
@@ -32,7 +30,7 @@ export const ScreenFocusLayout: React.FC = () => {
                 />
             </div>
             <div style={{width: 200, display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', flexShrink: 0}}>
-                {order.map((id: string) => (
+                {order.filter((id: string) => id !== screenSharerId).map((id: string) => (
                     <ParticipantTile
                         key={id}
                         participantId={id}

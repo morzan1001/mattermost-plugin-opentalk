@@ -98,6 +98,11 @@ export function selectActiveSpeakers(state: AnyState): string[] {
     return state?.[stateKey]?.tracks?.activeSpeakers ?? [];
 }
 
+export function selectScreenSharerId(state: AnyState): string | undefined {
+    const perParticipant = selectTracksPerParticipant(state);
+    return selectParticipantOrder(state).find((id) => Boolean(perParticipant[id]?.screenTrackId));
+}
+
 // Incoming calls slice
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
