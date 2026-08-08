@@ -25,13 +25,10 @@ const MeetingMiniBar: React.FC = () => {
     const isDM = channelType === 'D' || channelType === 'G';
     const [showLeavePrompt, setShowLeavePrompt] = useState(false);
 
-    const drag = useDraggable({
-        storageKey: 'opentalk:widget-position:v2',
-        defaultPosition: {
-            x: window.innerWidth - 620,
-            y: window.innerHeight - 100,
-        },
-    });
+    const drag = useDraggable({storageKey: 'opentalk:widget-position:v3'});
+
+    // react-hooks/refs rejects reading the ref off the hook result inside JSX.
+    const {nodeRef} = drag;
 
     const localId = useSelector(selectLocalParticipantId);
     const order = useSelector(selectParticipantOrder);
@@ -127,6 +124,7 @@ const MeetingMiniBar: React.FC = () => {
     return (
         <>
             <div
+                ref={nodeRef}
                 className='opentalk-mini-bar'
                 style={{
                     background: '#1c2230',
