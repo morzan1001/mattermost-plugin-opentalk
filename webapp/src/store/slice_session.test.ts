@@ -1,3 +1,4 @@
+import {participantRemoved} from './slice_participants';
 import {
     sessionReducer,
     connectStarted,
@@ -13,6 +14,7 @@ import {
     setMinimized,
     setRaiseHandsEnabled,
     setIsHost,
+    setPinnedParticipant,
 } from './slice_session';
 
 describe('sessionReducer', () => {
@@ -238,5 +240,27 @@ describe('sessionReducer', () => {
 
         const guest = sessionReducer(undefined, connected({participantCount: 1, isHost: false, isRoomOwner: false}));
         expect(sessionReducer(guest, setIsHost(true)).isRoomOwner).toBe(false);
+    });
+
+    it('setPinnedParticipant stores and clears the pinned id', () => {
+        const pinned = sessionReducer(undefined, setPinnedParticipant('p1'));
+        expect(pinned.pinnedParticipantId).toBe('p1');
+        expect(sessionReducer(pinned, setPinnedParticipant(null)).pinnedParticipantId).toBeUndefined();
+    });
+
+    it('clears the pin when the pinned participant is removed', () => {
+        const pinned = sessionReducer(undefined, setPinnedParticipant('p1'));
+        const after = sessionReducer(pinned, participantRemoved({id: 'p1'}));
+        expect(after.pinnedParticipantId).toBeUndefined();
+    });
+
+    it('keeps the pin when a different participant is removed', () => {
+        const pinned = sessionReducer(undefined, setPinnedParticipant('p1'));
+        expect(sessionReducer(pinned, participantRemoved({id: 'p2'})).pinnedParticipantId).toBe('p1');
+    });
+
+    it('clears the pin on disconnect', () => {
+        const pinned = sessionReducer(undefined, setPinnedParticipant('p1'));
+        expect(sessionReducer(pinned, disconnected()).pinnedParticipantId).toBeUndefined();
     });
 });

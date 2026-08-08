@@ -30,6 +30,11 @@ export function selectLocalParticipantId(state: AnyState): string | undefined {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function selectPinnedParticipantId(state: AnyState): string | undefined {
+    return state?.[stateKey]?.session?.pinnedParticipantId as string | undefined;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function selectIsExpanded(state: AnyState): boolean {
     return state?.[stateKey]?.session?.expanded ?? false;
 }

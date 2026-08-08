@@ -6,6 +6,7 @@ import {
     selectIsExpanded,
     selectIsMinimized,
     selectCurrentDisplayName,
+    selectPinnedParticipantId,
     PLUGIN_STATE_KEY,
 } from './selectors';
 
@@ -89,6 +90,13 @@ describe('selectLocalParticipantId', () => {
 
     it('returns undefined for null state', () => {
         expect(selectLocalParticipantId(null)).toBeUndefined();
+    });
+});
+
+describe('selectPinnedParticipantId', () => {
+    it('selectPinnedParticipantId reads the pinned id', () => {
+        expect(selectPinnedParticipantId({[PLUGIN_STATE_KEY]: {session: {pinnedParticipantId: 'p1'}}})).toBe('p1');
+        expect(selectPinnedParticipantId({})).toBeUndefined();
     });
 });
 
