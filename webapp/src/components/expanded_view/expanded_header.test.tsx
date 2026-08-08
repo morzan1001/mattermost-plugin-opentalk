@@ -55,6 +55,16 @@ describe('ExpandedHeader', () => {
         expect(screen.getByText('OpenTalk meeting')).toBeInTheDocument();
     });
 
+    it('counts participants with a singular noun at one', () => {
+        renderHeader({participantCount: 1});
+        expect(screen.getByText('1 participant')).toBeInTheDocument();
+    });
+
+    it('counts participants with a plural noun above one', () => {
+        renderHeader({participantCount: 3});
+        expect(screen.getByText('3 participants')).toBeInTheDocument();
+    });
+
     it('names the participant who is sharing their screen', () => {
         renderHeader({sharer: {id: 'p2', displayName: 'Bernd'}});
         expect(screen.getByTestId('expanded-header-sharing')).toHaveTextContent('Bernd');

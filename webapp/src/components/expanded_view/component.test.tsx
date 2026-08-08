@@ -260,6 +260,28 @@ describe('ExpandedView', () => {
             expect(store.dispatch).toHaveBeenCalledWith(setExpanded(false));
         });
 
+        it('collapses through the Minimize button', () => {
+            const store = renderExpanded({});
+            fireEvent.click(screen.getByTitle('Minimize'));
+            expect(store.dispatch).toHaveBeenCalledWith(setExpanded(false));
+        });
+
+        it('closes an open leave prompt on Escape instead of collapsing', () => {
+            const store = makeStore({expanded: true, status: 'connected', isHost: true, isRoomOwner: true});
+            store.dispatch = jest.fn();
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            fireEvent.click(screen.getByRole('button', {name: /Leave or end meeting/}));
+            expect(screen.getByRole('button', {name: 'End meeting for everyone'})).toBeInTheDocument();
+
+            fireEvent.keyDown(window, {key: 'Escape'});
+            expect(screen.queryByRole('button', {name: 'End meeting for everyone'})).toBeNull();
+            expect(store.dispatch).not.toHaveBeenCalledWith(setExpanded(false));
+        });
+
         it('toggles the microphone on M', () => {
             renderExpanded({});
             fireEvent.keyDown(window, {key: 'm'});
@@ -362,13 +384,29 @@ describe('ExpandedView', () => {
             fireEvent.click(screen.getByTestId('participant-menu-trigger-p1'));
             expect(overlay).not.toContainElement(screen.getByTestId('participant-menu-mute-p1'));
         });
+    });
 
-        it('drops a pending leave prompt when the view collapses', () => {
-            renderAsHost();
+    describe('leave prompt lifecycle', () => {
+        it('drops a pending leave prompt when the meeting ends from outside', () => {
+            const owner = {expanded: true, status: 'connected', isHost: true, isRoomOwner: true};
+            const {rerender} = render(
+                <Provider store={makeStore(owner)}>
+                    <ExpandedView/>
+                </Provider>,
+            );
             fireEvent.click(screen.getByRole('button', {name: /Leave or end meeting/}));
             expect(screen.getByRole('button', {name: 'End meeting for everyone'})).toBeInTheDocument();
 
-            fireEvent.keyDown(window, {key: 'Escape'});
+            rerender(
+                <Provider store={makeStore({...owner, status: 'idle'})}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            rerender(
+                <Provider store={makeStore(owner)}>
+                    <ExpandedView/>
+                </Provider>,
+            );
             expect(screen.queryByRole('button', {name: 'End meeting for everyone'})).toBeNull();
         });
     });

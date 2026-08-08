@@ -7,19 +7,12 @@ export function useAutoHide(enabled: boolean, idleMs = 4000): {
     const [hidden, setHidden] = useState(false);
     const heldRef = useRef(false);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const wasEnabledRef = useRef(enabled);
 
     const arm = useCallback(() => {
         if (timerRef.current !== null) {
             clearTimeout(timerRef.current);
             timerRef.current = null;
         }
-
-        // Reset before the held guard below, so a held re-enable still clears stale hidden state.
-        if (enabled && !wasEnabledRef.current) {
-            setHidden(false);
-        }
-        wasEnabledRef.current = enabled;
         if (!enabled || heldRef.current) {
             return;
         }
@@ -28,7 +21,6 @@ export function useAutoHide(enabled: boolean, idleMs = 4000): {
 
     useEffect(() => {
         if (!enabled) {
-            wasEnabledRef.current = false;
             return undefined;
         }
         const onActivity = () => {
@@ -48,6 +40,19 @@ export function useAutoHide(enabled: boolean, idleMs = 4000): {
         };
     }, [enabled, arm]);
 
+    // A held element can unmount while the pointer rests on it (the control bar's Minimize
+    // button), and React fires no pointer-leave for an unmounted node. Keyed on `enabled`
+    // alone so an idleMs change cannot drop a live hold.
+    useEffect(() => {
+        if (!enabled) {
+            return undefined;
+        }
+        return () => {
+            heldRef.current = false;
+            setHidden(false);
+        };
+    }, [enabled]);
+
     const onPointerEnter = useCallback(() => {
         heldRef.current = true;
         setHidden(false);
@@ -59,7 +64,7 @@ export function useAutoHide(enabled: boolean, idleMs = 4000): {
         arm();
     }, [arm]);
 
-    // Derived rather than stored: disabling shows the chrome immediately, and arm()
-    // above resets `hidden` on re-enable so a stale hidden state doesn't carry over.
+    // Derived rather than stored: disabling shows the chrome immediately, and the reset
+    // effect above clears `hidden` on the way out so no stale state reaches the next call.
     return {visible: !enabled || !hidden, holdProps: {onPointerEnter, onPointerLeave}};
 }

@@ -1,4 +1,4 @@
-import React, {useMemo, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import ReactDOM from 'react-dom';
 import {useDispatch, useSelector} from 'react-redux';
 
@@ -63,9 +63,18 @@ const ExpandedView: React.FC = () => {
         onToggleScreen: () => toggleScreenShare(),
         onToggleHand: () => (isRaised ? lowerLocalHand() : raiseLocalHand()),
         onToggleFullscreen: toggleFullscreen,
-        onCollapse: collapse,
+        onCollapse: () => (showLeavePrompt ? setShowLeavePrompt(false) : collapse()),
         onSetLayout: setMode,
     });
+
+    // This root component never unmounts, so a meeting ended from outside would
+    // otherwise carry an open prompt into the next call.
+    useEffect(() => {
+        if (!active) {
+            return undefined;
+        }
+        return () => setShowLeavePrompt(false);
+    }, [active]);
 
     if (!active) {
         return null;
@@ -133,7 +142,9 @@ const ExpandedView: React.FC = () => {
                             background: 'rgba(0, 181, 156, 0.12)',
                             borderBottom: '1px solid rgba(0, 181, 156, 0.3)',
                             fontSize: 13,
+                            ...chromeStyle,
                         }}
+                        {...chrome.holdProps}
                     >
                         <HandIcon/>
                         <span style={{color: '#00B59C', fontWeight: 600, marginRight: 6}}>{t({de: 'Wartereihe:', en: 'Queue:'})}</span>

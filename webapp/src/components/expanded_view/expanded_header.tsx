@@ -51,7 +51,7 @@ export const ExpandedHeader: React.FC<ExpandedHeaderProps> = ({mode, onModeChang
             }}
         >
             <span style={{fontSize: 14, fontWeight: 600}}>{channelName || t({de: 'OpenTalk-Meeting', en: 'OpenTalk meeting'})}</span>
-            <span style={metaStyle}>{`${participantCount} ${t({de: 'Teilnehmer', en: 'participants'})}`}</span>
+            <span style={metaStyle}>{`${participantCount} ${t({de: 'Teilnehmer', en: participantCount === 1 ? 'participant' : 'participants'})}`}</span>
             {duration && <span style={metaStyle}>{duration}</span>}
             {sharerName && (
                 <span

@@ -229,7 +229,8 @@ export const ParticipantMenu: React.FC<ParticipantMenuProps> = ({participantId})
                 </div>,
 
                 // The fullscreen element is promoted to the top layer, so anything
-                // portaled to the body stays hidden behind its backdrop.
+                // portaled to the body stays hidden behind its backdrop. Re-read on every
+                // tile render -- memoizing ParticipantTile would freeze it on the body.
                 document.fullscreenElement ?? document.body,
             )}
         </>

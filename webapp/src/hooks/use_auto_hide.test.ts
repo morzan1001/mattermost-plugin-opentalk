@@ -64,6 +64,21 @@ it('requires a fresh idle period after a disable/enable cycle', () => {
     expect(result.current.visible).toBe(false);
 });
 
+it('re-arms after a disable/enable cycle that unmounted the held element without a pointer leave', () => {
+    const {result, rerender} = renderHook(({enabled}) => useAutoHide(enabled, 4000), {
+        initialProps: {enabled: true},
+    });
+
+    act(() => result.current.holdProps.onPointerEnter());
+    rerender({enabled: false});
+    rerender({enabled: true});
+
+    act(() => {
+        jest.advanceTimersByTime(4000);
+    });
+    expect(result.current.visible).toBe(false);
+});
+
 it('does not strand the chrome hidden when the pointer is already resting through a disable/enable cycle', () => {
     const {result, rerender} = renderHook(({enabled}) => useAutoHide(enabled, 4000), {
         initialProps: {enabled: true},

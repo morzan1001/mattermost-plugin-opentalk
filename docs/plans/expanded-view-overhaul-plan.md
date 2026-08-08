@@ -6,7 +6,7 @@
 
 **Architecture:** `components/expanded_view/component.tsx` is reduced to orchestration; the header and the participant panel become their own components; five hooks under `webapp/src/hooks/` carry the interaction and sizing logic. Pin state lives in `slice_session` next to the existing `expanded`/`minimized` flags. No signaling, server, or protocol changes.
 
-**Tech Stack:** TypeScript, React 17 function components, Redux (hand-rolled reducers, no toolkit), Jest + @testing-library/react, inline styles.
+**Tech Stack:** TypeScript, React 18 function components, Redux (hand-rolled reducers, no toolkit), Jest + @testing-library/react, inline styles.
 
 **Design doc:** `docs/plans/expanded-view-overhaul.md`
 
