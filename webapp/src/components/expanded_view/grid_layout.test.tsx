@@ -81,7 +81,7 @@ describe('GridLayout', () => {
                 <GridLayout/>
             </Provider>,
         );
-        const tiles = screen.getAllByTestId(/^participant-tile-/);
+        const tiles = screen.getAllByTestId(/^participant-tile-(?!(video|muted|moderator|pin)-)/);
         const ids = tiles.map((el) => el.getAttribute('data-testid')?.replace('participant-tile-', ''));
         expect(ids).toEqual(['c', 'a', 'b']);
     });
@@ -106,6 +106,6 @@ describe('GridLayout', () => {
         expect(grid.style.display).toBe('grid');
         expect(grid.style.gridTemplateColumns).toMatch(/^repeat\(\d+,\s*\d+(\.\d+)?px\)$/);
         expect(grid.style.gridTemplateColumns).not.toContain('auto-fit');
-        expect(screen.getAllByTestId(/^participant-tile-/)).toHaveLength(3);
+        expect(screen.getAllByTestId(/^participant-tile-(?!(video|muted|moderator|pin)-)/)).toHaveLength(3);
     });
 });

@@ -85,8 +85,8 @@ describe('ScreenFocusLayout', () => {
         expect(screen.getByTestId('screen-focus-layout')).toBeInTheDocument();
         expect(screen.queryByTestId('grid-layout')).not.toBeInTheDocument();
 
-        // The main pane should show p2's tile (match only exact tile divs, not video elements)
-        const tiles = screen.getAllByTestId(/^participant-tile-p/);
+        // The main pane should show p2's tile (match only exact tile divs, not video/badge/pin elements)
+        const tiles = screen.getAllByTestId(/^participant-tile-(?!(video|muted|moderator|pin)-)/);
 
         // Total tiles: 1 (main) + 4 (filmstrip) = 5 (p2 appears twice: once in main pane, once in filmstrip)
         expect(tiles).toHaveLength(5);
@@ -120,7 +120,7 @@ describe('ScreenFocusLayout', () => {
         expect(screen.getByTestId('screen-focus-layout')).toBeInTheDocument();
 
         // p3 appears first in order with screenTrackId, so p3 is main
-        const tiles = screen.getAllByTestId(/^participant-tile-p/);
+        const tiles = screen.getAllByTestId(/^participant-tile-(?!(video|muted|moderator|pin)-)/);
         expect(tiles[0].getAttribute('data-testid')).toBe('participant-tile-p3');
     });
 });
