@@ -33,7 +33,7 @@ const triggerStyle: React.CSSProperties = {
     cursor: 'pointer',
 };
 
-// Portaled to document.body: the tile root clips overflow, so an in-tree
+// Portaled out of the tree: the tile root clips overflow, so an in-tree
 // popover would be cut off. z-index above the expanded view (9998), mini
 // bar (9999) and leave modal (10001).
 const menuStyle: React.CSSProperties = {
@@ -227,7 +227,10 @@ export const ParticipantMenu: React.FC<ParticipantMenuProps> = ({participantId})
                         {t({de: 'Verbannen', en: 'Ban'})}
                     </button>
                 </div>,
-                document.body,
+
+                // The fullscreen element is promoted to the top layer, so anything
+                // portaled to the body stays hidden behind its backdrop.
+                document.fullscreenElement ?? document.body,
             )}
         </>
     );

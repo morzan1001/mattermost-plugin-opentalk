@@ -1,19 +1,24 @@
-import React, {useMemo, useState} from 'react';
+import React, {useMemo, useRef, useState} from 'react';
+import ReactDOM from 'react-dom';
 import {useDispatch, useSelector} from 'react-redux';
 
+import {ExpandedHeader} from './expanded_header';
 import {GridLayout} from './grid_layout';
-import {LayoutSwitcher} from './layout_switcher';
+import {ParticipantPanel} from './participant_panel';
 import {ScreenFocusLayout} from './screen_focus_layout';
 import {SpeakerLayout} from './speaker_layout';
 
-import {leaveActiveConference, endActiveMeeting, resetHand} from '../../conference/controller';
+import {leaveActiveConference, endActiveMeeting, resetHand, toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand} from '../../conference/controller';
+import {useAutoHide} from '../../hooks/use_auto_hide';
+import {useCallShortcuts} from '../../hooks/use_call_shortcuts';
+import {useFullscreen} from '../../hooks/use_fullscreen';
 import {useLayoutMode} from '../../hooks/use_layout_mode';
-import {useMeetingDuration} from '../../hooks/use_meeting_duration';
+import {usePanelOpen} from '../../hooks/use_panel_open';
 import type {ParticipantInfo} from '../../store/slice_participants';
 import type {SessionStatus} from '../../store/slice_session';
 import {setExpanded} from '../../store/slice_session';
 import {useT} from '../../util/i18n';
-import {selectIsExpanded, selectIsHost, selectIsRoomOwner, selectJoinedAt, selectSessionStatus, selectParticipantOrder, selectParticipantsById, selectChannelID, selectChannelType} from '../../util/selectors';
+import {selectIsExpanded, selectIsHost, selectIsRoomOwner, selectLocalParticipantId, selectSessionStatus, selectParticipantOrder, selectParticipantsById, selectChannelID, selectChannelType} from '../../util/selectors';
 import {ControlsBar} from '../controls_bar/component';
 import {HandIcon} from '../icons';
 import {LeaveCallModal} from '../leave_call_modal';
@@ -24,7 +29,6 @@ const ExpandedView: React.FC = () => {
     const status = useSelector(selectSessionStatus) as SessionStatus;
     const isHost = useSelector(selectIsHost);
     const isRoomOwner = useSelector(selectIsRoomOwner);
-    const joinedAt = useSelector(selectJoinedAt);
     const channelID = useSelector(selectChannelID);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const channelType = useSelector((s: any) => selectChannelType(s, channelID));
@@ -32,19 +36,46 @@ const ExpandedView: React.FC = () => {
 
     const order = useSelector(selectParticipantOrder);
     const byId = useSelector(selectParticipantsById);
+    const localParticipantId = useSelector(selectLocalParticipantId);
+    const isRaised = localParticipantId ? Boolean(byId[localParticipantId]?.handRaised) : false;
     const raisedParticipants = useMemo<ParticipantInfo[]>(
         () => order.map((id) => byId[id]).filter((p): p is ParticipantInfo => Boolean(p) && p.handRaised === true),
         [order, byId],
     );
 
     const [mode, setMode] = useLayoutMode();
-    const duration = useMeetingDuration(joinedAt);
     const dispatch = useDispatch();
     const [showLeavePrompt, setShowLeavePrompt] = useState(false);
+    const collapse = () => {
+        setShowLeavePrompt(false);
+        dispatch(setExpanded(false));
+    };
 
-    if (!expanded || status !== 'connected') {
+    const overlayRef = useRef<HTMLDivElement | null>(null);
+    const [panelOpen, setPanelOpen] = usePanelOpen();
+    const {isFullscreen, toggle: toggleFullscreen} = useFullscreen(overlayRef);
+    const active = expanded && status === 'connected';
+    const chrome = useAutoHide(active);
+
+    useCallShortcuts(active, {
+        onToggleMic: () => toggleMic(),
+        onToggleCam: () => toggleCam(),
+        onToggleScreen: () => toggleScreenShare(),
+        onToggleHand: () => (isRaised ? lowerLocalHand() : raiseLocalHand()),
+        onToggleFullscreen: toggleFullscreen,
+        onCollapse: collapse,
+        onSetLayout: setMode,
+    });
+
+    if (!active) {
         return null;
     }
+
+    const chromeStyle: React.CSSProperties = {
+        opacity: chrome.visible ? 1 : 0,
+        pointerEvents: chrome.visible ? 'auto' : 'none',
+        transition: 'opacity 200ms ease',
+    };
 
     const onLeaveClick = () => {
         // Only the room owner can end for everyone; the server end-endpoint
@@ -63,6 +94,7 @@ const ExpandedView: React.FC = () => {
     return (
         <>
             <div
+                ref={overlayRef}
                 data-testid='expanded-view'
                 style={{
                     position: 'fixed',
@@ -76,23 +108,16 @@ const ExpandedView: React.FC = () => {
                 }}
             >
                 <div
-                    style={{
-                        height: 56,
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 16,
-                        padding: '0 16px',
-                        background: 'rgba(255,255,255,0.04)',
-                        borderBottom: '1px solid rgba(255,255,255,0.08)',
-                    }}
+                    style={{flexShrink: 0, ...chromeStyle}}
+                    {...chrome.holdProps}
                 >
-                    <span style={{fontSize: 14, fontWeight: 600}}>{t({de: 'OpenTalk-Meeting', en: 'OpenTalk meeting'})}</span>
-                    {duration && <span style={{fontSize: 13, opacity: 0.7}}>{duration}</span>}
-                    <div style={{flex: 1}}/>
-                    <LayoutSwitcher
+                    <ExpandedHeader
                         mode={mode}
-                        onChange={setMode}
+                        onModeChange={setMode}
+                        panelOpen={panelOpen}
+                        onTogglePanel={() => setPanelOpen(!panelOpen)}
+                        isFullscreen={isFullscreen}
+                        onToggleFullscreen={toggleFullscreen}
                     />
                 </div>
 
@@ -152,9 +177,12 @@ const ExpandedView: React.FC = () => {
                 )}
 
                 <div style={{flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden'}}>
-                    {mode === 'speaker' && <SpeakerLayout/>}
-                    {mode === 'grid' && <GridLayout/>}
-                    {mode === 'screen-focus' && <ScreenFocusLayout/>}
+                    <div style={{flex: 1, minWidth: 0, display: 'flex', overflow: 'hidden'}}>
+                        {mode === 'speaker' && <SpeakerLayout/>}
+                        {mode === 'grid' && <GridLayout/>}
+                        {mode === 'screen-focus' && <ScreenFocusLayout/>}
+                    </div>
+                    {panelOpen && <ParticipantPanel/>}
                 </div>
 
                 <div
@@ -166,28 +194,36 @@ const ExpandedView: React.FC = () => {
                         padding: 16,
                         background: 'rgba(255,255,255,0.04)',
                         borderTop: '1px solid rgba(255,255,255,0.08)',
+                        ...chromeStyle,
                     }}
+                    {...chrome.holdProps}
                 >
                     <ControlsBar
                         showExpand={false}
                         onLeave={onLeaveClick}
-                        onMinimize={() => dispatch(setExpanded(false))}
+                        onMinimize={collapse}
                     />
                 </div>
             </div>
 
-            <LeaveCallModal
-                open={showLeavePrompt}
-                onClose={() => setShowLeavePrompt(false)}
-                onLeaveOnly={() => {
-                    setShowLeavePrompt(false);
-                    leaveActiveConference();
-                }}
-                onEndForAll={() => {
-                    setShowLeavePrompt(false);
-                    endActiveMeeting();
-                }}
-            />
+            {ReactDOM.createPortal(
+                <LeaveCallModal
+                    open={showLeavePrompt}
+                    onClose={() => setShowLeavePrompt(false)}
+                    onLeaveOnly={() => {
+                        setShowLeavePrompt(false);
+                        leaveActiveConference();
+                    }}
+                    onEndForAll={() => {
+                        setShowLeavePrompt(false);
+                        endActiveMeeting();
+                    }}
+                />,
+
+                // Same target as the moderation menu, so their z-order survives the
+                // top layer: the fullscreen element hides anything left on the body.
+                document.fullscreenElement ?? document.body,
+            )}
         </>
     );
 };

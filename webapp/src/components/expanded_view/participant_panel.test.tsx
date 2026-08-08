@@ -63,6 +63,30 @@ describe('ParticipantPanel', () => {
         expect(store.dispatch).toHaveBeenCalledWith(setPinnedParticipant('p1'));
     });
 
+    it('unpins the participant when the pinned row is clicked again', () => {
+        const store = renderPanel({order: ['p1'], byId: {p1: {id: 'p1', displayName: 'Anna'}}, pinnedParticipantId: 'p1'});
+        fireEvent.click(screen.getByTestId('participant-row-p1'));
+        expect(store.dispatch).toHaveBeenCalledWith(setPinnedParticipant(null));
+    });
+
+    it('is reachable by keyboard and pins on Enter and Space', () => {
+        const store = renderPanel({order: ['p1'], byId: {p1: {id: 'p1', displayName: 'Anna'}}});
+        const row = screen.getByTestId('participant-row-p1');
+        expect(row).toHaveAttribute('role', 'button');
+        expect(row).toHaveAttribute('tabindex', '0');
+
+        fireEvent.keyDown(row, {key: 'Enter'});
+        fireEvent.keyDown(row, {key: ' '});
+        expect(store.dispatch).toHaveBeenCalledTimes(2);
+        expect(store.dispatch).toHaveBeenCalledWith(setPinnedParticipant('p1'));
+    });
+
+    it('ignores keys that bubble up from the moderation menu', () => {
+        const store = renderPanel({order: ['p1'], byId: {p1: {id: 'p1', displayName: 'Anna'}}, localParticipantId: 'me', isHost: true});
+        fireEvent.keyDown(screen.getByTestId('participant-menu-trigger-p1'), {key: 'Enter'});
+        expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
     it('offers the moderation menu to a host', () => {
         renderPanel({order: ['p1'], byId: {p1: {id: 'p1', displayName: 'Anna'}}, localParticipantId: 'me', isHost: true});
         expect(screen.getByTestId('participant-menu-trigger-p1')).toBeInTheDocument();

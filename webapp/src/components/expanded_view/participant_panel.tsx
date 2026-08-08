@@ -47,11 +47,23 @@ const ParticipantRow: React.FC<{participantId: string}> = ({participantId}) => {
     const isModerator = participant?.role === 'moderator' || participant?.isHost === true;
     const isSpeaking = participant?.isSpeaking === true;
     const label = isSelf ? `${displayName} (${t({de: 'Du', en: 'You'})})` : displayName;
+    const isPinned = pinnedId === participantId;
+    const togglePin = () => dispatch(setPinnedParticipant(isPinned ? null : participantId));
 
     return (
         <div
             data-testid={`participant-row-${participantId}`}
-            onClick={() => dispatch(setPinnedParticipant(participantId))}
+            role='button'
+            tabIndex={0}
+            onClick={togglePin}
+            onKeyDown={(e) => {
+                // The row wraps the moderation menu's own button; only act on keys aimed at the row itself.
+                if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) {
+                    return;
+                }
+                e.preventDefault();
+                togglePin();
+            }}
             style={{
                 position: 'relative',
                 display: 'flex',
@@ -59,7 +71,7 @@ const ParticipantRow: React.FC<{participantId: string}> = ({participantId}) => {
                 gap: 8,
                 padding: '6px 32px 6px 10px',
                 cursor: 'pointer',
-                background: pinnedId === participantId ? 'rgba(255,255,255,0.10)' : 'transparent',
+                background: isPinned ? 'rgba(255,255,255,0.10)' : 'transparent',
             }}
         >
             <span style={avatarStyle}>{initialsOf(displayName)}</span>

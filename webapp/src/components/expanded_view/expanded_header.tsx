@@ -93,5 +93,3 @@ export const ExpandedHeader: React.FC<ExpandedHeaderProps> = ({mode, onModeChang
         </div>
     );
 };
-
-export default ExpandedHeader;
