@@ -59,9 +59,12 @@ function clampSize(width: number, height: number, opts: ResizeOpts): Size {
     const maxW = opts.maxSize ? opts.maxSize.width : window.innerWidth - VIEWPORT_MARGIN;
     const maxH = opts.maxSize ? opts.maxSize.height : window.innerHeight - VIEWPORT_MARGIN;
 
+    // Math.max outermost, so a viewport too small for the widget resolves to the
+    // minimum — the measured natural content width — instead of inverting the
+    // range into a negative size.
     return {
-        width: Math.min(Math.max(width, minW), maxW),
-        height: Math.min(Math.max(height, minH), maxH),
+        width: Math.max(minW, Math.min(width, maxW)),
+        height: Math.max(minH, Math.min(height, maxH)),
     };
 }
 

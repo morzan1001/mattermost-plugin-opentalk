@@ -63,10 +63,13 @@ const MARGIN = 16;
 // Keeps the widget's top edge clear of Mattermost's global header.
 const HEADER_INSET = 60;
 
+// Keeps the widget clear of Mattermost's App Bar column on the right edge.
+const APP_BAR_INSET = 60;
+
 const DEFAULT_OFFSETS: Offsets = {left: MARGIN, bottom: MARGIN};
 
 function clampOffsets(left: number, bottom: number, box: Box): Offsets {
-    const maxLeft = window.innerWidth - box.width - MARGIN;
+    const maxLeft = window.innerWidth - box.width - APP_BAR_INSET;
     const maxBottom = window.innerHeight - box.height - HEADER_INSET;
 
     // Math.max outermost, so a viewport too small for the widget resolves to
@@ -120,7 +123,7 @@ export function useDraggable(opts: {storageKey: string}): UseDraggableResult {
         setOffsets((cur) => {
             // This lands exactly on maxLeft, so later content growth slides the
             // widget left and keeps it glued to the right edge.
-            const base = place ? {left: window.innerWidth - box.width - MARGIN, bottom: MARGIN} : cur;
+            const base = place ? {left: window.innerWidth - box.width - APP_BAR_INSET, bottom: MARGIN} : cur;
             const next = clampOffsets(base.left, base.bottom, box);
             return next.left === cur.left && next.bottom === cur.bottom ? cur : next;
         });

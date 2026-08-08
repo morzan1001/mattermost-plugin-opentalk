@@ -74,8 +74,8 @@ describe('useDraggable', () => {
         attachBox(result, 400, 120);
         rerender();
 
-        // 1024 - 400 - 16
-        expect(result.current.style).toEqual({position: 'fixed', left: 608, bottom: 16});
+        // 1024 - 400 - 60
+        expect(result.current.style).toEqual({position: 'fixed', left: 564, bottom: 16});
         expect(result.current.style).not.toHaveProperty('top');
         expect(result.current.style).not.toHaveProperty('right');
         expect(result.current.isDragging).toBe(false);
@@ -105,7 +105,7 @@ describe('useDraggable', () => {
         remeasure(400, 120);
         rerender();
 
-        expect(result.current.style.left).toBe(608);
+        expect(result.current.style.left).toBe(564);
         expect(result.current.style.bottom).toBe(16);
     });
 
@@ -136,7 +136,7 @@ describe('useDraggable', () => {
         attachBox(result, 400, 120);
         rerender();
 
-        expect(result.current.style).toEqual({position: 'fixed', left: 608, bottom: 16});
+        expect(result.current.style).toEqual({position: 'fixed', left: 564, bottom: 16});
     });
 
     it('falls back to the default when localStorage has non-finite numbers', () => {
@@ -147,7 +147,7 @@ describe('useDraggable', () => {
         attachBox(result, 400, 120);
         rerender();
 
-        expect(result.current.style).toEqual({position: 'fixed', left: 608, bottom: 16});
+        expect(result.current.style).toEqual({position: 'fixed', left: 564, bottom: 16});
     });
 
     it('rejects a stored payload in the previous {x, y} shape', () => {
@@ -158,7 +158,7 @@ describe('useDraggable', () => {
         attachBox(result, 400, 120);
         rerender();
 
-        expect(result.current.style).toEqual({position: 'fixed', left: 608, bottom: 16});
+        expect(result.current.style).toEqual({position: 'fixed', left: 564, bottom: 16});
     });
 
     it('never produces negative offsets at a degenerate 0x0 viewport', () => {
@@ -184,8 +184,8 @@ describe('useDraggable', () => {
         attachBox(result, 400, 120);
         rerender();
 
-        // 1024 - 400 - 16
-        expect(result.current.style.left).toBe(608);
+        // 1024 - 400 - 60
+        expect(result.current.style.left).toBe(564);
     });
 
     it('clamps bottom so the top edge stays below the global header', () => {
@@ -201,14 +201,14 @@ describe('useDraggable', () => {
     });
 
     it('re-clamps on window resize', () => {
-        localStorage.setItem('k', JSON.stringify({left: 600, bottom: 16}));
+        localStorage.setItem('k', JSON.stringify({left: 500, bottom: 16}));
 
         const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
 
         attachBox(result, 400, 120);
         rerender();
 
-        expect(result.current.style.left).toBe(600);
+        expect(result.current.style.left).toBe(500);
 
         setViewport(300, 768);
         act(() => {
@@ -219,7 +219,7 @@ describe('useDraggable', () => {
     });
 
     it('does not persist a clamp caused by a shrinking viewport', () => {
-        localStorage.setItem('k', JSON.stringify({left: 600, bottom: 16}));
+        localStorage.setItem('k', JSON.stringify({left: 500, bottom: 16}));
 
         const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
 
@@ -231,7 +231,7 @@ describe('useDraggable', () => {
             window.dispatchEvent(new Event('resize'));
         });
 
-        expect(JSON.parse(localStorage.getItem('k') ?? 'null')).toEqual({left: 600, bottom: 16});
+        expect(JSON.parse(localStorage.getItem('k') ?? 'null')).toEqual({left: 500, bottom: 16});
     });
 
     it('drag updates offsets along the inverted vertical axis and persists on pointer-up', () => {
@@ -272,10 +272,10 @@ describe('useDraggable', () => {
         firePointerDown(result, 100, 100);
         fireWindowPointerEvent('pointerup', 2000, 100);
 
-        // 1024 - 400 - 16; a degenerate box would have allowed 1008
-        expect(result.current.style.left).toBe(608);
+        // 1024 - 400 - 60; a degenerate box would have allowed 1008
+        expect(result.current.style.left).toBe(564);
         expect(JSON.parse(localStorage.getItem('drag-box-key') ?? 'null')).toEqual({
-            left: 608,
+            left: 564,
             bottom: 100,
         });
     });

@@ -18,7 +18,11 @@ import {leaveActiveConference, endActiveMeeting, toggleMic, toggleCam, toggleScr
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeStore(session: any) {
     return createStore(() => ({
-        'plugins-com.github.morzan1001.mattermost-plugin-opentalk': {session},
+        'plugins-com.github.morzan1001.mattermost-plugin-opentalk': {
+            session,
+            participants: {byId: {}, order: []},
+            tracks: {perParticipant: {}},
+        },
     }));
 }
 

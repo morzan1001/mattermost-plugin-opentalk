@@ -3,9 +3,15 @@ import type React from 'react';
 
 import {useResizable} from './use_resizable';
 
+function setViewport(width: number, height: number) {
+    Object.defineProperty(window, 'innerWidth', {value: width, configurable: true});
+    Object.defineProperty(window, 'innerHeight', {value: height, configurable: true});
+}
+
 beforeEach(() => {
     localStorage.clear();
     jest.restoreAllMocks();
+    setViewport(1024, 768);
 });
 
 // Helper: simulate a pointer-down on the handle
@@ -156,8 +162,7 @@ describe('useResizable', () => {
     });
 
     it('clamps to viewport minus 32 when no maxSize is provided', () => {
-        Object.defineProperty(window, 'innerWidth', {value: 500, configurable: true});
-        Object.defineProperty(window, 'innerHeight', {value: 400, configurable: true});
+        setViewport(500, 400);
 
         const {result} = renderHook(() =>
             useResizable({
@@ -176,6 +181,26 @@ describe('useResizable', () => {
         // Should be clamped to viewport - 32
         expect(result.current.style.width).toBe(500 - 32); // 468
         expect(result.current.style.height).toBe(400 - 32); // 368
+    });
+
+    // A viewport narrower than minSize inverts the clamp range; the minimum has
+    // to win, because minSize.width is the measured natural content width.
+    it('keeps minSize when the viewport leaves no room for it', () => {
+        setViewport(0, 0);
+
+        const {result} = renderHook(() =>
+            useResizable({
+                storageKey: 'inverted-range-key',
+                defaultSize: {width: 340, height: 88},
+                minSize: {width: 400, height: 0},
+            }),
+        );
+
+        firePointerDown(result, 100, 100);
+        fireWindowPointerEvent('pointerup', 100, 100);
+
+        expect(result.current.style.width).toBe(400);
+        expect(result.current.style.height).toBe(0);
     });
 
     it('removes window listeners on unmount even if mid-resize', () => {

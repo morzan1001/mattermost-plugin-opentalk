@@ -31,6 +31,7 @@ function makeStore(session: any = {}) {
                 isHost: false,
                 ...session,
             },
+            participants: {byId: {}, order: []},
         },
     }));
 }
