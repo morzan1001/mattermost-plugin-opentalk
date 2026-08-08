@@ -22,7 +22,7 @@
     "@babel/preset-typescript": "8.0.1",
     "@babel/runtime": "8.0.0",
     "@emotion/react": "11.14.0",
-    "@mattermost/client": "11.6.0",
+    "@mattermost/client": "11.9.0",
     "@mattermost/eslint-plugin": "1.1.0-0",
     "@mattermost/types": "11.6.0",
     "@testing-library/jest-dom": "6.9.1",
