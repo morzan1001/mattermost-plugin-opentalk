@@ -3,17 +3,48 @@ import type React from 'react';
 
 import {useDraggable} from './use_draggable';
 
+type DraggableResult = ReturnType<typeof renderHook<ReturnType<typeof useDraggable>, unknown>>['result'];
+
+function setViewport(width: number, height: number) {
+    Object.defineProperty(window, 'innerWidth', {value: width, configurable: true});
+    Object.defineProperty(window, 'innerHeight', {value: height, configurable: true});
+}
+
+function stubRect(width: number, height: number): DOMRect {
+    return {
+        width,
+        height,
+        top: 0,
+        left: 0,
+        right: width,
+        bottom: height,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+    } as DOMRect;
+}
+
+// renderHook mounts no DOM node, so box-aware cases have to hand the hook a
+// detached element with a stubbed rect. Returns a remeasure function, since the
+// widget's box changes size between layout passes.
+function attachBox(result: DraggableResult, width: number, height: number) {
+    const el = document.createElement('div');
+    const spy = jest.spyOn(el, 'getBoundingClientRect').mockReturnValue(stubRect(width, height));
+    result.current.nodeRef.current = el;
+
+    return (nextWidth: number, nextHeight: number) => {
+        spy.mockReturnValue(stubRect(nextWidth, nextHeight));
+    };
+}
+
 beforeEach(() => {
     localStorage.clear();
     jest.restoreAllMocks();
+    setViewport(1024, 768);
 });
 
 // Helper: simulate a pointer-down on the handle
-function firePointerDown(
-    result: ReturnType<typeof renderHook<ReturnType<typeof useDraggable>, unknown>>['result'],
-    pageX: number,
-    pageY: number,
-) {
+function firePointerDown(result: DraggableResult, pageX: number, pageY: number) {
     act(() => {
         result.current.handleProps.onPointerDown({
             pageX,
@@ -37,119 +68,222 @@ function fireWindowPointerEvent(name: 'pointermove' | 'pointerup', pageX: number
 }
 
 describe('useDraggable', () => {
-    it('uses default position when localStorage is empty', () => {
-        const {result} = renderHook(() =>
-            useDraggable({storageKey: 'k', defaultPosition: {x: 100, y: 200}}),
-        );
+    it('defaults to the bottom-right corner once the box is measured', () => {
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
 
-        expect(result.current.style).toEqual({position: 'fixed', left: 100, top: 200});
+        attachBox(result, 400, 120);
+        rerender();
+
+        // 1024 - 400 - 60
+        expect(result.current.style).toEqual({position: 'fixed', left: 564, bottom: 16});
+        expect(result.current.style).not.toHaveProperty('top');
+        expect(result.current.style).not.toHaveProperty('right');
         expect(result.current.isDragging).toBe(false);
     });
 
-    it('uses stored position when localStorage has valid JSON', () => {
-        localStorage.setItem('k', JSON.stringify({x: 50, y: 75}));
+    it('does not place the default against an unmeasured zero-width box', () => {
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
 
-        const {result} = renderHook(() =>
-            useDraggable({storageKey: 'k', defaultPosition: {x: 100, y: 200}}),
-        );
+        attachBox(result, 0, 0);
+        rerender();
 
-        expect(result.current.style).toEqual({position: 'fixed', left: 50, top: 75});
+        expect(result.current.style.left).toBe(16);
+        expect(result.current.style.left).not.toBe(1024 - 16);
     });
 
-    it('falls back to default when localStorage has invalid JSON', () => {
+    // The production sequence: baseMinWidth is 0 until the row is measured, so
+    // the first layout pass reports a zero-width box and only the second can
+    // resolve the default corner.
+    it('defers placement to the pass that measures a real width', () => {
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
+
+        const remeasure = attachBox(result, 0, 0);
+        rerender();
+
+        expect(result.current.style.left).toBe(16);
+
+        remeasure(400, 120);
+        rerender();
+
+        expect(result.current.style.left).toBe(564);
+        expect(result.current.style.bottom).toBe(16);
+    });
+
+    it('uses stored offsets when localStorage has valid JSON', () => {
+        localStorage.setItem('k', JSON.stringify({left: 300, bottom: 200}));
+
+        const {result} = renderHook(() => useDraggable({storageKey: 'k'}));
+
+        expect(result.current.style).toEqual({position: 'fixed', left: 300, bottom: 200});
+    });
+
+    it('does not override a stored position with the bottom-right default', () => {
+        localStorage.setItem('k', JSON.stringify({left: 300, bottom: 200}));
+
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
+
+        attachBox(result, 400, 120);
+        rerender();
+
+        expect(result.current.style).toEqual({position: 'fixed', left: 300, bottom: 200});
+    });
+
+    it('falls back to the default when localStorage has invalid JSON', () => {
         localStorage.setItem('k', 'not-json');
 
-        const {result} = renderHook(() =>
-            useDraggable({storageKey: 'k', defaultPosition: {x: 100, y: 200}}),
-        );
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
 
-        expect(result.current.style).toEqual({position: 'fixed', left: 100, top: 200});
+        attachBox(result, 400, 120);
+        rerender();
+
+        expect(result.current.style).toEqual({position: 'fixed', left: 564, bottom: 16});
     });
 
-    it('falls back to default when localStorage has non-finite numbers', () => {
-        localStorage.setItem('k', JSON.stringify({x: Infinity, y: 0}));
+    it('falls back to the default when localStorage has non-finite numbers', () => {
+        localStorage.setItem('k', JSON.stringify({left: Infinity, bottom: 0}));
 
-        const {result} = renderHook(() =>
-            useDraggable({storageKey: 'k', defaultPosition: {x: 100, y: 200}}),
-        );
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
 
-        expect(result.current.style).toEqual({position: 'fixed', left: 100, top: 200});
+        attachBox(result, 400, 120);
+        rerender();
+
+        expect(result.current.style).toEqual({position: 'fixed', left: 564, bottom: 16});
     });
 
-    it('drag updates position and persists to localStorage on pointer-up', () => {
-        const {result} = renderHook(() =>
-            useDraggable({storageKey: 'drag-key', defaultPosition: {x: 100, y: 100}}),
-        );
+    it('rejects a stored payload in the previous {x, y} shape', () => {
+        localStorage.setItem('k', JSON.stringify({x: 900, y: 40}));
+
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
+
+        attachBox(result, 400, 120);
+        rerender();
+
+        expect(result.current.style).toEqual({position: 'fixed', left: 564, bottom: 16});
+    });
+
+    it('never produces negative offsets at a degenerate 0x0 viewport', () => {
+        setViewport(0, 0);
+        localStorage.setItem('k', JSON.stringify({left: 1200, bottom: 700}));
+
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
+
+        attachBox(result, 400, 120);
+        rerender();
+
+        expect(result.current.style.left).toBe(16);
+        expect(result.current.style.bottom).toBe(16);
+        expect(result.current.style.left as number).toBeGreaterThanOrEqual(16);
+        expect(result.current.style.bottom as number).toBeGreaterThanOrEqual(16);
+    });
+
+    it('clamps left against the measured box width, not the viewport corner', () => {
+        localStorage.setItem('k', JSON.stringify({left: 900, bottom: 16}));
+
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
+
+        attachBox(result, 400, 120);
+        rerender();
+
+        // 1024 - 400 - 60
+        expect(result.current.style.left).toBe(564);
+    });
+
+    it('clamps bottom so the top edge stays below the global header', () => {
+        localStorage.setItem('k', JSON.stringify({left: 16, bottom: 700}));
+
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
+
+        attachBox(result, 400, 120);
+        rerender();
+
+        // 768 - 120 - 60
+        expect(result.current.style.bottom).toBe(588);
+    });
+
+    it('re-clamps on window resize', () => {
+        localStorage.setItem('k', JSON.stringify({left: 500, bottom: 16}));
+
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
+
+        attachBox(result, 400, 120);
+        rerender();
+
+        expect(result.current.style.left).toBe(500);
+
+        setViewport(300, 768);
+        act(() => {
+            window.dispatchEvent(new Event('resize'));
+        });
+
+        expect(result.current.style.left).toBe(16);
+    });
+
+    it('does not persist a clamp caused by a shrinking viewport', () => {
+        localStorage.setItem('k', JSON.stringify({left: 500, bottom: 16}));
+
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'k'}));
+
+        attachBox(result, 400, 120);
+        rerender();
+
+        setViewport(300, 768);
+        act(() => {
+            window.dispatchEvent(new Event('resize'));
+        });
+
+        expect(JSON.parse(localStorage.getItem('k') ?? 'null')).toEqual({left: 500, bottom: 16});
+    });
+
+    it('drag updates offsets along the inverted vertical axis and persists on pointer-up', () => {
+        localStorage.setItem('drag-key', JSON.stringify({left: 100, bottom: 100}));
+
+        const {result} = renderHook(() => useDraggable({storageKey: 'drag-key'}));
 
         // Start drag at pointer position (100, 100); widget is at (100, 100)
         firePointerDown(result, 100, 100);
 
         expect(result.current.isDragging).toBe(true);
 
-        // Move pointer to (150, 130) — delta: +50, +30
+        // Move pointer to (150, 130) — delta: +50 across, +30 down
         fireWindowPointerEvent('pointermove', 150, 130);
-
-        // End drag
         fireWindowPointerEvent('pointerup', 150, 130);
 
         expect(result.current.isDragging).toBe(false);
 
-        // Widget started at (100, 100); delta is (+50, +30) → new pos (150, 130)
+        // bottom grows upward, so a downward pointer delta lowers it
         expect(result.current.style.left).toBe(150);
-        expect(result.current.style.top).toBe(130);
+        expect(result.current.style.bottom).toBe(70);
 
-        // localStorage should be persisted
         const stored = JSON.parse(localStorage.getItem('drag-key') ?? 'null') as {
-            x: number;
-            y: number;
+            left: number;
+            bottom: number;
         } | null;
-        expect(stored).not.toBeNull();
-        expect(stored?.x).toBe(150);
-        expect(stored?.y).toBe(130);
+        expect(stored).toEqual({left: 150, bottom: 70});
     });
 
-    it('clamps x position to minimum 16 when dragged off left edge', () => {
-        Object.defineProperty(window, 'innerWidth', {value: 1024, configurable: true});
-        Object.defineProperty(window, 'innerHeight', {value: 768, configurable: true});
+    it('clamps a drag against the measured box and persists the clamped value', () => {
+        localStorage.setItem('drag-box-key', JSON.stringify({left: 100, bottom: 100}));
 
-        const {result} = renderHook(() =>
-            useDraggable({storageKey: 'clamp-key', defaultPosition: {x: 100, y: 100}}),
-        );
+        const {result, rerender} = renderHook(() => useDraggable({storageKey: 'drag-box-key'}));
 
-        // Start drag at (100, 100), widget at (100, 100)
+        attachBox(result, 400, 120);
+        rerender();
+
         firePointerDown(result, 100, 100);
-
-        // Move pointer to (0, 100) — delta: -100, 0 → would place x at 0 which is below 16
-        fireWindowPointerEvent('pointerup', 0, 100);
-
-        // x should be clamped to 16
-        expect(result.current.style.left).toBeGreaterThanOrEqual(16);
-    });
-
-    it('clamps x position to maximum window.innerWidth - 16 when dragged off right edge', () => {
-        Object.defineProperty(window, 'innerWidth', {value: 1024, configurable: true});
-        Object.defineProperty(window, 'innerHeight', {value: 768, configurable: true});
-
-        const {result} = renderHook(() =>
-            useDraggable({storageKey: 'clamp-right-key', defaultPosition: {x: 100, y: 100}}),
-        );
-
-        // Start drag at (100, 100), widget at (100, 100)
-        firePointerDown(result, 100, 100);
-
-        // Move pointer to (2000, 100) — delta far off screen right
         fireWindowPointerEvent('pointerup', 2000, 100);
 
-        // x should be clamped to innerWidth - 16
-        expect(result.current.style.left).toBeLessThanOrEqual(1024 - 16);
+        // 1024 - 400 - 60; a degenerate box would have allowed 1008
+        expect(result.current.style.left).toBe(564);
+        expect(JSON.parse(localStorage.getItem('drag-box-key') ?? 'null')).toEqual({
+            left: 564,
+            bottom: 100,
+        });
     });
 
     it('removes window listeners on unmount even if mid-drag', () => {
         const removeEventListenerSpy = jest.spyOn(window, 'removeEventListener');
 
-        const {result, unmount} = renderHook(() =>
-            useDraggable({storageKey: 'unmount-key', defaultPosition: {x: 100, y: 100}}),
-        );
+        const {result, unmount} = renderHook(() => useDraggable({storageKey: 'unmount-key'}));
 
         // Trigger pointer-down to attach window listeners
         firePointerDown(result, 100, 100);
@@ -163,5 +297,6 @@ describe('useDraggable', () => {
         const removedEvents = removeEventListenerSpy.mock.calls.map((c) => c[0]);
         expect(removedEvents).toContain('pointermove');
         expect(removedEvents).toContain('pointerup');
+        expect(removedEvents).toContain('resize');
     });
 });

@@ -1,13 +1,15 @@
-import React, {useRef} from 'react';
-import {useSelector} from 'react-redux';
+import React, {useRef, useState} from 'react';
+import {useDispatch, useSelector} from 'react-redux';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
 import {useAttachTrack} from '../../hooks/use_attach_track';
-import {selectParticipantsById, selectTracksPerParticipant} from '../../util/selectors';
-import {CrownIcon, HandIcon, MicOffIcon} from '../icons';
+import {setPinnedParticipant} from '../../store/slice_session';
+import {useT} from '../../util/i18n';
+import {selectParticipantsById, selectPinnedParticipantId, selectTracksPerParticipant} from '../../util/selectors';
+import {CrownIcon, HandIcon, MicOffIcon, PinIcon, PinOffIcon} from '../icons';
 import {ParticipantMenu} from '../participant_menu/component';
 
-function initialsOf(name: string | undefined): string {
+export function initialsOf(name: string | undefined): string {
     const safe = (name ?? '').trim();
     if (!safe) {
         return '';
@@ -62,6 +64,14 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({participantId, 
     const handRaised = participant?.handRaised === true;
     const isModerator = participant?.role === 'moderator' || participant?.isHost === true;
 
+    const [hovered, setHovered] = useState(false);
+    const showLabel = hovered || isMuted;
+
+    const t = useT();
+    const dispatch = useDispatch();
+    const pinnedId = useSelector(selectPinnedParticipantId);
+    const isPinned = pinnedId === participantId;
+
     const speakingStyle: React.CSSProperties = isSpeaking ? {outline: '2px solid #00B59C', outlineOffset: 1} : {};
 
     const rootStyle: React.CSSProperties = {
@@ -86,7 +96,7 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({participantId, 
         bottom: 2,
         left: 4,
         right: 4,
-        fontSize: 11,
+        fontSize: 13,
         fontWeight: 500,
         color: 'white',
         background: 'rgba(0,0,0,0.5)',
@@ -103,6 +113,8 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({participantId, 
             data-testid={`participant-tile-${participantId}`}
             data-speaking={isSpeaking ? 'true' : undefined}
             style={rootStyle}
+            onPointerEnter={() => setHovered(true)}
+            onPointerLeave={() => setHovered(false)}
         >
             {showVideo ? (
                 <VideoTileInner
@@ -125,30 +137,52 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({participantId, 
                     {isMuted && (
                         <span
                             data-testid={`participant-tile-muted-${participantId}`}
-                            style={{display: 'flex', padding: 3, borderRadius: 4, background: 'rgba(227,53,76,0.85)', color: 'white', lineHeight: 0}}
+                            style={{display: 'flex', padding: 5, borderRadius: 4, background: 'rgba(227,53,76,0.85)', color: 'white', lineHeight: 0}}
                         >
                             <MicOffIcon/>
                         </span>
                     )}
                     {handRaised && (
                         <span
-                            style={{display: 'flex', padding: 3, borderRadius: 4, background: 'rgba(0,181,156,0.85)', color: 'white', lineHeight: 0}}
+                            style={{display: 'flex', padding: 5, borderRadius: 4, background: 'rgba(0,181,156,0.85)', color: 'white', lineHeight: 0}}
                         >
-                            <HandIcon size={14}/>
+                            <HandIcon size={18}/>
                         </span>
                     )}
                     {isModerator && (
                         <span
                             data-testid={`participant-tile-moderator-${participantId}`}
-                            style={{display: 'flex', padding: 3, borderRadius: 4, background: 'rgba(255,184,0,0.85)', color: 'white', lineHeight: 0}}
+                            style={{display: 'flex', padding: 5, borderRadius: 4, background: 'rgba(255,184,0,0.85)', color: 'white', lineHeight: 0}}
                         >
-                            <CrownIcon size={14}/>
+                            <CrownIcon size={18}/>
                         </span>
                     )}
                 </div>
             )}
             <ParticipantMenu participantId={participantId}/>
-            <span style={labelStyle}>{displayName || participantId.slice(0, 8)}</span>
+            <button
+                type='button'
+                data-testid={`participant-tile-pin-${participantId}`}
+                onClick={() => dispatch(setPinnedParticipant(isPinned ? null : participantId))}
+                title={isPinned ? t({de: 'Anheftung lösen', en: 'Unpin'}) : t({de: 'Für mich anheften', en: 'Pin for me'})}
+                aria-label={isPinned ? t({de: 'Anheftung lösen', en: 'Unpin'}) : t({de: 'Für mich anheften', en: 'Pin for me'})}
+                style={{
+                    position: 'absolute',
+                    top: 4,
+                    right: 32,
+                    display: 'flex',
+                    padding: 4,
+                    borderRadius: 4,
+                    border: 'none',
+                    background: isPinned ? 'rgba(0,181,156,0.85)' : 'rgba(0,0,0,0.5)',
+                    color: 'white',
+                    cursor: 'pointer',
+                    lineHeight: 0,
+                }}
+            >
+                {isPinned ? <PinOffIcon size={16}/> : <PinIcon size={16}/>}
+            </button>
+            {showLabel && <span style={labelStyle}>{displayName || participantId.slice(0, 8)}</span>}
         </div>
     );
 };

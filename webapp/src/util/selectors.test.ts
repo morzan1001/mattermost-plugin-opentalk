@@ -6,6 +6,9 @@ import {
     selectIsExpanded,
     selectIsMinimized,
     selectCurrentDisplayName,
+    selectPinnedParticipantId,
+    selectScreenSharerId,
+    selectChannelDisplayName,
     PLUGIN_STATE_KEY,
 } from './selectors';
 
@@ -89,6 +92,32 @@ describe('selectLocalParticipantId', () => {
 
     it('returns undefined for null state', () => {
         expect(selectLocalParticipantId(null)).toBeUndefined();
+    });
+});
+
+describe('selectPinnedParticipantId', () => {
+    it('selectPinnedParticipantId reads the pinned id', () => {
+        expect(selectPinnedParticipantId({[PLUGIN_STATE_KEY]: {session: {pinnedParticipantId: 'p1'}}})).toBe('p1');
+        expect(selectPinnedParticipantId({})).toBeUndefined();
+    });
+});
+
+describe('selectScreenSharerId', () => {
+    it('selectScreenSharerId finds the participant with a screen track', () => {
+        const state = {[PLUGIN_STATE_KEY]: {
+            participants: {byId: {p1: {id: 'p1'}, p2: {id: 'p2'}}, order: ['p1', 'p2']},
+            tracks: {perParticipant: {p2: {screenTrackId: 's1'}}},
+        }};
+        expect(selectScreenSharerId(state)).toBe('p2');
+        expect(selectScreenSharerId({})).toBeUndefined();
+    });
+});
+
+describe('selectChannelDisplayName', () => {
+    it('selectChannelDisplayName reads the Mattermost channel entity', () => {
+        const state = {entities: {channels: {channels: {c1: {display_name: 'Team'}}}}};
+        expect(selectChannelDisplayName(state, 'c1')).toBe('Team');
+        expect(selectChannelDisplayName(state, undefined)).toBeUndefined();
     });
 });
 

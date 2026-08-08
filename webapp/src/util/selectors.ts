@@ -30,6 +30,11 @@ export function selectLocalParticipantId(state: AnyState): string | undefined {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function selectPinnedParticipantId(state: AnyState): string | undefined {
+    return state?.[stateKey]?.session?.pinnedParticipantId as string | undefined;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function selectIsExpanded(state: AnyState): boolean {
     return state?.[stateKey]?.session?.expanded ?? false;
 }
@@ -93,6 +98,11 @@ export function selectActiveSpeakers(state: AnyState): string[] {
     return state?.[stateKey]?.tracks?.activeSpeakers ?? [];
 }
 
+export function selectScreenSharerId(state: AnyState): string | undefined {
+    const perParticipant = selectTracksPerParticipant(state);
+    return selectParticipantOrder(state).find((id) => Boolean(perParticipant[id]?.screenTrackId));
+}
+
 // Incoming calls slice
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,4 +137,12 @@ export function selectChannelType(state: AnyState, channelId: string | undefined
         return undefined;
     }
     return state?.entities?.channels?.channels?.[channelId]?.type as string | undefined;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function selectChannelDisplayName(state: AnyState, channelId: string | undefined): string | undefined {
+    if (!channelId) {
+        return undefined;
+    }
+    return state?.entities?.channels?.channels?.[channelId]?.display_name as string | undefined;
 }

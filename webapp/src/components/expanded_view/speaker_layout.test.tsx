@@ -20,11 +20,12 @@ jest.mock('../../conference/livekit/track_registry', () => {
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeStore(participants: any, tracks: any = {}) {
+function makeStore(participants: any, tracks: any = {}, session: any = {}) {
     return createStore(() => ({
         [stateKey]: {
             participants,
             tracks: {perParticipant: {}, activeSpeakers: [], ...tracks},
+            session,
         },
     }));
 }
@@ -71,7 +72,7 @@ describe('SpeakerLayout', () => {
         expect(screen.getByTestId('participant-tile-p1')).toBeInTheDocument();
 
         // Only one tile rendered, no filmstrip column (no other participants)
-        const tiles = screen.getAllByTestId(/^participant-tile-/);
+        const tiles = screen.getAllByTestId(/^participant-tile-(?!(video|muted|moderator|pin)-)/);
         expect(tiles).toHaveLength(1);
     });
 
@@ -91,7 +92,7 @@ describe('SpeakerLayout', () => {
         expect(screen.getByTestId('participant-tile-p4')).toBeInTheDocument();
 
         // p1 should be first (main pane), p2/p3/p4 in filmstrip
-        const tiles = screen.getAllByTestId(/^participant-tile-/);
+        const tiles = screen.getAllByTestId(/^participant-tile-(?!(video|muted|moderator|pin)-)/);
         expect(tiles).toHaveLength(4);
         expect(tiles[0].getAttribute('data-testid')).toBe('participant-tile-p1');
     });
@@ -109,7 +110,7 @@ describe('SpeakerLayout', () => {
         expect(screen.getByTestId('speaker-layout')).toBeInTheDocument();
 
         // All 4 tiles should be rendered
-        const tiles = screen.getAllByTestId(/^participant-tile-/);
+        const tiles = screen.getAllByTestId(/^participant-tile-(?!(video|muted|moderator|pin)-)/);
         expect(tiles).toHaveLength(4);
 
         // p3 should be the main tile (first in DOM)
@@ -135,8 +136,23 @@ describe('SpeakerLayout', () => {
         expect(screen.getByTestId('speaker-layout')).toBeInTheDocument();
 
         // p1 should be the main tile (ghost not in byId, fallback to order[0])
-        const tiles = screen.getAllByTestId(/^participant-tile-/);
+        const tiles = screen.getAllByTestId(/^participant-tile-(?!(video|muted|moderator|pin)-)/);
         expect(tiles).toHaveLength(4);
         expect(tiles[0].getAttribute('data-testid')).toBe('participant-tile-p1');
+    });
+
+    it('shows the pinned participant in the main slot instead of the active speaker', () => {
+        const store = makeStore(
+            makeParticipants(['p1', 'p2']),
+            {activeSpeakers: ['p1']},
+            {pinnedParticipantId: 'p2'},
+        );
+        render(
+            <Provider store={store}>
+                <SpeakerLayout/>
+            </Provider>,
+        );
+        const main = screen.getByTestId('speaker-layout-main');
+        expect(main.querySelector('[data-testid="participant-tile-p2"]')).not.toBeNull();
     });
 });

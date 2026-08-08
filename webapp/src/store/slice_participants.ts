@@ -1,6 +1,9 @@
+// The session slice reacts to this to drop a pin on a participant who left.
+export const PARTICIPANT_REMOVED = 'opentalk/participants/removed';
+
 const ACTION_TYPES = {
     ADDED: 'opentalk/participants/added',
-    REMOVED: 'opentalk/participants/removed',
+    REMOVED: PARTICIPANT_REMOVED,
     BULK_SET: 'opentalk/participants/bulk_set',
     SPEAKING_CHANGED: 'opentalk/participants/speaking_changed',
     RESET: 'opentalk/participants/reset',

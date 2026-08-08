@@ -85,21 +85,34 @@ describe('ScreenFocusLayout', () => {
         expect(screen.getByTestId('screen-focus-layout')).toBeInTheDocument();
         expect(screen.queryByTestId('grid-layout')).not.toBeInTheDocument();
 
-        // The main pane should show p2's tile (match only exact tile divs, not video elements)
-        const tiles = screen.getAllByTestId(/^participant-tile-p/);
+        // The main pane should show p2's tile (match only exact tile divs, not video/badge/pin elements)
+        const tiles = screen.getAllByTestId(/^participant-tile-(?!(video|muted|moderator|pin)-)/);
 
-        // Total tiles: 1 (main) + 4 (filmstrip) = 5 (p2 appears twice: once in main pane, once in filmstrip)
-        expect(tiles).toHaveLength(5);
+        // Total tiles: 1 (main) + 3 (filmstrip, sharer excluded) = 4
+        expect(tiles).toHaveLength(4);
 
         // The first tile (main pane) should be p2
         expect(tiles[0].getAttribute('data-testid')).toBe('participant-tile-p2');
 
-        // All 4 participants should be in the filmstrip
+        // The sharer is not repeated in the filmstrip
         const filmstripIds = tiles.slice(1).map((el) => el.getAttribute('data-testid'));
         expect(filmstripIds).toContain('participant-tile-p1');
-        expect(filmstripIds).toContain('participant-tile-p2');
+        expect(filmstripIds).not.toContain('participant-tile-p2');
         expect(filmstripIds).toContain('participant-tile-p3');
         expect(filmstripIds).toContain('participant-tile-p4');
+    });
+
+    it('does not repeat the screen sharer in the thumbnail column', () => {
+        const store = makeStore(
+            makeParticipants(['p1', 'p2']),
+            {perParticipant: {p1: {screenTrackId: 's1'}}},
+        );
+        render(
+            <Provider store={store}>
+                <ScreenFocusLayout/>
+            </Provider>,
+        );
+        expect(screen.getAllByTestId('participant-tile-p1')).toHaveLength(1);
     });
 
     it('when multiple participants share screens, the first in order wins', () => {
@@ -120,7 +133,7 @@ describe('ScreenFocusLayout', () => {
         expect(screen.getByTestId('screen-focus-layout')).toBeInTheDocument();
 
         // p3 appears first in order with screenTrackId, so p3 is main
-        const tiles = screen.getAllByTestId(/^participant-tile-p/);
+        const tiles = screen.getAllByTestId(/^participant-tile-(?!(video|muted|moderator|pin)-)/);
         expect(tiles[0].getAttribute('data-testid')).toBe('participant-tile-p3');
     });
 });

@@ -1,3 +1,5 @@
+import {PARTICIPANT_REMOVED} from './slice_participants';
+
 const ACTION_TYPES = {
     CONNECT_STARTED: 'opentalk/session/connect_started',
     CONNECTED: 'opentalk/session/connected',
@@ -12,6 +14,7 @@ const ACTION_TYPES = {
     SET_MINIMIZED: 'opentalk/session/set_minimized',
     SET_RAISE_HANDS_ENABLED: 'opentalk/session/set_raise_hands_enabled',
     SET_IS_HOST: 'opentalk/session/set_is_host',
+    SET_PINNED_PARTICIPANT: 'opentalk/session/set_pinned_participant',
 } as const;
 
 export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'leaving';
@@ -40,6 +43,9 @@ export interface SessionState {
     // OpenTalk-Roomserver participant id of the local user. Set on CONNECTED,
     // cleared on DISCONNECTED.
     localParticipantId?: string;
+
+    // Local-only spotlight: OpenTalk has no pin frame, so this never leaves the client.
+    pinnedParticipantId?: string;
 }
 
 const initial: SessionState = {
@@ -55,6 +61,7 @@ const initial: SessionState = {
     minimized: false,
     joinedAt: undefined,
     localParticipantId: undefined,
+    pinnedParticipantId: undefined,
     raiseHandsEnabled: false,
 };
 
@@ -96,6 +103,9 @@ export function setRaiseHandsEnabled(value: boolean) {
 }
 export function setIsHost(value: boolean) {
     return {type: ACTION_TYPES.SET_IS_HOST, payload: {value}};
+}
+export function setPinnedParticipant(id: string | null) {
+    return {type: ACTION_TYPES.SET_PINNED_PARTICIPANT, payload: {id}};
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -143,6 +153,10 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
         return {...state, raiseHandsEnabled: action.payload.value};
     case ACTION_TYPES.SET_IS_HOST:
         return {...state, isHost: action.payload.value};
+    case ACTION_TYPES.SET_PINNED_PARTICIPANT:
+        return {...state, pinnedParticipantId: action.payload.id ?? undefined};
+    case PARTICIPANT_REMOVED:
+        return state.pinnedParticipantId === action.payload.id ? {...state, pinnedParticipantId: undefined} : state;
     default:
         return state;
     }

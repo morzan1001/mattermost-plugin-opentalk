@@ -1,4 +1,4 @@
-import {render, screen} from '@testing-library/react';
+import {render, screen, fireEvent} from '@testing-library/react';
 import React from 'react';
 import {Provider} from 'react-redux';
 import {createStore} from 'redux';
@@ -6,6 +6,7 @@ import {createStore} from 'redux';
 import {ParticipantTile} from './participant_tile';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';
+import {setPinnedParticipant} from '../../store/slice_session';
 import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;
@@ -20,7 +21,9 @@ jest.mock('../../conference/livekit/track_registry', () => {
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeStore(participants: any = {}, tracks: any = {}, session: any = {}) {
+type StoreOpts = {participants?: any; tracks?: any; session?: any};
+
+function makeStore({participants = {}, tracks = {}, session = {}}: StoreOpts = {}) {
     return createStore(() => ({
         [stateKey]: {
             session: {isHost: false, localParticipantId: 'me', ...session},
@@ -43,7 +46,7 @@ beforeEach(() => {
 describe('ParticipantTile', () => {
     it('renders initials when no track for participant', () => {
         const store = makeStore({
-            byId: {p1: {id: 'p1', displayName: 'Alice Bob'}},
+            participants: {byId: {p1: {id: 'p1', displayName: 'Alice Bob'}}},
         });
         render(
             <Provider store={store}>
@@ -61,10 +64,10 @@ describe('ParticipantTile', () => {
     });
 
     it('renders <video> element when tracks.perParticipant[id].videoTrackId is set AND registry has the track', () => {
-        const store = makeStore(
-            {byId: {p2: {id: 'p2', displayName: 'Bob Smith'}}},
-            {perParticipant: {p2: {videoTrackId: 'track-p2'}}},
-        );
+        const store = makeStore({
+            participants: {byId: {p2: {id: 'p2', displayName: 'Bob Smith'}}},
+            tracks: {perParticipant: {p2: {videoTrackId: 'track-p2'}}},
+        });
         render(
             <Provider store={store}>
                 <ParticipantTile
@@ -80,10 +83,10 @@ describe('ParticipantTile', () => {
     it('falls back to initials if registry does not have the track for that id', () => {
         (trackRegistry.get as jest.Mock).mockImplementation(() => undefined);
 
-        const store = makeStore(
-            {byId: {p3: {id: 'p3', displayName: 'Carol Dave'}}},
-            {perParticipant: {p3: {videoTrackId: 'missing-track'}}},
-        );
+        const store = makeStore({
+            participants: {byId: {p3: {id: 'p3', displayName: 'Carol Dave'}}},
+            tracks: {perParticipant: {p3: {videoTrackId: 'missing-track'}}},
+        });
         render(
             <Provider store={store}>
                 <ParticipantTile
@@ -101,10 +104,10 @@ describe('ParticipantTile', () => {
 
     it('uses overrideTrackId when given, ignoring the slice videoTrackId', () => {
         // slice has 'slice-track-p4', override points to 'override-track-p4'
-        const store = makeStore(
-            {byId: {p4: {id: 'p4', displayName: 'Dave Eve'}}},
-            {perParticipant: {p4: {videoTrackId: 'slice-track-p4'}}},
-        );
+        const store = makeStore({
+            participants: {byId: {p4: {id: 'p4', displayName: 'Dave Eve'}}},
+            tracks: {perParticipant: {p4: {videoTrackId: 'slice-track-p4'}}},
+        });
 
         // Make registry return a track for the override id but not slice id
         (trackRegistry.get as jest.Mock).mockImplementation((id: string) => {
@@ -131,7 +134,7 @@ describe('ParticipantTile', () => {
 
     it('applies speaking indicator outline when isSpeaking === true', () => {
         const store = makeStore({
-            byId: {p5: {id: 'p5', displayName: 'Eve Frank', isSpeaking: true}},
+            participants: {byId: {p5: {id: 'p5', displayName: 'Eve Frank', isSpeaking: true}}},
         });
         render(
             <Provider store={store}>
@@ -148,7 +151,7 @@ describe('ParticipantTile', () => {
 
     it('does not apply speaking indicator when isSpeaking is false', () => {
         const store = makeStore({
-            byId: {p6: {id: 'p6', displayName: 'Frank Grace', isSpeaking: false}},
+            participants: {byId: {p6: {id: 'p6', displayName: 'Frank Grace', isSpeaking: false}}},
         });
         render(
             <Provider store={store}>
@@ -165,7 +168,7 @@ describe('ParticipantTile', () => {
 
     it('shows a crown badge when role is moderator', () => {
         const store = makeStore({
-            byId: {p7: {id: 'p7', displayName: 'Grace Hill', role: 'moderator'}},
+            participants: {byId: {p7: {id: 'p7', displayName: 'Grace Hill', role: 'moderator'}}},
         });
         render(
             <Provider store={store}>
@@ -181,7 +184,7 @@ describe('ParticipantTile', () => {
 
     it('shows a crown badge when isHost is true, regardless of role', () => {
         const store = makeStore({
-            byId: {p8: {id: 'p8', displayName: 'Hank Irving', isHost: true}},
+            participants: {byId: {p8: {id: 'p8', displayName: 'Hank Irving', isHost: true}}},
         });
         render(
             <Provider store={store}>
@@ -197,7 +200,7 @@ describe('ParticipantTile', () => {
 
     it('does not show a crown badge for a plain participant', () => {
         const store = makeStore({
-            byId: {p9: {id: 'p9', displayName: 'Ivy Jones', role: 'user'}},
+            participants: {byId: {p9: {id: 'p9', displayName: 'Ivy Jones', role: 'user'}}},
         });
         render(
             <Provider store={store}>
@@ -212,11 +215,10 @@ describe('ParticipantTile', () => {
     });
 
     it('mounts the participant menu trigger for a host viewing a remote tile', () => {
-        const store = makeStore(
-            {byId: {p10: {id: 'p10', displayName: 'Jack Kelly'}}},
-            {},
-            {isHost: true, localParticipantId: 'me'},
-        );
+        const store = makeStore({
+            participants: {byId: {p10: {id: 'p10', displayName: 'Jack Kelly'}}},
+            session: {isHost: true, localParticipantId: 'me'},
+        });
         render(
             <Provider store={store}>
                 <ParticipantTile
@@ -230,11 +232,10 @@ describe('ParticipantTile', () => {
     });
 
     it('does not mount the participant menu trigger for a non-host viewer', () => {
-        const store = makeStore(
-            {byId: {p11: {id: 'p11', displayName: 'Kim Lee'}}},
-            {},
-            {isHost: false, localParticipantId: 'me'},
-        );
+        const store = makeStore({
+            participants: {byId: {p11: {id: 'p11', displayName: 'Kim Lee'}}},
+            session: {isHost: false, localParticipantId: 'me'},
+        });
         render(
             <Provider store={store}>
                 <ParticipantTile
@@ -245,5 +246,40 @@ describe('ParticipantTile', () => {
             </Provider>,
         );
         expect(screen.queryByTestId('participant-menu-trigger-p11')).not.toBeInTheDocument();
+    });
+
+    it('pins an unpinned participant', () => {
+        const store = makeStore({participants: {byId: {p1: {id: 'p1', displayName: 'Anna'}}, order: ['p1']}});
+        store.dispatch = jest.fn();
+        render(
+            <Provider store={store}>
+                <ParticipantTile
+                    participantId='p1'
+                    width={320}
+                    height={180}
+                />
+            </Provider>,
+        );
+        fireEvent.click(screen.getByTestId('participant-tile-pin-p1'));
+        expect(store.dispatch).toHaveBeenCalledWith(setPinnedParticipant('p1'));
+    });
+
+    it('unpins the participant that is currently pinned', () => {
+        const store = makeStore({
+            participants: {byId: {p1: {id: 'p1', displayName: 'Anna'}}, order: ['p1']},
+            session: {pinnedParticipantId: 'p1'},
+        });
+        store.dispatch = jest.fn();
+        render(
+            <Provider store={store}>
+                <ParticipantTile
+                    participantId='p1'
+                    width={320}
+                    height={180}
+                />
+            </Provider>,
+        );
+        fireEvent.click(screen.getByTestId('participant-tile-pin-p1'));
+        expect(store.dispatch).toHaveBeenCalledWith(setPinnedParticipant(null));
     });
 });

@@ -481,6 +481,16 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         console.warn('[opentalk] LiveKit connect failed:', err.message);
         store.dispatch(setLivekitConnected(false));
         activeLiveKit = null;
+
+        // The OpenTalk session stays up, so nothing else tells the user their
+        // audio and video will never arrive.
+        store.dispatch(noticeSet({
+            kind: 'error',
+            message: t({
+                de: 'Keine Medienverbindung zum Meeting. Audio und Video funktionieren nicht — bitte verlassen und erneut beitreten.',
+                en: 'No media connection to the meeting. Audio and video will not work — please leave and rejoin.',
+            }),
+        }));
     });
 }
 

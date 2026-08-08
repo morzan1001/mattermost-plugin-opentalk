@@ -5,7 +5,7 @@ import {createStore} from 'redux';
 
 import ExpandedView from './component';
 
-import {resetHand, leaveActiveConference, endActiveMeeting} from '../../conference/controller';
+import {resetHand, leaveActiveConference, endActiveMeeting, toggleMic} from '../../conference/controller';
 import * as trackRegistry from '../../conference/livekit/track_registry';
 
 jest.mock('../../conference/controller', () => ({
@@ -14,6 +14,8 @@ jest.mock('../../conference/controller', () => ({
     toggleMic: jest.fn().mockResolvedValue(undefined),
     toggleCam: jest.fn().mockResolvedValue(undefined),
     toggleScreenShare: jest.fn().mockResolvedValue(undefined),
+    raiseLocalHand: jest.fn(),
+    lowerLocalHand: jest.fn(),
     resetHand: jest.fn(),
 }));
 
@@ -23,6 +25,7 @@ jest.mock('../../conference/livekit/track_registry', () => {
     return makeTrackRegistryMock((id: string) => ({attach: jest.fn(), detach: jest.fn(), sid: id}));
 });
 
+import {setExpanded} from '../../store/slice_session';
 import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;
@@ -37,6 +40,7 @@ function makeStore(session: any = {}, extra: any = {}) {
                 status: 'idle',
                 expanded: false,
                 joinedAt: undefined,
+                participantCount: 0,
                 micEnabled: false,
                 camEnabled: false,
                 screenShareEnabled: false,
@@ -47,6 +51,30 @@ function makeStore(session: any = {}, extra: any = {}) {
             tracks: {perParticipant: {}, activeSpeakers: [], ...extra.tracks},
         },
     }));
+}
+
+interface ExpandedOverrides {
+    expanded?: boolean;
+    order?: string[];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    byId?: Record<string, any>;
+}
+
+function renderExpanded(overrides: ExpandedOverrides) {
+    const store = makeStore(
+        {expanded: overrides.expanded ?? true, status: 'connected'},
+        {participants: {byId: overrides.byId ?? {}, order: overrides.order ?? []}},
+    );
+    store.dispatch = jest.fn();
+
+    render(
+        <Provider store={store}>
+            <ExpandedView/>
+        </Provider>,
+    );
+
+    return store;
 }
 
 beforeEach(() => {
@@ -218,6 +246,168 @@ describe('ExpandedView', () => {
             expect(chip.tagName).not.toBe('BUTTON');
             fireEvent.click(chip);
             expect(resetHand).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('keyboard shortcuts and participant panel', () => {
+        beforeEach(() => {
+            (toggleMic as jest.Mock).mockClear();
+        });
+
+        it('collapses on Escape', () => {
+            const store = renderExpanded({});
+            fireEvent.keyDown(window, {key: 'Escape'});
+            expect(store.dispatch).toHaveBeenCalledWith(setExpanded(false));
+        });
+
+        it('collapses through the Minimize button', () => {
+            const store = renderExpanded({});
+            fireEvent.click(screen.getByTitle('Minimize'));
+            expect(store.dispatch).toHaveBeenCalledWith(setExpanded(false));
+        });
+
+        it('closes an open leave prompt on Escape instead of collapsing', () => {
+            const store = makeStore({expanded: true, status: 'connected', isHost: true, isRoomOwner: true});
+            store.dispatch = jest.fn();
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            fireEvent.click(screen.getByRole('button', {name: /Leave or end meeting/}));
+            expect(screen.getByRole('button', {name: 'End meeting for everyone'})).toBeInTheDocument();
+
+            fireEvent.keyDown(window, {key: 'Escape'});
+            expect(screen.queryByRole('button', {name: 'End meeting for everyone'})).toBeNull();
+            expect(store.dispatch).not.toHaveBeenCalledWith(setExpanded(false));
+        });
+
+        it('toggles the microphone on M', () => {
+            renderExpanded({});
+            fireEvent.keyDown(window, {key: 'm'});
+            expect(toggleMic).toHaveBeenCalled();
+        });
+
+        it('switches to the grid layout on 2', () => {
+            renderExpanded({order: ['p1'], byId: {p1: {id: 'p1', displayName: 'Anna'}}});
+            fireEvent.keyDown(window, {key: '2'});
+            expect(screen.getByTestId('grid-layout')).toBeInTheDocument();
+        });
+
+        it('renders the participant panel when it is open', () => {
+            localStorage.setItem('opentalk:panel-open:v1', 'true');
+            renderExpanded({order: ['p1'], byId: {p1: {id: 'p1', displayName: 'Anna'}}});
+            expect(screen.getAllByTestId(/^participant-row-/)).toHaveLength(1);
+        });
+
+        it('hides the panel when it is closed', () => {
+            localStorage.setItem('opentalk:panel-open:v1', 'false');
+            renderExpanded({order: ['p1'], byId: {p1: {id: 'p1', displayName: 'Anna'}}});
+            expect(screen.queryByTestId('participant-row-p1')).toBeNull();
+        });
+
+        it('binds no shortcuts while collapsed', () => {
+            renderExpanded({expanded: false});
+            fireEvent.keyDown(window, {key: 'm'});
+            expect(toggleMic).not.toHaveBeenCalled();
+        });
+
+        it('closes the panel through the header toggle', () => {
+            localStorage.setItem('opentalk:panel-open:v1', 'true');
+            renderExpanded({order: ['p1'], byId: {p1: {id: 'p1', displayName: 'Anna'}}});
+            expect(screen.getByTestId('participant-panel')).toBeInTheDocument();
+
+            fireEvent.click(screen.getByTestId('expanded-header-panel-toggle'));
+            expect(screen.queryByTestId('participant-panel')).toBeNull();
+            expect(localStorage.getItem('opentalk:panel-open:v1')).toBe('false');
+        });
+
+        it('requests fullscreen on the overlay through the header toggle', () => {
+            const requestFullscreen = jest.fn();
+
+            // jsdom implements no fullscreen API at all.
+            (HTMLElement.prototype as unknown as {requestFullscreen: unknown}).requestFullscreen = requestFullscreen;
+
+            renderExpanded({});
+            fireEvent.click(screen.getByTestId('expanded-header-fullscreen-toggle'));
+            expect(requestFullscreen).toHaveBeenCalled();
+            expect(requestFullscreen.mock.instances[0]).toBe(screen.getByTestId('expanded-view'));
+
+            delete (HTMLElement.prototype as unknown as {requestFullscreen?: unknown}).requestFullscreen;
+        });
+    });
+
+    describe('fullscreen portal targets', () => {
+        function setFullscreenElement(el: Element | null) {
+            Object.defineProperty(document, 'fullscreenElement', {configurable: true, writable: true, value: el});
+        }
+
+        afterEach(() => setFullscreenElement(null));
+
+        function renderAsHost() {
+            localStorage.setItem('opentalk:panel-open:v1', 'false');
+            localStorage.setItem(STORAGE_KEY, 'grid');
+            const store = makeStore(
+                {expanded: true, status: 'connected', isHost: true, isRoomOwner: true, localParticipantId: 'me'},
+                {participants: {byId: {p1: {id: 'p1', displayName: 'Anna'}}, order: ['p1']}},
+            );
+            render(
+                <Provider store={store}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            return screen.getByTestId('expanded-view');
+        }
+
+        it('mounts the leave prompt inside the fullscreen element', () => {
+            const overlay = renderAsHost();
+            setFullscreenElement(overlay);
+            fireEvent.click(screen.getByRole('button', {name: /Leave or end meeting/}));
+            expect(overlay).toContainElement(screen.getByRole('button', {name: 'End meeting for everyone'}));
+        });
+
+        it('mounts the leave prompt outside the overlay when not in fullscreen', () => {
+            const overlay = renderAsHost();
+            fireEvent.click(screen.getByRole('button', {name: /Leave or end meeting/}));
+            expect(overlay).not.toContainElement(screen.getByRole('button', {name: 'End meeting for everyone'}));
+        });
+
+        it('mounts the moderation menu inside the fullscreen element', () => {
+            const overlay = renderAsHost();
+            setFullscreenElement(overlay);
+            fireEvent.click(screen.getByTestId('participant-menu-trigger-p1'));
+            expect(overlay).toContainElement(screen.getByTestId('participant-menu-mute-p1'));
+        });
+
+        it('mounts the moderation menu outside the overlay when not in fullscreen', () => {
+            const overlay = renderAsHost();
+            fireEvent.click(screen.getByTestId('participant-menu-trigger-p1'));
+            expect(overlay).not.toContainElement(screen.getByTestId('participant-menu-mute-p1'));
+        });
+    });
+
+    describe('leave prompt lifecycle', () => {
+        it('drops a pending leave prompt when the meeting ends from outside', () => {
+            const owner = {expanded: true, status: 'connected', isHost: true, isRoomOwner: true};
+            const {rerender} = render(
+                <Provider store={makeStore(owner)}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            fireEvent.click(screen.getByRole('button', {name: /Leave or end meeting/}));
+            expect(screen.getByRole('button', {name: 'End meeting for everyone'})).toBeInTheDocument();
+
+            rerender(
+                <Provider store={makeStore({...owner, status: 'idle'})}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            rerender(
+                <Provider store={makeStore(owner)}>
+                    <ExpandedView/>
+                </Provider>,
+            );
+            expect(screen.queryByRole('button', {name: 'End meeting for everyone'})).toBeNull();
         });
     });
 

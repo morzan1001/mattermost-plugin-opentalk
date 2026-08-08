@@ -1,4 +1,4 @@
-import {useState, useRef, useCallback, useEffect} from 'react';
+import {useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo} from 'react';
 import type React from 'react';
 
 export interface DragHandle {
@@ -9,14 +9,28 @@ export interface UseDraggableResult {
     style: React.CSSProperties;
     handleProps: DragHandle;
     isDragging: boolean;
+    nodeRef: React.MutableRefObject<HTMLDivElement | null>;
 }
 
-interface Position {
-    x: number;
-    y: number;
+interface Offsets {
+    left: number;
+    bottom: number;
 }
 
-function readStoredPosition(storageKey: string): Position | null {
+interface Box {
+    width: number;
+    height: number;
+}
+
+interface DragStart {
+    pointerX: number;
+    pointerY: number;
+    startLeft: number;
+    startBottom: number;
+    box: Box;
+}
+
+function readStoredOffsets(storageKey: string): Offsets | null {
     try {
         const raw = localStorage.getItem(storageKey);
         if (raw === null) {
@@ -26,16 +40,16 @@ function readStoredPosition(storageKey: string): Position | null {
         if (
             parsed !== null &&
             typeof parsed === 'object' &&
-            'x' in parsed &&
-            'y' in parsed &&
-            typeof (parsed as Record<string, unknown>).x === 'number' &&
-            typeof (parsed as Record<string, unknown>).y === 'number' &&
-            isFinite((parsed as {x: number; y: number}).x) &&
-            isFinite((parsed as {x: number; y: number}).y)
+            'left' in parsed &&
+            'bottom' in parsed &&
+            typeof (parsed as Record<string, unknown>).left === 'number' &&
+            typeof (parsed as Record<string, unknown>).bottom === 'number' &&
+            isFinite((parsed as Offsets).left) &&
+            isFinite((parsed as Offsets).bottom)
         ) {
             return {
-                x: (parsed as {x: number; y: number}).x,
-                y: (parsed as {x: number; y: number}).y,
+                left: (parsed as Offsets).left,
+                bottom: (parsed as Offsets).bottom,
             };
         }
         return null;
@@ -46,34 +60,88 @@ function readStoredPosition(storageKey: string): Position | null {
 
 const MARGIN = 16;
 
-function clampPosition(x: number, y: number): Position {
-    const clampedX = Math.min(Math.max(x, MARGIN), window.innerWidth - MARGIN);
-    const clampedY = Math.min(Math.max(y, MARGIN), window.innerHeight - MARGIN);
-    return {x: clampedX, y: clampedY};
+// Keeps the widget's top edge clear of Mattermost's global header.
+const HEADER_INSET = 60;
+
+// Keeps the widget clear of Mattermost's App Bar column on the right edge.
+const APP_BAR_INSET = 60;
+
+const DEFAULT_OFFSETS: Offsets = {left: MARGIN, bottom: MARGIN};
+
+function clampOffsets(left: number, bottom: number, box: Box): Offsets {
+    const maxLeft = window.innerWidth - box.width - APP_BAR_INSET;
+    const maxBottom = window.innerHeight - box.height - HEADER_INSET;
+
+    // Math.max outermost, so a viewport too small for the widget resolves to
+    // the bottom-left margin and overflows upward instead of inverting into
+    // negative offsets that push the drag handle offscreen.
+    return {
+        left: Math.max(MARGIN, Math.min(left, maxLeft)),
+        bottom: Math.max(MARGIN, Math.min(bottom, maxBottom)),
+    };
 }
 
-export function useDraggable(opts: {
-    storageKey: string;
-    defaultPosition: Position;
-}): UseDraggableResult {
-    const {storageKey, defaultPosition} = opts;
+function dragOffsets(ev: MouseEvent, start: DragStart): Offsets {
+    // bottom grows upward, so it subtracts the vertical pointer delta.
+    return clampOffsets(
+        start.startLeft + (ev.pageX - start.pointerX),
+        start.startBottom - (ev.pageY - start.pointerY),
+        start.box,
+    );
+}
 
-    const [position, setPosition] = useState<Position>(() => {
-        const stored = readStoredPosition(storageKey);
+export function useDraggable(opts: {storageKey: string}): UseDraggableResult {
+    const {storageKey} = opts;
 
-        // Re-clamp on restore: the viewport may have shrunk since the position
-        // was saved, which would otherwise place the widget fully offscreen.
-        return stored ? clampPosition(stored.x, stored.y) : defaultPosition;
-    });
+    const nodeRef = useRef<HTMLDivElement | null>(null);
+
+    const stored = useMemo(() => readStoredOffsets(storageKey), [storageKey]);
+
+    // Unclamped placeholder: there is no DOM to measure when this runs, and the
+    // default corner needs the widget's width.
+    const [offsets, setOffsets] = useState<Offsets>(() => stored ?? DEFAULT_OFFSETS);
+
+    // A stored position is already final, so it skips the placement pass.
+    const placedRef = useRef(stored !== null);
 
     const [isDragging, setIsDragging] = useState(false);
 
-    const dragStartRef = useRef<{
-        pointerX: number;
-        pointerY: number;
-        widgetX: number;
-        widgetY: number;
-    } | null>(null);
+    const clampToViewport = useCallback(() => {
+        const node = nodeRef.current;
+        if (!node) {
+            return;
+        }
+        const box = node.getBoundingClientRect();
+
+        // The default corner is bottom-right, which only becomes computable once
+        // the content has laid out; a zero width would pin a bogus box to the edge.
+        const place = !placedRef.current && box.width > 0;
+        if (place) {
+            placedRef.current = true;
+        }
+
+        setOffsets((cur) => {
+            // This lands exactly on maxLeft, so later content growth slides the
+            // widget left and keeps it glued to the right edge.
+            const base = place ? {left: window.innerWidth - box.width - APP_BAR_INSET, bottom: MARGIN} : cur;
+            const next = clampOffsets(base.left, base.bottom, box);
+            return next.left === cur.left && next.bottom === cur.bottom ? cur : next;
+        });
+    }, []);
+
+    // No dependency array: the box grows and shrinks with the widget's content,
+    // so every render has to re-measure. The equality bail-out above ends the
+    // resulting update cycle.
+    useLayoutEffect(clampToViewport);
+
+    useEffect(() => {
+        window.addEventListener('resize', clampToViewport);
+        return () => {
+            window.removeEventListener('resize', clampToViewport);
+        };
+    }, [clampToViewport]);
+
+    const dragStartRef = useRef<DragStart | null>(null);
 
     const onPointerMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
     const onPointerUpRef = useRef<((e: MouseEvent) => void) | null>(null);
@@ -101,14 +169,20 @@ export function useDraggable(opts: {
             const startPointerX = e.pageX;
             const startPointerY = e.pageY;
 
-            // Functional update lets us read the current position without
-            // adding it to the useCallback dep list.
-            setPosition((current) => {
+            // The widget cannot resize mid-drag, so measure once instead of
+            // forcing a layout on every pointermove.
+            const rect = nodeRef.current?.getBoundingClientRect();
+            const box: Box = {width: rect?.width ?? 0, height: rect?.height ?? 0};
+
+            // Functional update lets us read the current offsets without
+            // adding them to the useCallback dep list.
+            setOffsets((current) => {
                 dragStartRef.current = {
                     pointerX: startPointerX,
                     pointerY: startPointerY,
-                    widgetX: current.x,
-                    widgetY: current.y,
+                    startLeft: current.left,
+                    startBottom: current.bottom,
+                    box,
                 };
                 return current; // no change
             });
@@ -119,11 +193,8 @@ export function useDraggable(opts: {
                 if (!dragStartRef.current) {
                     return;
                 }
-                const {pointerX, pointerY, widgetX, widgetY} = dragStartRef.current;
-                const newX = widgetX + (ev.pageX - pointerX);
-                const newY = widgetY + (ev.pageY - pointerY);
-                const clamped = clampPosition(newX, newY);
-                setPosition(clamped);
+                const clamped = dragOffsets(ev, dragStartRef.current);
+                setOffsets(clamped);
                 setIsDragging(false);
                 dragStartRef.current = null;
 
@@ -148,11 +219,7 @@ export function useDraggable(opts: {
                     handlePointerUp(ev);
                     return;
                 }
-                const {pointerX, pointerY, widgetX, widgetY} = dragStartRef.current;
-                const newX = widgetX + (ev.pageX - pointerX);
-                const newY = widgetY + (ev.pageY - pointerY);
-                const clamped = clampPosition(newX, newY);
-                setPosition(clamped);
+                setOffsets(dragOffsets(ev, dragStartRef.current));
             };
 
             onPointerMoveRef.current = handlePointerMove;
@@ -167,11 +234,11 @@ export function useDraggable(opts: {
 
     const style: React.CSSProperties = {
         position: 'fixed' as const,
-        left: position.x,
-        top: position.y,
+        left: offsets.left,
+        bottom: offsets.bottom,
     };
 
     const handleProps: DragHandle = {onPointerDown};
 
-    return {style, handleProps, isDragging};
+    return {style, handleProps, isDragging, nodeRef};
 }

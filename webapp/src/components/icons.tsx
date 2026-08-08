@@ -44,8 +44,12 @@ export const MicIcon: React.FC = () => (
     </svg>
 );
 
-export const MicOffIcon: React.FC = () => (
-    <svg {...baseProps}>
+export const MicOffIcon: React.FC<{size?: number}> = ({size = 20}) => (
+    <svg
+        {...baseProps}
+        width={size}
+        height={size}
+    >
         <line
             x1='2'
             x2='22'
@@ -231,6 +235,111 @@ export const CrownIcon: React.FC<{size?: number}> = ({size = 20}) => (
     >
         <path d='M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z'/>
         <path d='M5 21h14'/>
+    </svg>
+);
+
+export const PinIcon: React.FC<{size?: number}> = ({size = 16}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth={2}
+        strokeLinecap='round'
+        strokeLinejoin='round'
+    >
+        <line
+            x1='12'
+            y1='17'
+            x2='12'
+            y2='22'
+        />
+        <path d='M5 17h14l-1.7-3.4a2 2 0 0 1-.3-1V4H7v8.6a2 2 0 0 1-.3 1L5 17z'/>
+    </svg>
+);
+
+export const PinOffIcon: React.FC<{size?: number}> = ({size = 16}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth={2}
+        strokeLinecap='round'
+        strokeLinejoin='round'
+    >
+        <line
+            x1='2'
+            y1='2'
+            x2='22'
+            y2='22'
+        />
+        <line
+            x1='12'
+            y1='17'
+            x2='12'
+            y2='22'
+        />
+        <path d='M9 4h8v8.6a2 2 0 0 0 .3 1L19 17H8'/>
+    </svg>
+);
+
+export const PanelIcon: React.FC<{size?: number}> = ({size = 20}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth='2'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+    >
+        <rect
+            x='3'
+            y='4'
+            width='18'
+            height='16'
+            rx='2'
+        />
+        <line
+            x1='15'
+            y1='4'
+            x2='15'
+            y2='20'
+        />
+    </svg>
+);
+
+export const FullscreenIcon: React.FC<{size?: number}> = ({size = 20}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth='2'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+    >
+        <path d='M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M16 21h3a2 2 0 0 0 2-2v-3M8 21H5a2 2 0 0 1-2-2v-3'/>
+    </svg>
+);
+
+export const FullscreenExitIcon: React.FC<{size?: number}> = ({size = 20}) => (
+    <svg
+        width={size}
+        height={size}
+        viewBox='0 0 24 24'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth='2'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+    >
+        <path d='M8 3v3a2 2 0 0 1-2 2H3M16 3v3a2 2 0 0 0 2 2h3M16 21v-3a2 2 0 0 1 2-2h3M8 21v-3a2 2 0 0 0-2-2H3'/>
     </svg>
 );
 

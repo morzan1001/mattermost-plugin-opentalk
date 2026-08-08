@@ -18,7 +18,11 @@ import {leaveActiveConference, endActiveMeeting, toggleMic, toggleCam, toggleScr
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeStore(session: any) {
     return createStore(() => ({
-        'plugins-com.github.morzan1001.mattermost-plugin-opentalk': {session},
+        'plugins-com.github.morzan1001.mattermost-plugin-opentalk': {
+            session,
+            participants: {byId: {}, order: []},
+            tracks: {perParticipant: {}},
+        },
     }));
 }
 
@@ -60,6 +64,23 @@ describe('MeetingMiniBar', () => {
         expect(screen.getByTitle('Turn on camera')).toBeInTheDocument();
         expect(screen.getByTitle('Share screen')).toBeInTheDocument();
         expect(screen.getByRole('button', {name: /Leave meeting/})).toBeInTheDocument();
+    });
+
+    // The resize handle grows the box rightward from a left anchor, so the
+    // widget must stay positioned by left/bottom whatever its default corner.
+    it('positions the widget by left/bottom, never by top or right', () => {
+        const {container} = render(
+            <Provider store={makeStore({status: 'connected', participantCount: 1, micEnabled: false, camEnabled: false, screenShareEnabled: false})}>
+                <MeetingMiniBar/>
+            </Provider>,
+        );
+
+        const bar = container.querySelector('.opentalk-mini-bar') as HTMLElement;
+        expect(bar).not.toBeNull();
+        expect(bar.style.left).not.toBe('');
+        expect(bar.style.bottom).not.toBe('');
+        expect(bar.style.top).toBe('');
+        expect(bar.style.right).toBe('');
     });
 
     it('clicking mic button calls toggleMic', () => {
