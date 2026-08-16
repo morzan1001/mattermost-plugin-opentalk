@@ -25,7 +25,7 @@
     "@mattermost/client": "11.9.0",
     "@mattermost/eslint-plugin": "1.1.0-0",
     "@mattermost/types": "11.9.0",
-    "@testing-library/jest-dom": "7.0.0",
+    "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.2",
     "@types/babel__core": "7.20.5",
     "@types/babel__template": "7.4.4",
