@@ -6,6 +6,7 @@ import {getMuteOnJoin} from './livekit/devices';
 import {LiveKitRoom, participantIdFromIdentity} from './livekit/room';
 import {pickScreenSource} from './livekit/screen_picker';
 import * as trackRegistry from './livekit/track_registry';
+import {JoinCancelledError} from './signaling/conference_room';
 import type {Participant} from './signaling/modules/core';
 
 import {getOrCreateDeviceSecret, heartbeat} from '../client/rest';
@@ -350,9 +351,18 @@ export async function startConferenceConnection(
     };
 
     client.on('closed', () => {
+        // A torn-down session's late events must not touch state that may
+        // already belong to a newer call.
+        if (activeClient !== client) {
+            return;
+        }
         tearDownActiveConference().catch(() => { /* swallow */ });
     });
     client.on('error', (err) => {
+        if (activeClient !== client) {
+            return;
+        }
+
         // Dispatch the error AFTER teardown: teardown's disconnected() resets
         // the session to initial (clearing error), so an error dispatched
         // before it would be wiped in the same tick and the user would see no
@@ -368,6 +378,9 @@ export async function startConferenceConnection(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
         await tearDownActiveConference();
+        if (e instanceof JoinCancelledError) {
+            return;
+        }
         dispatchConnectError(e?.message ?? String(e));
     }
 }
@@ -400,6 +413,12 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
     });
 
     lk.on('disconnected', () => {
+        // Intentional teardown nulls activeLiveKit before disconnecting; only
+        // an unexpected drop still sees the pointer, and a stale room must not
+        // tear down a newer call.
+        if (activeLiveKit !== lk) {
+            return;
+        }
         tearDownActiveConference().catch(() => { /* swallow */ });
     });
 
@@ -477,6 +496,9 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
     });
 
     lk.connect(url, token).catch((err: Error) => {
+        if (activeLiveKit !== lk) {
+            return;
+        }
         // eslint-disable-next-line no-console
         console.warn('[opentalk] LiveKit connect failed:', err.message);
         store.dispatch(setLivekitConnected(false));

@@ -6,7 +6,7 @@ import {createStore} from 'redux';
 // mock factories can use it to hand instances back to tests.
 jest.mock('./controller.test.helpers', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const reg: {client: any; lk: any; livekitConnectError: Error | null} = {client: null, lk: null, livekitConnectError: null};
+    const reg: {client: any; lk: any; livekitConnectError: Error | null; livekitConnectFactory: (() => Promise<void>) | null; clientConnectFactory: (() => Promise<void>) | null} = {client: null, lk: null, livekitConnectError: null, livekitConnectFactory: null, clientConnectFactory: null};
     return {
         reg,
         setClient(c: unknown) {
@@ -44,7 +44,12 @@ jest.mock('./client', () => {
             (this.listeners[ev] || []).slice().forEach((cb: (x: unknown) => void) => cb(d));
         }
 
-        connect = jest.fn().mockResolvedValue(undefined);
+        connect = jest.fn().mockImplementation(() => {
+            if (helpers.reg.clientConnectFactory) {
+                return helpers.reg.clientConnectFactory();
+            }
+            return Promise.resolve();
+        });
         leave = jest.fn().mockResolvedValue(undefined);
         raiseHand = jest.fn();
         lowerHand = jest.fn();
@@ -89,7 +94,12 @@ jest.mock('./livekit/room', () => {
             (this.listeners[ev] || []).slice().forEach((cb: (x: unknown) => void) => cb(d));
         }
 
-        connect = jest.fn().mockImplementation(() => (helpers.reg.livekitConnectError ? Promise.reject(helpers.reg.livekitConnectError) : Promise.resolve()));
+        connect = jest.fn().mockImplementation(() => {
+            if (helpers.reg.livekitConnectFactory) {
+                return helpers.reg.livekitConnectFactory();
+            }
+            return helpers.reg.livekitConnectError ? Promise.reject(helpers.reg.livekitConnectError) : Promise.resolve();
+        });
         disconnect = jest.fn().mockResolvedValue(undefined);
         enableMic = jest.fn().mockResolvedValue(undefined);
         disableMic = jest.fn().mockResolvedValue(undefined);
@@ -164,6 +174,7 @@ import {
 } from './controller';
 import {isElectron, getDesktopSources, captureDesktopStream} from './livekit/desktop_capturer';
 import {pickScreenSource} from './livekit/screen_picker';
+import {JoinCancelledError} from './signaling/conference_room';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const helpers = require('./controller.test.helpers');
@@ -224,6 +235,8 @@ beforeEach(() => {
     helpers.reg.client = null;
     helpers.reg.lk = null;
     helpers.reg.livekitConnectError = null;
+    helpers.reg.livekitConnectFactory = null;
+    helpers.reg.clientConnectFactory = null;
     dispatched = [];
     mockFetch.mockReset();
     mockFetch.mockResolvedValue({ok: true, json: async () => ({})});
@@ -404,6 +417,146 @@ describe('"error" client event', () => {
         const types = dispatched.map((a) => a.type);
         expect(types).toContain('opentalk/participants/reset');
         expect(jest.getTimerCount()).toBe(0);
+    });
+});
+
+describe('stale session events after teardown', () => {
+    const flush = async () => {
+        for (let i = 0; i < 5; i++) {
+            // eslint-disable-next-line no-await-in-loop
+            await Promise.resolve();
+        }
+    };
+
+    it('a late socket error after an intentional leave dispatches nothing', async () => {
+        const store = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: false});
+        await leaveActiveConference();
+
+        dispatched = [];
+        c().trigger('error', new Error('ws gone'));
+        await flush();
+
+        expect(dispatched.find((a) => a.type === 'opentalk/notice/set')).toBeUndefined();
+        expect(dispatched.find((a) => a.type === 'opentalk/session/connect_error')).toBeUndefined();
+        expect(dispatched.find((a) => a.type === 'opentalk/session/disconnected')).toBeUndefined();
+    });
+
+    it("a stale client's late closed/error cannot tear down a newer call", async () => {
+        const store1 = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store1);
+        await Promise.resolve();
+        const stale = c();
+        stale.trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: false});
+        await leaveActiveConference();
+
+        const store2 = makeTestStore();
+        startConferenceConnection('room-2', 'ch-2', 'Bob', store2);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Bob'}], isHost: false});
+        await Promise.resolve();
+
+        dispatched = [];
+        stale.trigger('closed', {code: 1000});
+        stale.trigger('error', new Error('ws gone'));
+        await flush();
+
+        expect(dispatched.find((a) => a.type === 'opentalk/session/disconnected')).toBeUndefined();
+        expect(dispatched.find((a) => a.type === 'opentalk/notice/set')).toBeUndefined();
+        expect(dispatched.find((a) => a.type === 'opentalk/participants/reset')).toBeUndefined();
+
+        // The newer call's heartbeat keeps running.
+        expect(jest.getTimerCount()).toBeGreaterThan(0);
+    });
+
+    it("a stale LiveKit room's late disconnect cannot tear down a newer call", async () => {
+        const store1 = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store1);
+        await Promise.resolve();
+        c().trigger('connected', {
+            participants: [{id: 'self', displayName: 'Alice'}],
+            isHost: false,
+            livekit: {url: 'wss://lk.example', token: 'tok'},
+        });
+        await Promise.resolve();
+        const staleLk = lkRoom();
+        await leaveActiveConference();
+
+        const store2 = makeTestStore();
+        startConferenceConnection('room-2', 'ch-2', 'Bob', store2);
+        await Promise.resolve();
+        c().trigger('connected', {
+            participants: [{id: 'self', displayName: 'Bob'}],
+            isHost: false,
+            livekit: {url: 'wss://lk.example', token: 'tok'},
+        });
+        await Promise.resolve();
+
+        dispatched = [];
+        staleLk.trigger('disconnected');
+        await flush();
+
+        expect(dispatched.find((a) => a.type === 'opentalk/session/disconnected')).toBeUndefined();
+
+        // The newer call's heartbeat keeps running.
+        expect(jest.getTimerCount()).toBeGreaterThan(0);
+    });
+
+    it('a late LiveKit connect rejection leaves the active room intact', async () => {
+        let rejectConnect!: (err: Error) => void;
+        helpers.reg.livekitConnectFactory = () => new Promise((_resolve, reject) => {
+            rejectConnect = reject;
+        });
+
+        const store1 = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store1);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: false});
+        c().trigger('livekit_credentials', {url: 'wss://lk.example', token: 'tok'});
+        await Promise.resolve();
+        await leaveActiveConference();
+
+        helpers.reg.livekitConnectFactory = null;
+        const store2 = makeTestStore();
+        startConferenceConnection('room-2', 'ch-2', 'Bob', store2);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Bob'}], isHost: false});
+        c().trigger('livekit_credentials', {url: 'wss://lk.example', token: 'tok'});
+        await Promise.resolve();
+
+        dispatched = [];
+        rejectConnect(new Error('late pc failure'));
+        await flush();
+
+        expect(dispatched.find((a) => a.type === 'opentalk/session/set_livekit_connected' && a.payload?.value === false)).toBeUndefined();
+        expect(dispatched.find((a) => a.type === 'opentalk/session/disconnected')).toBeUndefined();
+        expect(dispatched.find((a) => a.type === 'opentalk/notice/set')).toBeUndefined();
+
+        // Positive: the surviving room still drives media controls.
+        setActiveStore(store2);
+        dispatched = [];
+        await toggleMic();
+        expect(dispatched.find((a) => a.type === 'opentalk/session/set_mic_enabled')).toBeDefined();
+    });
+
+    it('reports no failure when leave cancels an in-flight join', async () => {
+        helpers.reg.clientConnectFactory = () => Promise.reject(new JoinCancelledError());
+        const store = makeTestStore();
+        await startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+
+        expect(dispatched.find((a) => a.type === 'opentalk/notice/set')).toBeUndefined();
+        expect(dispatched.find((a) => a.type === 'opentalk/session/connect_error')).toBeUndefined();
+    });
+
+    it('still reports a genuine join failure through the connect rejection path', async () => {
+        helpers.reg.clientConnectFactory = () => Promise.reject(new Error('boom'));
+        const store = makeTestStore();
+        await startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+
+        expect(dispatched.find((a) => a.type === 'opentalk/session/connect_error')?.payload?.error).toBe('boom');
+        expect(dispatched.find((a) => a.type === 'opentalk/notice/set')).toBeDefined();
     });
 });
 

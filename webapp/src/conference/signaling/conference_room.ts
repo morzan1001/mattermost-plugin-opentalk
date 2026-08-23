@@ -36,6 +36,11 @@ function clearResumption(roomID: string): void {
     }
 }
 
+// WebSocket ErrorEvents carry no message; describe from the room state.
+function signalingErrorMessage(state: RoomState): string {
+    return state === 'connected' ? 'signaling connection lost' : 'could not reach the signaling server';
+}
+
 export interface AuthProvider {
     getTicket(roomID: string, channelID: string, deviceSecret: string, resumption?: string): Promise<{
         ticket: string;
@@ -45,6 +50,14 @@ export interface AuthProvider {
 }
 
 export type RoomState = 'idle' | 'authenticating' | 'connecting' | 'connected' | 'leaving' | 'closed';
+
+// Marks a connect() aborted by our own leave(); must not surface as a failed join.
+export class JoinCancelledError extends Error {
+    constructor() {
+        super('join cancelled');
+        this.name = 'JoinCancelledError';
+    }
+}
 
 type EventName =
     | 'connected'
@@ -72,6 +85,7 @@ export class ConferenceRoom {
     private participants: Participant[] = [];
     private localId: string = '';
     private closedEmitted = false;
+    private joinCancelled = false;
     private listeners: Record<EventName, Listener[]> = {
         connected: [],
         participant_joined: [],
@@ -116,6 +130,7 @@ export class ConferenceRoom {
         }
         this.roomID = roomID;
         this.state = 'authenticating';
+        this.joinCancelled = false;
 
         // A prior session's resumption goes into the REST start body, not the
         // join frame; the controller mints a fresh token in the response.
@@ -363,7 +378,7 @@ export class ConferenceRoom {
                 });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.socket.on('error', (e: any) => {
-                    this.emit('error', e instanceof Error ? e : new Error(String(e)));
+                    this.emit('error', e instanceof Error ? e : new Error(signalingErrorMessage(this.state)));
                 });
 
                 this.socket.connect();
@@ -380,17 +395,20 @@ export class ConferenceRoom {
                         offConnected();
                         offClosed();
                         offError();
-                        reject(new Error('socket closed before joinSuccess'));
+                        reject(this.joinCancelled ? new JoinCancelledError() : new Error('socket closed before joinSuccess'));
                     });
                     const offError = this.on('error', (err) => {
                         offConnected();
                         offClosed();
                         offError();
-                        reject(err);
+                        reject(this.joinCancelled ? new JoinCancelledError() : err);
                     });
                 });
             },
             (err) => {
+                if (this.state === 'closed') {
+                    throw new JoinCancelledError();
+                }
                 this.state = 'idle';
                 throw err;
             },
@@ -488,6 +506,7 @@ export class ConferenceRoom {
     }
 
     public async leave(): Promise<void> {
+        this.joinCancelled = true;
         if (this.state !== 'connected') {
             // Called before the join completed (idle/authenticating/connecting)
             // or after a close. Abort any in-flight socket and unbind listeners
