@@ -458,3 +458,42 @@ describe('ConferenceRoom join cancellation', () => {
         await expect(connectPromise).rejects.toBeInstanceOf(JoinCancelledError);
     });
 });
+
+describe('ConferenceRoom close-code classification', () => {
+    async function makeRoomWithClosedListener(): Promise<{room: ConferenceRoom; onClosed: jest.Mock; ws: FakeWebSocket}> {
+        const room = new ConferenceRoom(makeFakeAuth(), 'wss://rs.example');
+        const onClosed = jest.fn();
+        room.on('closed', onClosed);
+        room.connect('room-1', 'ch-1', 'alice', 'dev-1');
+        await Promise.resolve();
+        await Promise.resolve();
+        const ws = getWS();
+        ws.onopen?.({} as Event);
+        emit(ws, {namespace: 'control', payload: {message: 'join_success', id: 'self-id', display_name: 'self-name', participants: []}});
+        return {room, onClosed, ws};
+    }
+
+    it.each([
+        [1006, true],
+        [1001, true],
+        [4999, true],
+        [1012, true],
+        [1000, false],
+        [3000, false],
+        [4000, false],
+    ])('marks close code %i as recoverable=%s', async (code, expected) => {
+        const {onClosed, ws} = await makeRoomWithClosedListener();
+
+        ws.onclose?.({code} as CloseEvent);
+
+        expect(onClosed).toHaveBeenCalledWith(expect.objectContaining({code, recoverable: expected}));
+    });
+
+    it('emits the intentional leave close as non-recoverable', async () => {
+        const {room, onClosed} = await makeRoomWithClosedListener();
+
+        await room.leave();
+
+        expect(onClosed).toHaveBeenCalledWith(expect.objectContaining({code: 1000, recoverable: false}));
+    });
+});

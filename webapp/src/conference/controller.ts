@@ -349,24 +349,37 @@ export async function startConferenceConnection(
             message: `${t({de: 'Meeting-Beitritt fehlgeschlagen', en: 'Could not join the meeting'})}: ${message}`,
         }));
     };
+    let joinSettled = false;
 
-    client.on('closed', () => {
+    client.on('closed', (data) => {
         // A torn-down session's late events must not touch state that may
         // already belong to a newer call.
         if (activeClient !== client) {
             return;
         }
-        tearDownActiveConference().catch(() => { /* swallow */ });
-    });
-    client.on('error', (err) => {
-        if (activeClient !== client) {
+        if (!joinSettled) {
+            // During the join the close rejects connect(); its catch path owns
+            // teardown and reporting.
             return;
         }
 
-        // Dispatch the error AFTER teardown: teardown's disconnected() resets
-        // the session to initial (clearing error), so an error dispatched
-        // before it would be wiped in the same tick and the user would see no
-        // feedback for a failed join.
+        tearDownActiveConference().finally(() => {
+            let message = t({de: 'Verbindung zum Meetingserver verloren', en: 'Lost connection to the meeting server'});
+            if (!data.recoverable) {
+                message = t({de: 'Die Meetingverbindung wurde beendet', en: 'The meeting connection was closed'});
+            }
+            store.dispatch(noticeSet({kind: 'error', message}));
+        });
+    });
+    client.on('error', (err) => {
+        // Every socket error is followed by a close carrying the code, so once
+        // the join has settled that close owns reporting; reporting here would
+        // mislabel a mid-call drop as a failed join.
+        if (activeClient !== client || joinSettled) {
+            return;
+        }
+
+        // Dispatch after teardown or disconnected() wipes it in the same tick.
         tearDownActiveConference().finally(() => dispatchConnectError(err.message));
     });
 
@@ -374,6 +387,7 @@ export async function startConferenceConnection(
 
     try {
         await client.connect(roomID, channelID, displayName, getOrCreateDeviceSecret());
+        joinSettled = true;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
@@ -419,7 +433,10 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         if (activeLiveKit !== lk) {
             return;
         }
-        tearDownActiveConference().catch(() => { /* swallow */ });
+        tearDownActiveConference().finally(() => {
+            const message = t({de: 'Medienverbindung getrennt', en: 'Media connection dropped'});
+            store.dispatch(noticeSet({kind: 'error', message}));
+        });
     });
 
     // Differentiate screen-share from camera: both have kind:'video' in LiveKit

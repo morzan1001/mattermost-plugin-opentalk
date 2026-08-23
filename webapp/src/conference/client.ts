@@ -63,7 +63,7 @@ export class OpenTalkConferenceClient {
     public on(event: 'raise_hands_toggled', cb: (data: {enabled: boolean}) => void): () => void;
     public on(event: 'force_muted', cb: (data: {moderator: string}) => void): () => void;
     public on(event: 'role_updated', cb: (data: {participantId: string; newRole: 'user' | 'moderator'}) => void): () => void;
-    public on(event: 'closed', cb: (data: {code: number}) => void): () => void;
+    public on(event: 'closed', cb: (data: {code: number; recoverable: boolean}) => void): () => void;
     public on(event: 'error', cb: (err: Error) => void): () => void;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

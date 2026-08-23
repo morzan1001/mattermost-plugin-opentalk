@@ -41,6 +41,13 @@ function signalingErrorMessage(state: RoomState): string {
     return state === 'connected' ? 'signaling connection lost' : 'could not reach the signaling server';
 }
 
+// Close codes that mean a dropped connection rather than a final termination
+// (mirrors the upstream frontend's classification; 4999 is our heartbeat
+// timeout). Everything else, including 1000, is treated as terminal.
+export function isRecoverableCloseCode(code: number): boolean {
+    return [1001, 1005, 1006, 1007, 1012, 1013, 4999].includes(code);
+}
+
 export interface AuthProvider {
     getTicket(roomID: string, channelID: string, deviceSecret: string, resumption?: string): Promise<{
         ticket: string;
@@ -373,7 +380,8 @@ export class ConferenceRoom {
                     this.listener?.dispose();
                     if (!this.closedEmitted) {
                         this.closedEmitted = true;
-                        this.emit('closed', {code: e?.code ?? 1006});
+                        const code = e?.code ?? 1006;
+                        this.emit('closed', {code, recoverable: isRecoverableCloseCode(code)});
                     }
                 });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -516,7 +524,7 @@ export class ConferenceRoom {
             this.listener?.dispose();
             if (!this.closedEmitted) {
                 this.closedEmitted = true;
-                this.emit('closed', {code: 1000});
+                this.emit('closed', {code: 1000, recoverable: false});
             }
             return;
         }
@@ -533,7 +541,7 @@ export class ConferenceRoom {
         // closedEmitted so we never double-fire.
         if (!this.closedEmitted) {
             this.closedEmitted = true;
-            this.emit('closed', {code: 1000});
+            this.emit('closed', {code: 1000, recoverable: false});
         }
     }
 

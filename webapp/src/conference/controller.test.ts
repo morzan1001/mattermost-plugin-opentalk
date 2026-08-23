@@ -392,31 +392,161 @@ describe('"closed" client event', () => {
 });
 
 describe('"error" client event', () => {
-    it('dispatches connectError + participantsReset and cleans up', async () => {
+    const flush = async () => {
+        for (let i = 0; i < 5; i++) {
+            // eslint-disable-next-line no-await-in-loop
+            await Promise.resolve();
+        }
+    };
+
+    it('waits for the classified close event on a mid-call socket error', async () => {
         const store = makeTestStore();
         startConferenceConnection('room-1', 'ch-1', 'Alice', store);
         await Promise.resolve();
 
         c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: false});
+        await Promise.resolve();
         dispatched = [];
         mockFetch.mockReset();
         mockFetch.mockResolvedValue({ok: true});
 
-        c().trigger('error', new Error('ws gone'));
+        c().trigger('error', new Error('signaling connection lost'));
+        await flush();
 
-        // connectError is now dispatched after teardown resolves (so
-        // disconnected() cannot wipe it in the same tick); flush the teardown
-        // microtasks before asserting.
+        // Every socket error is followed by a close carrying the code;
+        // reporting here would mislabel the drop as a failed join.
+        expect(dispatched.find((a) => a.type === 'opentalk/session/connect_error')).toBeUndefined();
+        expect(dispatched.find((a) => a.type === 'opentalk/notice/set')).toBeUndefined();
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+
+        const notice = dispatched.find((a) => a.type === 'opentalk/notice/set');
+        expect(notice?.payload?.message).toBe('Lost connection to the meeting server');
+        expect(dispatched.find((a) => a.type === 'opentalk/participants/reset')).toBeDefined();
+        expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('reports a join-phase socket error immediately as a join failure', async () => {
+        const store = makeTestStore();
+        let rejectConnect!: (e: Error) => void;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => new Promise((_resolve, reject) => {
+            rejectConnect = reject;
+        });
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+
+        c().trigger('error', new Error('could not reach the signaling server'));
+        await flush();
+
+        const errAction = dispatched.find((a) => a.type === 'opentalk/session/connect_error');
+        expect(errAction?.payload?.error).toBe('could not reach the signaling server');
+        expect(dispatched.filter((a) => a.type === 'opentalk/notice/set')).toHaveLength(1);
+
+        // The eventual close of the aborted socket must not add a second toast.
+        rejectConnect(new Error('socket closed before joinSuccess'));
+        await flush();
+        expect(dispatched.filter((a) => a.type === 'opentalk/notice/set')).toHaveLength(1);
+    });
+});
+
+describe('classified drop notices', () => {
+    const flush = async () => {
         for (let i = 0; i < 5; i++) {
             // eslint-disable-next-line no-await-in-loop
             await Promise.resolve();
         }
+    };
 
-        const errAction = dispatched.find((a) => a.type === 'opentalk/session/connect_error');
-        expect(errAction?.payload?.error).toBe('ws gone');
-        const types = dispatched.map((a) => a.type);
-        expect(types).toContain('opentalk/participants/reset');
-        expect(jest.getTimerCount()).toBe(0);
+    async function connectActive(withLiveKit = false) {
+        const store = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {
+            participants: [{id: 'self', displayName: 'Alice'}],
+            isHost: false,
+            ...(withLiveKit && {livekit: {url: 'wss://lk.example', token: 'tok'}}),
+        });
+        await Promise.resolve();
+    }
+
+    function notices(): AnyAction[] {
+        return dispatched.filter((a) => a.type === 'opentalk/notice/set');
+    }
+
+    it('shows the connection-lost notice on a recoverable remote close', async () => {
+        await connectActive();
+        dispatched = [];
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+
+        expect(notices()).toHaveLength(1);
+        expect(notices()[0].payload?.kind).toBe('error');
+        expect(notices()[0].payload?.message).toBe('Lost connection to the meeting server');
+    });
+
+    it('shows a neutral notice on a terminal remote close', async () => {
+        await connectActive();
+        dispatched = [];
+
+        c().trigger('closed', {code: 1000, recoverable: false});
+        await flush();
+
+        expect(notices()).toHaveLength(1);
+        expect(notices()[0].payload?.message).toBe('The meeting connection was closed');
+    });
+
+    it('shows the media-drop notice when LiveKit drops unexpectedly', async () => {
+        await connectActive(true);
+        dispatched = [];
+
+        lkRoom().trigger('disconnected');
+        await flush();
+
+        expect(notices()).toHaveLength(1);
+        expect(notices()[0].payload?.message).toBe('Media connection dropped');
+    });
+
+    it('dispatches exactly one notice when signaling and media both drop', async () => {
+        await connectActive(true);
+        const staleLk = lkRoom();
+        dispatched = [];
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+        staleLk.trigger('disconnected');
+        await flush();
+
+        expect(notices()).toHaveLength(1);
+    });
+
+    it('defers a close during the join to the connect rejection path', async () => {
+        let rejectConnect!: (e: Error) => void;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => new Promise((_resolve, reject) => {
+            rejectConnect = reject;
+        });
+        const store = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+
+        // The rejection path owns join-phase reporting; reporting here too
+        // would double up with the join-failure toast.
+        expect(dispatched.find((a) => a.type === 'opentalk/notice/set')).toBeUndefined();
+        expect(dispatched.find((a) => a.type === 'opentalk/session/disconnected')).toBeUndefined();
+
+        rejectConnect(new Error('socket closed before joinSuccess'));
+        await flush();
+
+        expect(notices()).toHaveLength(1);
+        expect(dispatched.find((a) => a.type === 'opentalk/session/connect_error')).toBeDefined();
     });
 });
 
