@@ -1,6 +1,7 @@
 package command
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/mattermost/mattermost/server/public/model"
@@ -8,11 +9,20 @@ import (
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/i18n"
 )
 
+// saveFailedResponse reports a persistence failure without broadcasting, so
+// the user's tabs never see a state the server did not store.
+func saveFailedResponse(locale string, err error) *model.CommandResponse {
+	return ephemeral(fmt.Sprintf(i18n.T(locale, i18n.Translatable{
+		DE: "Speichern fehlgeschlagen: %v",
+		EN: "Saving failed: %v",
+	}), err))
+}
+
 // ring handles `/opentalk ring on|off|status` — a slash-command fallback for
 // users on Mattermost versions that don't expose registerUserSettings (or
-// where the OpenTalk Settings section just isn't visible). The actual
-// preference lives in the webapp's localStorage; the command broadcasts a
-// targeted WS event that the webapp catches and persists.
+// where the OpenTalk Settings section just isn't visible). The server is the
+// source of truth for the preference; the broadcast updates the user's other
+// live tabs.
 func (h *Handler) ring(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	fields := strings.Fields(args.Command)
 	var sub string
@@ -24,6 +34,9 @@ func (h *Handler) ring(args *model.CommandArgs) (*model.CommandResponse, *model.
 
 	switch sub {
 	case "on", "an", "true", "1":
+		if err := h.Store.SaveRingtone(args.UserId, true); err != nil {
+			return saveFailedResponse(locale, err), nil
+		}
 		if h.Broadcaster != nil {
 			h.Broadcaster("ring_setting_changed", map[string]any{
 				"mm_user_id": args.UserId,
@@ -36,6 +49,9 @@ func (h *Handler) ring(args *model.CommandArgs) (*model.CommandResponse, *model.
 		})), nil
 
 	case "off", "aus", "false", "0":
+		if err := h.Store.SaveRingtone(args.UserId, false); err != nil {
+			return saveFailedResponse(locale, err), nil
+		}
 		if h.Broadcaster != nil {
 			h.Broadcaster("ring_setting_changed", map[string]any{
 				"mm_user_id": args.UserId,

@@ -13,6 +13,7 @@ import IncomingCallModal from './components/incoming_call_modal/component';
 import MeetingMiniBar from './components/meeting_mini_bar/component';
 import NoticeBanner from './components/notice_banner/component';
 import PostTypeMeeting from './components/post_type_meeting/component';
+import ReconnectingBanner from './components/reconnecting_banner/component';
 import ScreenPickerModal from './components/screen_picker_modal/component';
 import SwitchCallModal from './components/switch_call_modal/component';
 import {
@@ -31,8 +32,8 @@ import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_mee
 import {incomingCallReceived, incomingCallCleared, incomingCallsReset} from './store/slice_incoming_calls';
 import {setConnected} from './store/slice_oauth';
 import type {PluginRegistry} from './types/mattermost-webapp';
-import {registerOpenTalkUserSettings, ringtoneSettingKey} from './user_settings';
-import {setModuleLocale} from './util/i18n';
+import {registerOpenTalkUserSettings, readRingtone, writeRingtone, applyRingtoneLocal} from './user_settings';
+import {setModuleLocale, t} from './util/i18n';
 import {PLUGIN_STATE_KEY} from './util/selectors';
 
 const pluginId: string = manifest.id;
@@ -59,8 +60,6 @@ interface IncomingCallMessage {
         host_user_id: string;
         host_name: string;
         post_id?: string;
-        dm_user_ids?: string[];
-        created_at_unix_ms?: number;
     };
 }
 
@@ -71,23 +70,7 @@ interface MeetingStartedMessage {
         host_user_id: string;
         host_name: string;
         post_id?: string;
-        created_at_unix_ms?: number;
     };
-}
-
-// Stale threshold: ignore incoming-call broadcasts older than this. Matches
-// the modal's auto-decline timer, so anything we'd have auto-dismissed by
-// now is also too old to ring for.
-const incomingCallFreshnessMs = 30000;
-
-// Default ON. User can opt out via the Settings modal, /opentalk ring off,
-// or window.opentalk.ringtone(false).
-function ringtoneEnabled(): boolean {
-    try {
-        return window.localStorage.getItem(ringtoneSettingKey) !== 'false';
-    } catch {
-        return true;
-    }
 }
 
 interface IncomingCallDismissedMessage {
@@ -129,24 +112,16 @@ export default class Plugin {
             end: endActiveMeeting,
 
             ringtone: (enabled: boolean): boolean => {
-                try {
-                    window.localStorage.setItem(ringtoneSettingKey, enabled ? 'true' : 'false');
-                } catch {
-                    /* swallow — quota or private mode */
-                }
+                writeRingtone(enabled);
                 return enabled;
             },
-            ringtoneStatus: (): boolean => ringtoneEnabled(),
+            ringtoneStatus: (): boolean => readRingtone(),
 
             // Emergency stop: wipes the incoming-calls slice and disables
             // the ringtone so any immediately-following event doesn't re-ring.
             killRing: (): void => {
                 store.dispatch(incomingCallsReset());
-                try {
-                    window.localStorage.setItem(ringtoneSettingKey, 'false');
-                } catch {
-                    /* swallow */
-                }
+                writeRingtone(false);
                 // eslint-disable-next-line no-console
                 console.warn('[opentalk] killRing: incoming-calls slice cleared, ringtone disabled');
             },
@@ -188,14 +163,10 @@ export default class Plugin {
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_incoming_call`,
             (msg: IncomingCallMessage) => {
-                const now = Date.now();
-                const createdAt = msg.data.created_at_unix_ms;
-                const ageMs = typeof createdAt === 'number' ? now - createdAt : -1;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const myId: string | undefined = (store.getState() as any)?.entities?.users?.currentUserId;
 
                 const ownCall = Boolean(myId && msg.data.host_user_id === myId);
-                const stale = typeof createdAt !== 'number' || ageMs > incomingCallFreshnessMs;
 
                 // Re-ring for the channel this session is already connected to:
                 // the SwitchCallModal would surface and its Cancel would flip
@@ -210,14 +181,12 @@ export default class Plugin {
                     channel_id: msg.data.channel_id,
                     host_user_id: msg.data.host_user_id,
                     my_id: myId,
-                    age_ms: ageMs,
                     own_call: ownCall,
-                    stale,
                     already_here: alreadyHere,
-                    will_dispatch: !ownCall && !stale && !alreadyHere,
+                    will_dispatch: !ownCall && !alreadyHere,
                 });
 
-                if (ownCall || stale || alreadyHere) {
+                if (ownCall || alreadyHere) {
                     return;
                 }
 
@@ -231,7 +200,9 @@ export default class Plugin {
             },
         );
 
-        // Slash-command fallback (/opentalk ring on|off) — persists to localStorage.
+        // Server-side ringtone changes (/opentalk ring on|off, other tabs)
+        // arrive here as authoritative echoes; applying them locally must not
+        // POST again or the broadcast would loop forever.
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_ring_setting_changed`,
             (msg: RingSettingChangedMessage) => {
@@ -240,11 +211,7 @@ export default class Plugin {
                 if (msg.data.mm_user_id !== myId) {
                     return;
                 }
-                try {
-                    window.localStorage.setItem(ringtoneSettingKey, msg.data.enabled ? 'true' : 'false');
-                } catch {
-                    /* swallow */
-                }
+                applyRingtoneLocal(msg.data.enabled);
             },
         );
 
@@ -286,6 +253,7 @@ export default class Plugin {
         registry.registerRootComponent?.(IncomingCallModal);
         registry.registerRootComponent?.(SwitchCallModal);
         registry.registerRootComponent?.(ChannelCallToast);
+        registry.registerRootComponent?.(ReconnectingBanner);
         registry.registerRootComponent?.(ScreenPickerModal);
         registry.registerRootComponent?.(NoticeBanner);
 
@@ -294,7 +262,7 @@ export default class Plugin {
             headerIcon,
             startMeetingAction(store),
             'OpenTalk',
-            'OpenTalk-Meeting starten',
+            t({de: 'OpenTalk-Meeting starten', en: 'Start OpenTalk meeting'}),
         );
 
         // Re-seed the connection snapshot after a websocket reconnect: the
@@ -304,6 +272,11 @@ export default class Plugin {
             try {
                 const me = await getConnectionStatus();
                 store.dispatch(setConnected(me.connected, me.email));
+
+                // Server snapshot is authoritative; apply without POSTing.
+                if (me.ringtone_enabled != null) {
+                    applyRingtoneLocal(me.ringtone_enabled);
+                }
             } catch {
                 // Non-fatal: the header button falls back to "please connect first".
             }

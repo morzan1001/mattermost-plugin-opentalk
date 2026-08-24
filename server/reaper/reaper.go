@@ -139,6 +139,15 @@ func (r *Reaper) loop(ctx context.Context) {
 
 const preHeartbeatGrace = 30 * time.Minute
 
+// isStale covers both reaping thresholds: the pre-heartbeat grace measured
+// from CreatedAt, and staleness measured from the last webapp heartbeat.
+func (r *Reaper) isStale(am *store.ActiveMeeting, now time.Time) bool {
+	if !am.HostHeartbeatReceived {
+		return am.CreatedAt.Before(now.Add(-preHeartbeatGrace))
+	}
+	return am.LastHeartbeat.Before(now.Add(-r.staleness))
+}
+
 func (r *Reaper) tick() {
 	if !r.acquireOrRenewLeader() {
 		return
@@ -153,28 +162,31 @@ func (r *Reaper) tick() {
 		return
 	}
 	now := time.Now().UTC()
-	staleCutoff := now.Add(-r.staleness)
-	graceCutoff := now.Add(-preHeartbeatGrace)
 	for _, am := range meetings {
-		if !am.HostHeartbeatReceived {
-			// No webapp heartbeat yet — trust CreatedAt for the longer grace.
-			if am.CreatedAt.Before(graceCutoff) {
-				r.api.LogInfo("[opentalk] reaper: ending meeting past pre-heartbeat grace",
-					"channel_id", am.ChannelID,
-					"room_id", am.RoomID,
-					"created_at", am.CreatedAt.Format(time.RFC3339),
-				)
-				r.endMeeting(am)
-			}
+		if !r.isStale(am, now) {
 			continue
 		}
-		if am.LastHeartbeat.Before(staleCutoff) {
-			r.api.LogInfo("[opentalk] reaper: ending stale meeting",
-				"channel_id", am.ChannelID,
-				"room_id", am.RoomID,
-				"last_heartbeat", am.LastHeartbeat.Format(time.RFC3339),
-			)
-			r.endMeeting(am)
+		fresh, err := r.store.LoadActiveMeeting(key, am.ChannelID)
+		if err != nil || !r.isStale(fresh, now) {
+			// Deleted or refreshed by a heartbeat after the list snapshot.
+			continue
 		}
+		if !fresh.HostHeartbeatReceived {
+			r.api.LogInfo("[opentalk] reaper: ending meeting past pre-heartbeat grace",
+				"channel_id", fresh.ChannelID,
+				"room_id", fresh.RoomID,
+				"created_at", fresh.CreatedAt.Format(time.RFC3339),
+			)
+		} else {
+			r.api.LogInfo("[opentalk] reaper: ending stale meeting",
+				"channel_id", fresh.ChannelID,
+				"room_id", fresh.RoomID,
+				"last_heartbeat", fresh.LastHeartbeat.Format(time.RFC3339),
+			)
+		}
+		// The freshness check narrows but cannot close the race: a heartbeat
+		// CAS landing between it and the delete still gets reaped, since MM KV
+		// has no conditional delete.
+		r.endMeeting(fresh)
 	}
 }

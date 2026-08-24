@@ -54,6 +54,12 @@ export class OpenTalkConferenceClient {
         return this.room.leave();
     }
 
+    // Flags the next leave() as part of an unexpected-drop teardown so the
+    // resumption token survives for the auto-rejoin.
+    public markUnexpectedDrop(): void {
+        this.room.markUnexpectedDrop();
+    }
+
     public on(event: 'connected', cb: (data: ConnectedEvent) => void): () => void;
     public on(event: 'participant_joined', cb: (p: Participant) => void): () => void;
     public on(event: 'participant_left', cb: (data: {id: string}) => void): () => void;
@@ -63,7 +69,7 @@ export class OpenTalkConferenceClient {
     public on(event: 'raise_hands_toggled', cb: (data: {enabled: boolean}) => void): () => void;
     public on(event: 'force_muted', cb: (data: {moderator: string}) => void): () => void;
     public on(event: 'role_updated', cb: (data: {participantId: string; newRole: 'user' | 'moderator'}) => void): () => void;
-    public on(event: 'closed', cb: (data: {code: number}) => void): () => void;
+    public on(event: 'closed', cb: (data: {code: number; recoverable: boolean}) => void): () => void;
     public on(event: 'error', cb: (err: Error) => void): () => void;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

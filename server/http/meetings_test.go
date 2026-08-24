@@ -164,6 +164,7 @@ func TestMeetingsJoin_HostUsesStartRoom(t *testing.T) {
 	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1", HostUserID: "u1"}
 	raw, _ := json.Marshal(am)
 	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
+	api.On("KVGet", "dismiss_ch-1_room-1").Return([]byte(nil), nil)
 
 	h := &Handlers{
 		Store:           store.New(api),
@@ -214,6 +215,7 @@ func TestMeetingsJoin_ConnectedNonHostUsesStartInvited(t *testing.T) {
 	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1", HostUserID: "u-host"}
 	raw, _ := json.Marshal(am)
 	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
+	api.On("KVGet", "dismiss_ch-1_room-1").Return([]byte(nil), nil)
 
 	h := &Handlers{
 		Store:           store.New(api),
@@ -255,6 +257,7 @@ func TestMeetingsJoin_GuestPathUsesInvite(t *testing.T) {
 	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", InviteCode: "inv-1"}
 	raw, _ := json.Marshal(am)
 	api.On("KVGet", "meeting_ch-1").Return(raw, nil)
+	api.On("KVGet", "dismiss_ch-1_room-1").Return([]byte(nil), nil)
 
 	h := &Handlers{
 		Store:           store.New(api),
@@ -412,6 +415,7 @@ func TestMeetingsPostActionEnd_Host(t *testing.T) {
 	require.NoError(t, err)
 	api.On("KVGet", "meeting_ch-1").Return(stored, nil)
 	api.On("KVDelete", "meeting_ch-1").Return(nil)
+	api.On("KVDelete", "dismiss_ch-1_room-1").Return(nil)
 
 	var broadcasts []string
 	h := &Handlers{
@@ -610,6 +614,7 @@ func TestEndMeetingFor_DeleteInviteFailureIsNonFatal(t *testing.T) {
 		InviteCode: "inv-1",
 	}
 	api.On("KVDelete", "meeting_ch-1").Return(nil)
+	api.On("KVDelete", "dismiss_ch-1_room-1").Return(nil)
 
 	var broadcasts []string
 	h := &Handlers{
@@ -625,6 +630,96 @@ func TestEndMeetingFor_DeleteInviteFailureIsNonFatal(t *testing.T) {
 	require.NoError(t, err, "DeleteInvite failure must not propagate")
 	assert.Contains(t, broadcasts, "meeting_ended")
 	api.AssertCalled(t, "KVDelete", "meeting_ch-1")
+}
+
+// TestMeetingsJoin_ClearsOwnDismissal_PreventsFalseMissed covers the race
+// where a stale dismissal for the joiner (earlier decline, or another device
+// auto-declining) survives their join: a later decline by the remaining user
+// would complete a false all-declined quorum, flip MISSED and force-end the
+// meeting the joiner is still in.
+func TestMeetingsJoin_ClearsOwnDismissal_PreventsFalseMissed(t *testing.T) {
+	otSrv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == nethttp.MethodPost && strings.HasSuffix(r.URL.Path, "/start_invited") {
+			w.Write([]byte(`{"ticket":"room-1#t","resumption":"res-1"}`))
+			return
+		}
+		w.WriteHeader(nethttp.StatusNotFound)
+	}))
+	defer otSrv.Close()
+
+	api := &plugintest.API{}
+	am := &store.ActiveMeeting{ChannelID: "ch-dm", RoomID: "room-1", InviteCode: "inv-1", HostUserID: "u-host"}
+	raw, _ := json.Marshal(am)
+	api.On("KVGet", "meeting_ch-dm").Return(raw, nil)
+
+	// First read (during alice's join) sees her stale dismissal; after the join
+	// cleared it, bob's decline reads an empty set.
+	api.On("KVGet", "dismiss_ch-dm_room-1").Return([]byte(`["alice"]`), nil).Once()
+	api.On("KVGet", "dismiss_ch-dm_room-1").Return([]byte(`[]`), nil).Once()
+
+	var dismissWrites [][]byte
+	api.On("KVSetWithOptions", "dismiss_ch-dm_room-1",
+		mock.AnythingOfType("[]uint8"), mock.AnythingOfType("model.PluginKVSetOptions")).
+		Run(func(args mock.Arguments) { dismissWrites = append(dismissWrites, args.Get(1).([]byte)) }).
+		Return(true, (*model.AppError)(nil)).
+		Times(2)
+
+	var broadcasts []string
+	postUpdated := false
+	h := &Handlers{
+		Store:         store.New(api),
+		OpenTalk:      opentalk.NewClient(otSrv.URL),
+		RoomserverURL: "wss://rs.example",
+		BroadcastFunc: func(event string, _ map[string]any, _ *model.WebsocketBroadcast) {
+			broadcasts = append(broadcasts, event)
+		},
+		IsChannelMember: func(_, _ string) bool { return true },
+		ChannelMembersOf: func(string) []string {
+			return []string{"u-host", "alice", "bob"}
+		},
+		PostGetter:  func(id string) (*model.Post, error) { return &model.Post{Id: id}, nil },
+		PostUpdater: func(*model.Post) error { postUpdated = true; return nil },
+	}
+
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v1/meetings/{room_id}/join", h.MeetingsJoin).Methods(nethttp.MethodPost)
+	router.HandleFunc("/api/v1/meetings/dismiss", h.MeetingsDismiss).Methods(nethttp.MethodPost)
+
+	joinBody := strings.NewReader(`{"channel_id":"ch-dm","device_secret":"dev"}`)
+	joinReq := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/room-1/join", joinBody)
+	joinReq.Header.Set("Mattermost-User-ID", "alice")
+	joinRR := httptest.NewRecorder()
+	router.ServeHTTP(joinRR, joinReq)
+	require.Equal(t, nethttp.StatusOK, joinRR.Code, joinRR.Body.String())
+
+	require.Len(t, dismissWrites, 1)
+	assert.JSONEq(t, `[]`, string(dismissWrites[0]), "join must clear the joiner's own dismissal")
+
+	dismissBody := strings.NewReader(`{"channel_id":"ch-dm","room_id":"room-1"}`)
+	dismissReq := httptest.NewRequest(nethttp.MethodPost, "/api/v1/meetings/dismiss", dismissBody)
+	dismissReq.Header.Set("Mattermost-User-ID", "bob")
+	dismissRR := httptest.NewRecorder()
+	router.ServeHTTP(dismissRR, dismissReq)
+	require.Equal(t, nethttp.StatusNoContent, dismissRR.Code, dismissRR.Body.String())
+
+	assert.NotContains(t, broadcasts, "meeting_ended",
+		"quorum must not be complete while alice has joined")
+	assert.False(t, postUpdated, "meeting post must not flip to MISSED")
+	api.AssertNotCalled(t, "KVDelete", mock.Anything)
+}
+
+func TestEndMeetingFor_DeletesDismissals(t *testing.T) {
+	api := &plugintest.API{}
+	am := &store.ActiveMeeting{ChannelID: "ch-1", RoomID: "room-1", HostUserID: "host-uid"}
+	api.On("KVDelete", "meeting_ch-1").Return(nil)
+	api.On("KVDelete", "dismiss_ch-1_room-1").Return(nil)
+
+	h := &Handlers{Store: store.New(api)}
+
+	_, err := h.endMeetingFor(am)
+	require.NoError(t, err)
+	api.AssertCalled(t, "KVDelete", "dismiss_ch-1_room-1")
 }
 
 func TestRouter_PostActionRoutesRegistered(t *testing.T) {

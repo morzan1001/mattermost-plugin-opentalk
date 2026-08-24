@@ -68,6 +68,7 @@ describe('incomingCallsReducer', () => {
         const before = incomingCallsReducer(undefined, {type: '@@INIT'});
         const after = incomingCallsReducer(before, incomingCallDismissed({channelID: 'nonexistent'}));
         expect(after).toEqual(before);
+        expect(after).toBe(before);
     });
 
     it('cleared — removes the entry entirely', () => {
@@ -80,6 +81,7 @@ describe('incomingCallsReducer', () => {
         const before = incomingCallsReducer(undefined, {type: '@@INIT'});
         const after = incomingCallsReducer(before, incomingCallCleared({channelID: 'nonexistent'}));
         expect(after).toEqual(before);
+        expect(after).toBe(before);
     });
 
     it('reset — empties the map', () => {

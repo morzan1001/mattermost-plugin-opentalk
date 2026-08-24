@@ -36,6 +36,18 @@ function clearResumption(roomID: string): void {
     }
 }
 
+// WebSocket ErrorEvents carry no message; describe from the room state.
+function signalingErrorMessage(state: RoomState): string {
+    return state === 'connected' ? 'signaling connection lost' : 'could not reach the signaling server';
+}
+
+// Close codes that mean a dropped connection rather than a final termination
+// (mirrors the upstream frontend's classification; 4999 is our heartbeat
+// timeout). Everything else, including 1000, is treated as terminal.
+export function isRecoverableCloseCode(code: number): boolean {
+    return [1001, 1005, 1006, 1007, 1012, 1013, 4999].includes(code);
+}
+
 export interface AuthProvider {
     getTicket(roomID: string, channelID: string, deviceSecret: string, resumption?: string): Promise<{
         ticket: string;
@@ -45,6 +57,14 @@ export interface AuthProvider {
 }
 
 export type RoomState = 'idle' | 'authenticating' | 'connecting' | 'connected' | 'leaving' | 'closed';
+
+// Marks a connect() aborted by our own leave(); must not surface as a failed join.
+export class JoinCancelledError extends Error {
+    constructor() {
+        super('join cancelled');
+        this.name = 'JoinCancelledError';
+    }
+}
 
 type EventName =
     | 'connected'
@@ -72,6 +92,11 @@ export class ConferenceRoom {
     private participants: Participant[] = [];
     private localId: string = '';
     private closedEmitted = false;
+    private joinCancelled = false;
+
+    // Set when a media-plane drop queues an auto-rejoin: the teardown's
+    // leave() must not clear the token that rejoin resumes with.
+    private keepResumption = false;
     private listeners: Record<EventName, Listener[]> = {
         connected: [],
         participant_joined: [],
@@ -95,6 +120,12 @@ export class ConferenceRoom {
         return this.state;
     }
 
+    // Flags the next leave() as part of an unexpected-drop teardown so the
+    // resumption token survives for the auto-rejoin.
+    public markUnexpectedDrop(): void {
+        this.keepResumption = true;
+    }
+
     public getParticipants(): Participant[] {
         return [...this.participants];
     }
@@ -116,6 +147,7 @@ export class ConferenceRoom {
         }
         this.roomID = roomID;
         this.state = 'authenticating';
+        this.joinCancelled = false;
 
         // A prior session's resumption goes into the REST start body, not the
         // join frame; the controller mints a fresh token in the response.
@@ -149,6 +181,7 @@ export class ConferenceRoom {
                     // leave a stale token behind.
                     if (restResumption) {
                         writeResumption(roomID, restResumption);
+                        this.keepResumption = false;
                     }
 
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -358,12 +391,13 @@ export class ConferenceRoom {
                     this.listener?.dispose();
                     if (!this.closedEmitted) {
                         this.closedEmitted = true;
-                        this.emit('closed', {code: e?.code ?? 1006});
+                        const code = e?.code ?? 1006;
+                        this.emit('closed', {code, recoverable: isRecoverableCloseCode(code)});
                     }
                 });
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 this.socket.on('error', (e: any) => {
-                    this.emit('error', e instanceof Error ? e : new Error(String(e)));
+                    this.emit('error', e instanceof Error ? e : new Error(signalingErrorMessage(this.state)));
                 });
 
                 this.socket.connect();
@@ -380,17 +414,20 @@ export class ConferenceRoom {
                         offConnected();
                         offClosed();
                         offError();
-                        reject(new Error('socket closed before joinSuccess'));
+                        reject(this.joinCancelled ? new JoinCancelledError() : new Error('socket closed before joinSuccess'));
                     });
                     const offError = this.on('error', (err) => {
                         offConnected();
                         offClosed();
                         offError();
-                        reject(err);
+                        reject(this.joinCancelled ? new JoinCancelledError() : err);
                     });
                 });
             },
             (err) => {
+                if (this.state === 'closed') {
+                    throw new JoinCancelledError();
+                }
                 this.state = 'idle';
                 throw err;
             },
@@ -488,6 +525,7 @@ export class ConferenceRoom {
     }
 
     public async leave(): Promise<void> {
+        this.joinCancelled = true;
         if (this.state !== 'connected') {
             // Called before the join completed (idle/authenticating/connecting)
             // or after a close. Abort any in-flight socket and unbind listeners
@@ -497,7 +535,7 @@ export class ConferenceRoom {
             this.listener?.dispose();
             if (!this.closedEmitted) {
                 this.closedEmitted = true;
-                this.emit('closed', {code: 1000});
+                this.emit('closed', {code: 1000, recoverable: false});
             }
             return;
         }
@@ -505,7 +543,13 @@ export class ConferenceRoom {
         this.socket?.disconnect();
         this.listener?.dispose();
         this.state = 'closed';
-        if (this.roomID) {
+
+        // An auto-rejoin teardown lands here with a still-connected room; the
+        // token must survive so the rejoin's REST join resumes instead of
+        // counting as a fresh participant.
+        if (this.keepResumption) {
+            this.keepResumption = false;
+        } else if (this.roomID) {
             clearResumption(this.roomID);
         }
 
@@ -514,7 +558,7 @@ export class ConferenceRoom {
         // closedEmitted so we never double-fire.
         if (!this.closedEmitted) {
             this.closedEmitted = true;
-            this.emit('closed', {code: 1000});
+            this.emit('closed', {code: 1000, recoverable: false});
         }
     }
 

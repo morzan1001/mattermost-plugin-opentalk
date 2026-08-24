@@ -483,8 +483,6 @@ func (p *Plugin) notifyMeetingStarted(am *store.ActiveMeeting) {
 		"host_user_id": am.HostUserID,
 		"host_name":    hostName,
 		"post_id":      am.PostID,
-		// lets the webapp ignore stale broadcasts on WS reconnect
-		"created_at_unix_ms": time.Now().UnixMilli(),
 	}
 
 	isDM := ch.Type == model.ChannelTypeDirect || ch.Type == model.ChannelTypeGroup
@@ -504,7 +502,6 @@ func (p *Plugin) notifyMeetingStarted(am *store.ActiveMeeting) {
 			recipients = append(recipients, uid)
 		}
 	}
-	payload["dm_user_ids"] = recipients
 
 	// Defense-in-depth: fire both ChannelId- and UserId-scoped broadcasts.
 	// Either path on its own has cluster / cache edge cases under which MM

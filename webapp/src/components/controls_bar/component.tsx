@@ -8,6 +8,7 @@ import {selectIsHost, selectIsRoomOwner, selectLocalParticipantId, selectMicEnab
 import {
     MicIcon,
     MicOffIcon,
+    MuteAllIcon,
     VideoIcon,
     CameraOffIcon,
     ScreenShareIcon,
@@ -130,10 +131,10 @@ export const ControlsBar: React.FC<ControlsBarProps> = ({showExpand, onLeave, on
                     data-testid='controls-mute-all'
                     style={mutedButtonStyle}
                     onClick={() => muteAll()}
-                    title={t({de: 'Alle stummschalten', en: 'Mute all'})}
-                    aria-label={t({de: 'Alle stummschalten', en: 'Mute all'})}
+                    title={t({de: 'Alle anderen stummschalten', en: 'Mute everyone else'})}
+                    aria-label={t({de: 'Alle anderen stummschalten', en: 'Mute everyone else'})}
                 >
-                    <MicOffIcon/>
+                    <MuteAllIcon/>
                 </button>
             )}
 

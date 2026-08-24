@@ -8,6 +8,12 @@ import snakecaseKeys from 'snakecase-keys';
 
 export type SignalingEvent = 'open' | 'message' | 'close' | 'error';
 
+// Upstream parity: ping every 12s and treat a ping as dead when no echo
+// arrived within 10s of it being sent.
+const PING_INTERVAL_MS = 12 * 1000;
+const ECHO_TIMEOUT_MS = 10 * 1000;
+const HEARTBEAT_CLOSE_CODE = 4999;
+
 const camelToSnake = (s: string): string => s.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
 
 /**
@@ -44,6 +50,9 @@ export class SignalingSocket {
     private ws?: WebSocket;
     private readonly url: string;
     private readonly protocols: string[];
+    private heartbeat?: ReturnType<typeof setInterval>;
+    private lastPingAt = 0;
+    private lastEchoAt = 0;
     private readonly listeners: Record<SignalingEvent, SignalingListener[]> = {
         open: [],
         message: [],
@@ -65,18 +74,30 @@ export class SignalingSocket {
     public connect(): void {
         const ws = new WebSocket(this.url, this.protocols);
         this.ws = ws;
-        ws.onopen = (e) => this.emit('open', e);
+        ws.onopen = (e) => {
+            this.startHeartbeat();
+            this.emit('open', e);
+        };
         ws.onmessage = (e) => {
             try {
                 const raw = JSON.parse((e as MessageEvent).data);
+                if ((raw as {namespace?: string})?.namespace === 'echo') {
+                    this.lastEchoAt = Date.now();
+                }
                 const message = camelcaseKeys(raw, {deep: true});
                 this.emit('message', message);
             } catch (err) {
                 this.emit('error', err);
             }
         };
-        ws.onclose = (e) => this.emit('close', e);
-        ws.onerror = (e) => this.emit('error', e);
+        ws.onclose = (e) => {
+            this.stopHeartbeat();
+            this.emit('close', e);
+        };
+        ws.onerror = (e) => {
+            this.stopHeartbeat();
+            this.emit('error', e);
+        };
     }
 
     public disconnect(): void {
@@ -101,6 +122,36 @@ export class SignalingSocket {
         const i = arr.indexOf(listener);
         if (i >= 0) {
             arr.splice(i, 1);
+        }
+    }
+
+    private startHeartbeat(): void {
+        this.stopHeartbeat();
+        this.lastPingAt = 0;
+        this.lastEchoAt = 0;
+        this.heartbeat = setInterval(() => this.heartbeatTick(), PING_INTERVAL_MS);
+    }
+
+    private stopHeartbeat(): void {
+        if (this.heartbeat) {
+            clearInterval(this.heartbeat);
+            this.heartbeat = undefined;
+        }
+    }
+
+    private heartbeatTick(): void {
+        // Only a server reply proves the connection is still alive; traffic we
+        // send alone does not.
+        if (this.lastPingAt !== 0 && this.lastEchoAt < this.lastPingAt && Date.now() - this.lastPingAt > ECHO_TIMEOUT_MS) {
+            this.stopHeartbeat();
+            this.ws?.close(HEARTBEAT_CLOSE_CODE, 'signaling heartbeat timeout');
+            return;
+        }
+        this.lastPingAt = Date.now();
+        try {
+            this.send({namespace: 'echo', payload: {action: 'ping'}});
+        } catch {
+            // socket already closing
         }
     }
 

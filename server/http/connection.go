@@ -4,13 +4,16 @@ import (
 	"encoding/json"
 	nethttp "net/http"
 
+	"github.com/mattermost/mattermost/server/public/model"
+
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
 type meResponse struct {
-	Connected bool   `json:"connected"`
-	Email     string `json:"email,omitempty"`
-	Sub       string `json:"sub,omitempty"`
+	Connected       bool   `json:"connected"`
+	Email           string `json:"email,omitempty"`
+	Sub             string `json:"sub,omitempty"`
+	RingtoneEnabled *bool  `json:"ringtone_enabled,omitempty"`
 }
 
 // Me handles GET /api/v1/me. It looks up the encrypted UserInfo for the
@@ -39,6 +42,49 @@ func (h *Handlers) Me(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 
+	if ring, rErr := h.Store.LoadRingtone(mmUserID); rErr == nil {
+		resp.RingtoneEnabled = ring
+	} else if h.LogWarn != nil {
+		h.LogWarn("[opentalk] Me: LoadRingtone", "err", rErr.Error())
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+type ringtoneRequest struct {
+	Enabled *bool `json:"enabled"`
+}
+
+// Ringtone handles POST /api/v1/ringtone. It persists the caller's ringtone
+// preference server-side and broadcasts ring_setting_changed user-scoped so
+// the user's other tabs pick up the change; the originating client applies it
+// from its own WS receive too.
+func (h *Handlers) Ringtone(w nethttp.ResponseWriter, r *nethttp.Request) {
+	mmUserID := r.Header.Get("Mattermost-User-ID")
+	if mmUserID == "" {
+		nethttp.Error(w, "unauthorized", nethttp.StatusUnauthorized)
+		return
+	}
+
+	var body ringtoneRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Enabled == nil {
+		nethttp.Error(w, "invalid request body", nethttp.StatusBadRequest)
+		return
+	}
+
+	if err := h.Store.SaveRingtone(mmUserID, *body.Enabled); err != nil {
+		h.internalError(w, "Ringtone: SaveRingtone", err, nethttp.StatusInternalServerError, "save failed")
+		return
+	}
+
+	if h.BroadcastFunc != nil {
+		h.BroadcastFunc("ring_setting_changed", map[string]any{
+			"mm_user_id": mmUserID,
+			"enabled":    *body.Enabled,
+		}, &model.WebsocketBroadcast{UserId: mmUserID})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"enabled": *body.Enabled})
 }

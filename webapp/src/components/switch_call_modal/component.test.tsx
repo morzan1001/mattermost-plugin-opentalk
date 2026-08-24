@@ -95,7 +95,7 @@ describe('SwitchCallModal', () => {
 
     it('renders modal when user is in another call AND there is an incoming call', () => {
         const store = makeStore(
-            {status: 'connected'},
+            {status: 'connected', channelID: 'ch-live'},
             {byChannelID: {'ch-1': mockCall}},
         );
         renderModal(store);
@@ -104,6 +104,54 @@ describe('SwitchCallModal', () => {
         expect(screen.getByText('Bob Caller')).toBeInTheDocument();
         expect(screen.getByText('Switch')).toBeInTheDocument();
         expect(screen.getByText('Cancel')).toBeInTheDocument();
+    });
+
+    it('renders modal while the session is leaving the current meeting', () => {
+        const store = makeStore(
+            {status: 'leaving', channelID: 'ch-live'},
+            {byChannelID: {'ch-1': mockCall}},
+        );
+        renderModal(store);
+        expect(screen.getByTestId('switch-call-modal')).toBeInTheDocument();
+    });
+
+    it('returns null when every ringing entry is dismissed', () => {
+        const store = makeStore(
+            {status: 'connected', channelID: 'ch-live'},
+            {byChannelID: {'ch-1': {...mockCall, dismissed: true}}},
+        );
+        const {container} = renderModal(store);
+        expect(screen.queryByTestId('switch-call-modal')).not.toBeInTheDocument();
+        expect(container.firstChild).toBeNull();
+    });
+
+    it('hidden when the ringing call is the channel the session is connecting to', () => {
+        const store = makeStore(
+            {status: 'connecting', channelID: 'ch-1'},
+            {byChannelID: {'ch-1': mockCall}},
+        );
+        const {container} = renderModal(store);
+        expect(screen.queryByTestId('switch-call-modal')).not.toBeInTheDocument();
+        expect(container.firstChild).toBeNull();
+    });
+
+    it('visible when the session is connecting to a different channel than the ringing call', () => {
+        const store = makeStore(
+            {status: 'connecting', channelID: 'ch-other'},
+            {byChannelID: {'ch-1': mockCall}},
+        );
+        renderModal(store);
+        expect(screen.getByTestId('switch-call-modal')).toBeInTheDocument();
+    });
+
+    it('hidden when the ringing call is the channel the session is connected to', () => {
+        const store = makeStore(
+            {status: 'connected', channelID: 'ch-1'},
+            {byChannelID: {'ch-1': mockCall}},
+        );
+        const {container} = renderModal(store);
+        expect(screen.queryByTestId('switch-call-modal')).not.toBeInTheDocument();
+        expect(container.firstChild).toBeNull();
     });
 
     it('click Cancel calls dismissIncomingCall and dispatches incomingCallDismissed', async () => {

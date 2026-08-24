@@ -15,6 +15,7 @@ const ACTION_TYPES = {
     SET_RAISE_HANDS_ENABLED: 'opentalk/session/set_raise_hands_enabled',
     SET_IS_HOST: 'opentalk/session/set_is_host',
     SET_PINNED_PARTICIPANT: 'opentalk/session/set_pinned_participant',
+    SET_RECONNECT_ATTEMPT: 'opentalk/session/set_reconnect_attempt',
 } as const;
 
 export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'leaving';
@@ -46,6 +47,10 @@ export interface SessionState {
 
     // Local-only spotlight: OpenTalk has no pin frame, so this never leaves the client.
     pinnedParticipantId?: string;
+
+    // Auto-rejoin: 0 when idle, otherwise the attempt number currently running
+    // or scheduled. Drives the reconnecting banner.
+    reconnectAttempt: number;
 }
 
 const initial: SessionState = {
@@ -63,6 +68,7 @@ const initial: SessionState = {
     localParticipantId: undefined,
     pinnedParticipantId: undefined,
     raiseHandsEnabled: false,
+    reconnectAttempt: 0,
 };
 
 export function connectStarted(payload: {channelID: string; roomID: string}) {
@@ -107,6 +113,9 @@ export function setIsHost(value: boolean) {
 export function setPinnedParticipant(id: string | null) {
     return {type: ACTION_TYPES.SET_PINNED_PARTICIPANT, payload: {id}};
 }
+export function setReconnectAttempt(attempt: number) {
+    return {type: ACTION_TYPES.SET_RECONNECT_ATTEMPT, payload: {attempt}};
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAction = {type: string; payload?: any};
@@ -119,6 +128,9 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
             status: 'connecting',
             channelID: action.payload.channelID,
             roomID: action.payload.roomID,
+
+            // A rejoin attempt must keep its banner visible while connecting.
+            reconnectAttempt: state.reconnectAttempt,
         };
     case ACTION_TYPES.CONNECTED:
         return {
@@ -130,13 +142,15 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
             localParticipantId: action.payload.localParticipantId,
             error: undefined,
             joinedAt: Date.now(),
+            reconnectAttempt: 0,
         };
     case ACTION_TYPES.PARTICIPANTS_CHANGED:
         return {...state, participantCount: action.payload.participantCount};
     case ACTION_TYPES.DISCONNECTED:
-        return initial;
+        // Per-attempt teardowns must not kill the rejoin banner mid-loop.
+        return {...initial, reconnectAttempt: state.reconnectAttempt};
     case ACTION_TYPES.CONNECT_ERROR:
-        return {...initial, error: action.payload.error};
+        return {...initial, error: action.payload.error, reconnectAttempt: state.reconnectAttempt};
     case ACTION_TYPES.SET_MIC_ENABLED:
         return {...state, micEnabled: action.payload.value};
     case ACTION_TYPES.SET_CAM_ENABLED:
@@ -155,6 +169,8 @@ export function sessionReducer(state: SessionState = initial, action: AnyAction)
         return {...state, isHost: action.payload.value};
     case ACTION_TYPES.SET_PINNED_PARTICIPANT:
         return {...state, pinnedParticipantId: action.payload.id ?? undefined};
+    case ACTION_TYPES.SET_RECONNECT_ATTEMPT:
+        return {...state, reconnectAttempt: action.payload.attempt};
     case PARTICIPANT_REMOVED:
         return state.pinnedParticipantId === action.payload.id ? {...state, pinnedParticipantId: undefined} : state;
     default:

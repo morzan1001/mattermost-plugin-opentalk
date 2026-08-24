@@ -300,6 +300,14 @@ func (h *Handlers) MeetingsJoin(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 
+	// A dismissal recorded for this user earlier (decline, or another device
+	// auto-declining) would otherwise complete a false all-declined quorum
+	// once they have joined. Not ordered against the Start roundtrip: a
+	// decline completing the quorum inside it still flips MISSED.
+	if rErr := h.Store.RemoveDismissal(body.ChannelID, roomID, mmUserID); rErr != nil && h.LogWarn != nil {
+		h.LogWarn("[opentalk] MeetingsJoin: RemoveDismissal failed", "err", rErr.Error())
+	}
+
 	// Stop this user's OTHER sessions from ringing -- and their 30s
 	// auto-decline from firing -- now that they have answered on this device.
 	// Reuses incoming_call_dismissed purely as a per-user "no longer ringing"
@@ -388,6 +396,7 @@ func (h *Handlers) endMeetingFor(am *store.ActiveMeeting) (*model.Post, error) {
 	if delErr := h.Store.DeleteActiveMeeting(am.ChannelID); delErr != nil {
 		return updated, delErr
 	}
+	_ = h.Store.DeleteDismissals(am.ChannelID, am.RoomID)
 	if h.BroadcastFunc != nil {
 		h.BroadcastFunc("meeting_ended", map[string]any{
 			"channel_id": am.ChannelID,

@@ -1,4 +1,4 @@
-import {ConferenceRoom, type AuthProvider} from './conference_room';
+import {ConferenceRoom, JoinCancelledError, type AuthProvider} from './conference_room';
 
 class FakeWebSocket {
     static instances: FakeWebSocket[] = [];
@@ -237,6 +237,26 @@ describe('ConferenceRoom', () => {
         expect(room.getState()).toBe('closed');
     });
 
+    it('an explicit leave clears the resumption token', async () => {
+        const {room} = await makeConnectedRoom();
+        expect(window.localStorage.getItem('opentalk:resumption:room-1')).toBe('resumption-1');
+
+        await room.leave();
+
+        expect(window.localStorage.getItem('opentalk:resumption:room-1')).toBeNull();
+    });
+
+    it('leave() keeps the resumption token after an unexpected drop is marked', async () => {
+        const {room} = await makeConnectedRoom();
+
+        // The drop teardown's leave must not wipe the token the auto-rejoin
+        // resumes with.
+        room.markUnexpectedDrop();
+        await room.leave();
+
+        expect(window.localStorage.getItem('opentalk:resumption:room-1')).toBe('resumption-1');
+    });
+
     it('rejects connect() when the server sends inWaitingRoom instead of joinSuccess', async () => {
         const room = new ConferenceRoom(makeFakeAuth(), 'wss://rs.example');
         const connectPromise = room.connect('room-1', 'ch-1', 'alice', 'dev-1');
@@ -392,5 +412,108 @@ describe('ConferenceRoom host moderation inbound', () => {
         room.on('hand_lowered', onHandLowered);
         emit(ws, {namespace: 'moderation', payload: {message: 'raised_hand_reset_by_moderator', issued_by: 'mod-1'}});
         expect(onHandLowered).toHaveBeenCalledWith({participantId: 'self-id'});
+    });
+});
+
+describe('ConferenceRoom socket error mapping', () => {
+    it('maps a raw WS error event during join to a descriptive failure', async () => {
+        const room = new ConferenceRoom(makeFakeAuth(), 'wss://rs.example');
+        const onError = jest.fn();
+        room.on('error', onError);
+        const connectPromise = room.connect('room-1', 'ch-1', 'alice', 'dev-1');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        getWS().onerror?.(new Event('error'));
+
+        await expect(connectPromise).rejects.toThrow('could not reach the signaling server');
+        expect(onError.mock.calls[0][0].message).toBe('could not reach the signaling server');
+    });
+
+    it('maps a raw WS error event mid-call to a connection-lost failure', async () => {
+        const {room, ws} = await makeConnectedRoom();
+        const onError = jest.fn();
+        room.on('error', onError);
+
+        ws.onerror?.(new Event('error'));
+
+        expect(onError.mock.calls[0][0].message).toBe('signaling connection lost');
+    });
+
+    it('passes a JSON parse error through as the original Error', async () => {
+        const {room, ws} = await makeConnectedRoom();
+        const onError = jest.fn();
+        room.on('error', onError);
+
+        ws.onmessage?.({data: 'not-json'} as MessageEvent);
+
+        expect(onError.mock.calls[0][0]).toBeInstanceOf(SyntaxError);
+    });
+});
+
+describe('ConferenceRoom join cancellation', () => {
+    it('rejects with JoinCancelledError when leave() aborts a connecting socket', async () => {
+        const room = new ConferenceRoom(makeFakeAuth(), 'wss://rs.example');
+        const connectPromise = room.connect('room-1', 'ch-1', 'alice', 'dev-1');
+        await Promise.resolve();
+        await Promise.resolve();
+
+        await room.leave();
+
+        await expect(connectPromise).rejects.toBeInstanceOf(JoinCancelledError);
+    });
+
+    it('rejects with JoinCancelledError when the ticket rejects after a leave', async () => {
+        let rejectTicket!: (err: Error) => void;
+        const auth: AuthProvider = {
+            getTicket: () => new Promise((_resolve, reject) => {
+                rejectTicket = reject;
+            }),
+        };
+        const room = new ConferenceRoom(auth, 'wss://rs.example');
+        const connectPromise = room.connect('room-1', 'ch-1', 'alice', 'dev-1');
+        room.leave();
+        rejectTicket(new Error('unauthorized'));
+
+        await expect(connectPromise).rejects.toBeInstanceOf(JoinCancelledError);
+    });
+});
+
+describe('ConferenceRoom close-code classification', () => {
+    async function makeRoomWithClosedListener(): Promise<{room: ConferenceRoom; onClosed: jest.Mock; ws: FakeWebSocket}> {
+        const room = new ConferenceRoom(makeFakeAuth(), 'wss://rs.example');
+        const onClosed = jest.fn();
+        room.on('closed', onClosed);
+        room.connect('room-1', 'ch-1', 'alice', 'dev-1');
+        await Promise.resolve();
+        await Promise.resolve();
+        const ws = getWS();
+        ws.onopen?.({} as Event);
+        emit(ws, {namespace: 'control', payload: {message: 'join_success', id: 'self-id', display_name: 'self-name', participants: []}});
+        return {room, onClosed, ws};
+    }
+
+    it.each([
+        [1006, true],
+        [1001, true],
+        [4999, true],
+        [1012, true],
+        [1000, false],
+        [3000, false],
+        [4000, false],
+    ])('marks close code %i as recoverable=%s', async (code, expected) => {
+        const {onClosed, ws} = await makeRoomWithClosedListener();
+
+        ws.onclose?.({code} as CloseEvent);
+
+        expect(onClosed).toHaveBeenCalledWith(expect.objectContaining({code, recoverable: expected}));
+    });
+
+    it('emits the intentional leave close as non-recoverable', async () => {
+        const {room, onClosed} = await makeRoomWithClosedListener();
+
+        await room.leave();
+
+        expect(onClosed).toHaveBeenCalledWith(expect.objectContaining({code: 1000, recoverable: false}));
     });
 });

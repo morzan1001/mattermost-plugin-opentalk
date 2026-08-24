@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest/mock"
 	"github.com/stretchr/testify/assert"
@@ -63,4 +64,78 @@ func TestActiveMeeting_Delete(t *testing.T) {
 	s := New(api)
 	require.NoError(t, s.DeleteActiveMeeting("ch-1"))
 	api.AssertExpectations(t)
+}
+
+func TestRemoveDismissal_FiltersOnlyTargetUser(t *testing.T) {
+	api := &plugintest.API{}
+	existing := []byte(`["u1","u2","u3"]`)
+	api.On("KVGet", dismissalKey("ch-1", "room-1")).Return(existing, nil)
+
+	var written []byte
+	var opts model.PluginKVSetOptions
+	api.On("KVSetWithOptions", dismissalKey("ch-1", "room-1"),
+		mock.AnythingOfType("[]uint8"), mock.AnythingOfType("model.PluginKVSetOptions")).
+		Run(func(args mock.Arguments) {
+			written = args.Get(1).([]byte)
+			opts = args.Get(2).(model.PluginKVSetOptions)
+		}).
+		Return(true, (*model.AppError)(nil))
+
+	s := New(api)
+	require.NoError(t, s.RemoveDismissal("ch-1", "room-1", "u2"))
+
+	assert.JSONEq(t, `["u1","u3"]`, string(written))
+	assert.Equal(t, existing, opts.OldValue,
+		"CAS precondition must pin the previously read value")
+	assert.Equal(t, int64(3600), opts.ExpireInSeconds,
+		"write must refresh the 1h TTL like AddDismissal")
+}
+
+func TestRemoveDismissal_IdempotentWhenAbsent(t *testing.T) {
+	t.Run("user not in set", func(t *testing.T) {
+		api := &plugintest.API{}
+		api.On("KVGet", dismissalKey("ch-1", "room-1")).Return([]byte(`["u1"]`), nil)
+
+		require.NoError(t, New(api).RemoveDismissal("ch-1", "room-1", "u-other"))
+		api.AssertNotCalled(t, "KVSetWithOptions", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("key missing entirely", func(t *testing.T) {
+		api := &plugintest.API{}
+		api.On("KVGet", dismissalKey("ch-1", "room-1")).Return([]byte(nil), nil)
+
+		require.NoError(t, New(api).RemoveDismissal("ch-1", "room-1", "u1"))
+		api.AssertNotCalled(t, "KVSetWithOptions", mock.Anything, mock.Anything, mock.Anything)
+	})
+}
+
+func TestRemoveDismissal_CASRetryAfterContention(t *testing.T) {
+	api := &plugintest.API{}
+	api.On("KVGet", dismissalKey("ch-1", "room-1")).Return([]byte(`["u1","u2"]`), nil)
+
+	var written []byte
+	api.On("KVSetWithOptions", dismissalKey("ch-1", "room-1"),
+		mock.AnythingOfType("[]uint8"), mock.AnythingOfType("model.PluginKVSetOptions")).
+		Return(false, (*model.AppError)(nil)).Once()
+	api.On("KVSetWithOptions", dismissalKey("ch-1", "room-1"),
+		mock.AnythingOfType("[]uint8"), mock.AnythingOfType("model.PluginKVSetOptions")).
+		Run(func(args mock.Arguments) { written = args.Get(1).([]byte) }).
+		Return(true, (*model.AppError)(nil)).Once()
+
+	require.NoError(t, New(api).RemoveDismissal("ch-1", "room-1", "u2"))
+	assert.JSONEq(t, `["u1"]`, string(written))
+}
+
+func TestRemoveDismissal_ExhaustedCASRetries(t *testing.T) {
+	api := &plugintest.API{}
+	api.On("KVGet", dismissalKey("ch-1", "room-1")).Return([]byte(`["u1"]`), nil)
+	api.On("KVSetWithOptions", dismissalKey("ch-1", "room-1"),
+		mock.AnythingOfType("[]uint8"), mock.AnythingOfType("model.PluginKVSetOptions")).
+		Return(false, (*model.AppError)(nil))
+
+	err := New(api).RemoveDismissal("ch-1", "room-1", "u1")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CAS contention")
+	api.AssertNumberOfCalls(t, "KVSetWithOptions", 5)
 }

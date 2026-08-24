@@ -111,3 +111,104 @@ describe('SignalingSocket', () => {
         expect(sent.payload.action).toBe('join_success');
     });
 });
+
+describe('SignalingSocket echo heartbeat', () => {
+    beforeEach(() => {
+        jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    function openSocket(): {s: SignalingSocket; ws: FakeWebSocket} {
+        const s = new SignalingSocket('wss://rs.example', 'ticket');
+        s.connect();
+        const ws = FakeWebSocket.instances[0];
+        ws.onopen?.({} as Event);
+        return {s, ws};
+    }
+
+    function sentFrames(ws: FakeWebSocket): object[] {
+        return ws.sent.map((raw) => JSON.parse(raw));
+    }
+
+    it('sends an echo ping every 12 seconds once open', () => {
+        const {ws} = openSocket();
+        const echoReply = {data: JSON.stringify({namespace: 'echo', payload: {action: 'echo'}})} as MessageEvent;
+
+        jest.advanceTimersByTime(12 * 1000);
+        ws.onmessage?.(echoReply);
+        jest.advanceTimersByTime(12 * 1000);
+
+        const frames = sentFrames(ws);
+        expect(frames).toHaveLength(2);
+        for (const f of frames) {
+            expect(f).toEqual({namespace: 'echo', payload: {action: 'ping'}});
+        }
+    });
+
+    it('sends no pings before the socket opens and none after close', () => {
+        const s = new SignalingSocket('wss://rs.example', 'ticket');
+        s.connect();
+        const ws = FakeWebSocket.instances[0];
+
+        jest.advanceTimersByTime(30 * 1000);
+        expect(ws.sent).toHaveLength(0);
+
+        ws.onopen?.({} as Event);
+        jest.advanceTimersByTime(12 * 1000);
+        expect(ws.sent).toHaveLength(1);
+
+        // An echo must be delivered before closing: a leaked heartbeat tick
+        // would otherwise take its dead-socket branch (which never sends)
+        // instead of exposing itself through this assertion.
+        ws.onmessage?.({data: JSON.stringify({namespace: 'echo', payload: {action: 'echo'}})} as MessageEvent);
+        ws.close();
+
+        jest.advanceTimersByTime(60 * 1000);
+        expect(ws.sent).toHaveLength(1);
+        expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('stops the heartbeat when the socket errors without a close', () => {
+        const {ws} = openSocket();
+
+        jest.advanceTimersByTime(12 * 1000);
+        ws.onerror?.(new Event('error'));
+
+        expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('keeps the connection alive while echo replies arrive', () => {
+        const {ws} = openSocket();
+        const closeSpy = jest.spyOn(ws, 'close');
+
+        for (let i = 0; i < 10; i++) {
+            jest.advanceTimersByTime(12 * 1000);
+            ws.onmessage?.({data: JSON.stringify({namespace: 'echo', payload: {action: 'echo'}})} as MessageEvent);
+        }
+
+        expect(closeSpy).not.toHaveBeenCalled();
+        expect(sentFrames(ws)).toHaveLength(10);
+    });
+
+    it('force-closes with code 4999 when no echo arrives within the timeout', () => {
+        const {s, ws} = openSocket();
+        const onClose = jest.fn();
+        s.on('close', onClose);
+        const closeSpy = jest.spyOn(ws, 'close');
+
+        // t=12s: first ping goes out unanswered. t=24s: next tick sees the ping
+        // is older than the 10s timeout and kills the socket.
+        jest.advanceTimersByTime(24 * 1000);
+
+        expect(closeSpy).toHaveBeenCalledWith(4999, 'signaling heartbeat timeout');
+        expect(onClose).toHaveBeenCalled();
+
+        // The dead socket must not keep being pinged, re-closed, or hold a timer.
+        jest.advanceTimersByTime(60 * 1000);
+        expect(closeSpy).toHaveBeenCalledTimes(1);
+        expect(jest.getTimerCount()).toBe(0);
+    });
+});

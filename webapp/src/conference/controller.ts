@@ -6,7 +6,9 @@ import {getMuteOnJoin} from './livekit/devices';
 import {LiveKitRoom, participantIdFromIdentity} from './livekit/room';
 import {pickScreenSource} from './livekit/screen_picker';
 import * as trackRegistry from './livekit/track_registry';
+import {JoinCancelledError} from './signaling/conference_room';
 import type {Participant} from './signaling/modules/core';
+import {clearOpenTalkStatus, setOpenTalkStatus} from './status';
 
 import {getOrCreateDeviceSecret, heartbeat} from '../client/rest';
 import {noticeSet} from '../store/slice_notice';
@@ -34,6 +36,7 @@ import {
     setLivekitConnected,
     setRaiseHandsEnabled,
     setIsHost,
+    setReconnectAttempt,
 } from '../store/slice_session';
 import {
     trackSubscribed,
@@ -47,6 +50,9 @@ import {PLUGIN_STATE_KEY} from '../util/selectors';
 
 const ALLOWED_ROLES = new Set<string>(['moderator', 'user', 'guest']);
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyStore = Store<any, Action>;
+
 function toParticipantInfo(p: Participant): ParticipantInfo {
     const role = (p.role && ALLOWED_ROLES.has(p.role)) ? p.role as ParticipantInfo['role'] : undefined;
     return {id: p.id, displayName: p.displayName, role};
@@ -56,6 +62,27 @@ let activeClient: OpenTalkConferenceClient | null = null;
 let activeLiveKit: LiveKitRoom | null = null;
 let heartbeatIntervalId: number | null = null;
 let tearingDown = false;
+
+// Auto-rejoin after a recoverable drop; the resumption token survives an unexpected close.
+const REJOIN_MAX_ATTEMPTS = 5;
+const REJOIN_DELAY_MS = 5000;
+
+type LocalMediaState = {mic: boolean; cam: boolean};
+
+interface PendingRejoin {
+    roomID: string;
+    channelID: string;
+    displayName: string;
+    store: AnyStore;
+    attempt: number;
+    timer?: ReturnType<typeof setTimeout>;
+
+    // The first attempt waits on this so a leave racing the gap can still cancel.
+    after?: Promise<void>;
+}
+
+let pendingRejoin: PendingRejoin | null = null;
+let pendingMediaRestore: LocalMediaState | null = null;
 
 function startHeartbeat(channelID: string): void {
     stopHeartbeat();
@@ -77,118 +104,8 @@ function stopHeartbeat(): void {
     }
 }
 
-const PRIOR_STATUS_KEY = 'opentalk:prior-status:v1';
-
-type CustomStatus = {emoji?: string; text?: string; duration?: string; expires_at?: string};
-
-function readPriorStatus(): CustomStatus | null {
-    try {
-        const raw = window.localStorage.getItem(PRIOR_STATUS_KEY);
-        return raw ? JSON.parse(raw) as CustomStatus : null;
-    } catch {
-        return null;
-    }
-}
-
-function writePriorStatus(status: CustomStatus | null): void {
-    try {
-        if (status === null) {
-            window.localStorage.removeItem(PRIOR_STATUS_KEY);
-        } else {
-            window.localStorage.setItem(PRIOR_STATUS_KEY, JSON.stringify(status));
-        }
-    } catch {
-        // quota / private mode
-    }
-}
-
-async function fetchCurrentStatus(): Promise<CustomStatus | null> {
-    try {
-        const r = await fetch('/api/v4/users/me', {
-            method: 'GET',
-            headers: {'X-Requested-With': 'XMLHttpRequest'},
-            credentials: 'include',
-        });
-        if (!r.ok) {
-            return null;
-        }
-        const me = await r.json() as {props?: {customStatus?: string}};
-        const s = me.props?.customStatus;
-        if (typeof s !== 'string' || s === '') {
-            return null;
-        }
-        return JSON.parse(s) as CustomStatus;
-    } catch {
-        return null;
-    }
-}
-
-const OPENTALK_STATUS_EMOJI = 'phone';
-
-// Bumped by both set and clear. setOpenTalkStatusAsync captures the value at
-// call time and bails before its PUT if it changed, so a late set cannot
-// overwrite a clear that ran while its GET was in flight (status stuck 4h).
-let statusEpoch = 0;
-
-async function setOpenTalkStatusAsync(epoch: number): Promise<void> {
-    const prior = await fetchCurrentStatus();
-    if (epoch !== statusEpoch) {
-        return;
-    }
-    if (prior && prior.emoji !== OPENTALK_STATUS_EMOJI) {
-        writePriorStatus(prior);
-    }
-
-    // MM 6+ rejects custom-status PUTs with a duration but no expires_at
-    // (400 Bad Request). Send both.
-    const expiresAt = new Date(Date.now() + (4 * 60 * 60 * 1000)).toISOString();
-    await fetch('/api/v4/users/me/status/custom', {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-            emoji: OPENTALK_STATUS_EMOJI,
-            text: t({de: 'Im OpenTalk-Meeting', en: 'In an OpenTalk meeting'}),
-            duration: 'four_hours',
-            expires_at: expiresAt,
-        }),
-    }).catch(() => { /* swallow */ });
-}
-
-function setOpenTalkStatus(): void {
-    const epoch = ++statusEpoch;
-    setOpenTalkStatusAsync(epoch).catch(() => { /* swallow */ });
-}
-
-function clearOpenTalkStatus(): void {
-    statusEpoch++;
-    const prior = readPriorStatus();
-    writePriorStatus(null);
-    if (!prior || !prior.emoji) {
-        fetch('/api/v4/users/me/status/custom', {
-            method: 'DELETE',
-            headers: {'X-Requested-With': 'XMLHttpRequest'},
-            credentials: 'include',
-        }).catch(() => { /* swallow */ });
-        return;
-    }
-    fetch('/api/v4/users/me/status/custom', {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-        credentials: 'include',
-        body: JSON.stringify(prior),
-    }).catch(() => { /* swallow */ });
-}
-
 // Root components don't have a Redux Provider; hold the store module-level.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let activeStore: Store<any, Action> | null = null;
+let activeStore: AnyStore | null = null;
 
 async function tearDownActiveConference(): Promise<void> {
     if (tearingDown) {
@@ -201,8 +118,7 @@ async function tearDownActiveConference(): Promise<void> {
         activeLiveKit = null;
         activeClient = null;
 
-        // UI must observe disconnect synchronously; the actual socket teardown
-        // happens after.
+        // UI must observe disconnect synchronously; socket teardown happens after.
         stopHeartbeat();
         clearOpenTalkStatus();
         trackRegistry.clear();
@@ -224,10 +140,7 @@ async function tearDownActiveConference(): Promise<void> {
             }
         }
 
-        // Always close the signaling room, not just on explicit leave. A
-        // LiveKit drop or a signaling error leaves the OpenTalk socket joined,
-        // so without this the user stays visible in the room after hangup.
-        // ConferenceRoom.leave() is a no-op when already closed.
+        // A LiveKit drop leaves the socket joined; leave() closes it and no-ops when closed.
         if (c) {
             try {
                 await c.leave();
@@ -240,8 +153,76 @@ async function tearDownActiveConference(): Promise<void> {
     }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function setActiveStore(store: Store<any, Action>): void {
+function readLocalMediaState(store: AnyStore): LocalMediaState {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = store.getState()?.[PLUGIN_STATE_KEY]?.session ?? {};
+    return {mic: session.micEnabled === true, cam: session.camEnabled === true};
+}
+
+function cancelPendingRejoin(): void {
+    const rejoin = pendingRejoin;
+    pendingRejoin = null;
+    pendingMediaRestore = null;
+    if (rejoin?.timer !== undefined) {
+        clearTimeout(rejoin.timer);
+    }
+}
+
+function runRejoinAttempt(rejoin: PendingRejoin): void {
+    const proceed = () => {
+        if (pendingRejoin !== rejoin) {
+            return;
+        }
+        rejoin.attempt += 1;
+        rejoin.store.dispatch(setReconnectAttempt(rejoin.attempt));
+        establishConference(rejoin.roomID, rejoin.channelID, rejoin.displayName, rejoin.store, {notifyOnFailure: false}).then((joined) => {
+            if (pendingRejoin !== rejoin) {
+                return;
+            }
+            if (joined) {
+                pendingRejoin = null;
+                return;
+            }
+            if (rejoin.attempt >= REJOIN_MAX_ATTEMPTS) {
+                pendingRejoin = null;
+                rejoin.store.dispatch(setReconnectAttempt(0));
+                rejoin.store.dispatch(noticeSet({
+                    kind: 'error',
+                    message: t({de: 'Verbindung konnte nicht wiederhergestellt werden', en: 'Could not restore the meeting connection'}),
+                }));
+                return;
+            }
+            rejoin.timer = setTimeout(() => {
+                rejoin.timer = undefined;
+                runRejoinAttempt(rejoin);
+            }, REJOIN_DELAY_MS);
+        }).catch((e: unknown) => {
+            // A terminal close ends the meeting for good; stop retrying and say so.
+            if (pendingRejoin !== rejoin || !(e instanceof TerminalCloseError)) {
+                return;
+            }
+            pendingRejoin = null;
+            rejoin.store.dispatch(setReconnectAttempt(0));
+            rejoin.store.dispatch(noticeSet({kind: 'error', message: e.message}));
+        });
+    };
+    if (rejoin.after) {
+        rejoin.after.then(proceed);
+    } else {
+        proceed();
+    }
+}
+
+function beginRejoin(roomID: string, channelID: string, displayName: string,
+    store: AnyStore, media: LocalMediaState, after?: Promise<void>): void {
+    cancelPendingRejoin();
+    pendingMediaRestore = media;
+    const rejoin: PendingRejoin = {roomID, channelID, displayName, store, attempt: 0, after};
+    pendingRejoin = rejoin;
+    runRejoinAttempt(rejoin);
+}
+
+export function setActiveStore(store: AnyStore): void {
     activeStore = store;
 }
 
@@ -249,27 +230,62 @@ export async function startConferenceConnection(
     roomID: string,
     channelID: string,
     displayName: string,
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    store: Store<any, Action>,
+    store: AnyStore,
 ): Promise<void> {
+    // A manual join supersedes an in-flight rejoin; its client must be torn
+    // down first or the join below would silently no-op.
+    const rejoining = (store.getState()?.[PLUGIN_STATE_KEY]?.session?.reconnectAttempt ?? 0) > 0;
+    cancelPendingRejoin();
+    store.dispatch(setReconnectAttempt(0));
+    if (rejoining && activeClient) {
+        await tearDownActiveConference();
+    }
+    try {
+        await establishConference(roomID, channelID, displayName, store, {notifyOnFailure: true});
+    } catch (e: unknown) {
+        if (e instanceof TerminalCloseError) {
+            store.dispatch(noticeSet({kind: 'error', message: e.message}));
+        }
+    }
+}
+
+// Thrown when a non-recoverable close ends the join: stops the loop, reports terminally.
+class TerminalCloseError extends Error {}
+
+// Resolves true on 'connected', false on failure or cancellation; rejoin attempts report through their loop.
+async function establishConference(
+    roomID: string,
+    channelID: string,
+    displayName: string,
+    store: AnyStore,
+    opts: {notifyOnFailure: boolean},
+): Promise<boolean> {
     if (activeClient) {
-        // Already connected/connecting; ignore duplicate clicks.
-        return;
+        return false;
     }
     setActiveStore(store);
     const client = new OpenTalkConferenceClient('');
     activeClient = client;
 
-    client.on('connected', (data) => {
-        const isHost = data.isHost === true;
+    const rejoinAfterDrop = () => {
+        // Capture media intent before teardown wipes it, keep the resumption
+        // token alive, and register the rejoin so a racing leave can cancel it.
+        const mediaWanted = readLocalMediaState(store);
+        client.markUnexpectedDrop();
+        const teardown = tearDownActiveConference();
+        beginRejoin(roomID, channelID, displayName, store, mediaWanted, teardown);
+    };
 
-        const localParticipantId = data.participants[0]?.id;
+    client.on('connected', (data) => {
+        // Moderation rights: ownership or moderator role at join; promotions arrive via role_updated.
+        const localUser = data.participants[0];
+        const isModerator = data.isHost === true || localUser?.role === 'moderator';
+        const localParticipantId = localUser?.id;
 
         store.dispatch(connected({
             participantCount: data.participants.length,
-            isHost,
-            isRoomOwner: isHost,
+            isHost: isModerator,
+            isRoomOwner: data.isHost === true,
             localParticipantId,
         }));
 
@@ -277,28 +293,25 @@ export async function startConferenceConnection(
             participants: data.participants.map(toParticipantInfo),
         }));
 
-        // Some OpenTalk builds inline livekit credentials in joinSuccess;
-        // most send a separate livekit:credentials frame. Keep both paths.
+        // Some OpenTalk builds inline livekit credentials in joinSuccess; most send a separate frame.
         if (data.livekit?.url && data.livekit?.token) {
-            bringUpLiveKit(data.livekit.url, data.livekit.token, store);
+            bringUpLiveKit(data.livekit.url, data.livekit.token, store, rejoinAfterDrop, opts.notifyOnFailure);
         }
 
         startHeartbeat(channelID);
         setOpenTalkStatus();
 
-        // OpenTalk's raise-hands feature is OFF by default per room. Hosts
-        // turn it on so participants' raiseHand calls aren't silently dropped.
-        if (isHost) {
+        // Raise-hands is OFF per room; moderators enable it so raiseHand works.
+        if (isModerator) {
             client.enableRaiseHands();
         }
     });
     client.on('livekit_credentials', ({url, token}) => {
         if (activeLiveKit) {
-            // Already up via the joinSuccess fallback — re-credentialing would
-            // tear down active publications.
+            // Already up via the joinSuccess fallback; re-credentialing would drop publications.
             return;
         }
-        bringUpLiveKit(url, token, store);
+        bringUpLiveKit(url, token, store, rejoinAfterDrop, opts.notifyOnFailure);
     });
     client.on('participant_joined', (p) => {
         store.dispatch(participantsChanged({participantCount: client.getParticipants().length}));
@@ -314,8 +327,7 @@ export async function startConferenceConnection(
         store.dispatch(setRaiseHandsEnabled(enabled));
     });
     client.on('force_muted', () => {
-        // The server force-mutes the publisher's track via LiveKit RoomService;
-        // this syncs the mic button and releases the local device.
+        // Server-side force-mute via RoomService; sync button, release the device.
         if (!activeLiveKit) {
             return;
         }
@@ -341,22 +353,48 @@ export async function startConferenceConnection(
         connectErrorDispatched = true;
         store.dispatch(connectError({error: message}));
 
-        // Surface it: teardown resets the session to idle and the widget
-        // vanishes, so the error would otherwise be invisible.
-        store.dispatch(noticeSet({
-            kind: 'error',
-            message: `${t({de: 'Meeting-Beitritt fehlgeschlagen', en: 'Could not join the meeting'})}: ${message}`,
-        }));
+        // Teardown hides the widget, so surface the error here; rejoin attempts stay silent.
+        if (opts.notifyOnFailure) {
+            store.dispatch(noticeSet({
+                kind: 'error',
+                message: `${t({de: 'Meeting-Beitritt fehlgeschlagen', en: 'Could not join the meeting'})}: ${message}`,
+            }));
+        }
     };
+    let joinSettled = false;
+    let terminalCloseDuringJoin = false;
 
-    client.on('closed', () => {
-        tearDownActiveConference().catch(() => { /* swallow */ });
+    client.on('closed', (data) => {
+        // Stale events must not touch state that may belong to a newer call.
+        if (activeClient !== client) {
+            return;
+        }
+        if (!joinSettled) {
+            // The join-phase close rejects connect(); its catch owns reporting
+            // and needs the final-vs-transient classification.
+            terminalCloseDuringJoin = !data.recoverable;
+            return;
+        }
+
+        if (data.recoverable) {
+            rejoinAfterDrop();
+            return;
+        }
+        tearDownActiveConference().finally(() => {
+            store.dispatch(noticeSet({
+                kind: 'error',
+                message: t({de: 'Die Meetingverbindung wurde beendet', en: 'The meeting connection was closed'}),
+            }));
+        });
     });
     client.on('error', (err) => {
-        // Dispatch the error AFTER teardown: teardown's disconnected() resets
-        // the session to initial (clearing error), so an error dispatched
-        // before it would be wiped in the same tick and the user would see no
-        // feedback for a failed join.
+        // Every socket error is followed by a classified close; once joined,
+        // that close owns reporting — an error here would mislabel a drop.
+        if (activeClient !== client || joinSettled) {
+            return;
+        }
+
+        // Dispatch after teardown or disconnected() wipes it in the same tick.
         tearDownActiveConference().finally(() => dispatchConnectError(err.message));
     });
 
@@ -364,48 +402,79 @@ export async function startConferenceConnection(
 
     try {
         await client.connect(roomID, channelID, displayName, getOrCreateDeviceSecret());
+        joinSettled = true;
+        return true;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
+        // A superseded attempt (manual join took over) must stay fully inert.
+        if (activeClient !== client) {
+            return false;
+        }
         await tearDownActiveConference();
+        if (e instanceof JoinCancelledError) {
+            return false;
+        }
+        if (terminalCloseDuringJoin) {
+            throw new TerminalCloseError(t({de: 'Die Meetingverbindung wurde beendet', en: 'The meeting connection was closed'}));
+        }
         dispatchConnectError(e?.message ?? String(e));
+        return false;
     }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): void {
+function bringUpLiveKit(url: string, token: string, store: AnyStore, onMediaDrop: () => void, notifyOnFailure: boolean): void {
     const lk = new LiveKitRoom();
     activeLiveKit = lk;
 
     lk.on('connected', () => {
-        if (getMuteOnJoin()) {
+        // Restore the pre-drop camera; the mic only if mute-on-join permits.
+        // Screen share is never restored (browsers require a user gesture).
+        const restore = pendingMediaRestore;
+        pendingMediaRestore = null;
+        const publishMic = restore ? restore.mic && !getMuteOnJoin() : !getMuteOnJoin();
+
+        if (publishMic) {
+            // Publish before surfacing connected so a racing user toggle cannot double-publish.
+            lk.enableMic().
+                then(() => {
+                    store.dispatch(setMicEnabled(true));
+                }).
+                catch((err: Error) => {
+                    // Mic-permission denial just leaves us muted; no need to crash.
+                    // eslint-disable-next-line no-console
+                    console.warn('[opentalk] enableMic failed:', err.message);
+                }).
+                finally(() => {
+                    store.dispatch(setLivekitConnected(true));
+                });
+        } else {
             store.dispatch(setLivekitConnected(true));
-            return;
         }
 
-        // Publish the mic before we surface "livekit connected" so a user
-        // toggle racing this path cannot trigger a parallel publish.
-        lk.enableMic().
+        if (!restore?.cam) {
+            return;
+        }
+        lk.enableCam().
             then(() => {
-                store.dispatch(setMicEnabled(true));
+                registerLocalCamTrack(store, lk);
+                store.dispatch(setCamEnabled(true));
             }).
             catch((err: Error) => {
-                // Mic-permission denial just leaves us muted; no need to crash.
                 // eslint-disable-next-line no-console
-                console.warn('[opentalk] enableMic failed:', err.message);
-            }).
-            finally(() => {
-                store.dispatch(setLivekitConnected(true));
+                console.warn('[opentalk] enableCam failed:', err.message);
             });
     });
 
     lk.on('disconnected', () => {
-        tearDownActiveConference().catch(() => { /* swallow */ });
+        // Teardown nulls activeLiveKit first; only an unexpected drop sees it.
+        if (activeLiveKit !== lk) {
+            return;
+        }
+        onMediaDrop();
     });
 
-    // Differentiate screen-share from camera: both have kind:'video' in LiveKit
-    // but different sources. Without this the screen-track would overwrite the
-    // cam-track in the slice, hiding the remote camera during screen-share.
+    // Screen share is also kind:'video'; branch on source or it overwrites the camera tile.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const trackKindOf = (sub: any): TrackKind => {
         if (sub.track?.kind === 'audio') {
@@ -466,9 +535,8 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
         }
     });
 
-    // OS share-controls / dismissed-tab stops the screen track outside our
-    // toggle path; we still need to clear the publication out of Redux and
-    // the track registry.
+    // OS share controls end the screen track outside our toggle path; clear
+    // the publication out of Redux and the registry.
     lk.on('local_screen_share_ended', () => {
         const trackId = localTrackId(lk, 'screen');
         trackRegistry.unregister(trackId);
@@ -477,24 +545,31 @@ function bringUpLiveKit(url: string, token: string, store: Store<any, Action>): 
     });
 
     lk.connect(url, token).catch((err: Error) => {
+        if (activeLiveKit !== lk) {
+            return;
+        }
         // eslint-disable-next-line no-console
         console.warn('[opentalk] LiveKit connect failed:', err.message);
         store.dispatch(setLivekitConnected(false));
         activeLiveKit = null;
 
-        // The OpenTalk session stays up, so nothing else tells the user their
-        // audio and video will never arrive.
-        store.dispatch(noticeSet({
-            kind: 'error',
-            message: t({
-                de: 'Keine Medienverbindung zum Meeting. Audio und Video funktionieren nicht — bitte verlassen und erneut beitreten.',
-                en: 'No media connection to the meeting. Audio and video will not work — please leave and rejoin.',
-            }),
-        }));
+        // The OpenTalk session stays up, so nothing else tells the user media is
+        // dead. Silent for auto-rejoin attempts; their loop reports once.
+        if (notifyOnFailure) {
+            store.dispatch(noticeSet({
+                kind: 'error',
+                message: t({
+                    de: 'Keine Medienverbindung zum Meeting. Audio und Video funktionieren nicht — bitte verlassen und erneut beitreten.',
+                    en: 'No media connection to the meeting. Audio and video will not work — please leave and rejoin.',
+                }),
+            }));
+        }
     });
 }
 
 export async function leaveActiveConference(): Promise<void> {
+    cancelPendingRejoin();
+    activeStore?.dispatch(setReconnectAttempt(0));
     await tearDownActiveConference();
 }
 
@@ -507,8 +582,7 @@ export async function endActiveMeeting(): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const channelID: string | undefined = store.getState()?.[PLUGIN_STATE_KEY]?.session?.channelID;
 
-    // Kick all participants on the OpenTalk side before we leave. Best-effort:
-    // failure must not block teardown.
+    // Kick everyone on the OpenTalk side first. Best-effort: never block teardown.
     activeClient?.sendDebrief();
 
     await leaveActiveConference();
@@ -565,10 +639,20 @@ export function toggleMic(): Promise<void> {
     return micToggleInFlight;
 }
 
-// Stable synthetic id for a local track: LiveKit's LocalTrack.sid is
-// undefined until the publication round-trips.
+// Synthetic id: LiveKit's LocalTrack.sid is undefined until publication round-trips.
 function localTrackId(lk: LiveKitRoom, kind: 'video' | 'screen'): string {
     return `local:${lk.getLocalIdentity()}:${kind}`;
+}
+
+// Publishes the enabled camera into registry and slice so self-view tiles
+// resolve a track; shared by toggle, device-change and rejoin paths.
+function registerLocalCamTrack(store: AnyStore, lk: LiveKitRoom): void {
+    if (!lk.camTrack) {
+        return;
+    }
+    const trackId = localTrackId(lk, 'video');
+    trackRegistry.register(trackId, lk.camTrack);
+    store.dispatch(trackSubscribed({participantId: lk.getLocalIdentity(), kind: 'video', trackId}));
 }
 
 export function toggleCam(): Promise<void> {
@@ -589,11 +673,7 @@ export function toggleCam(): Promise<void> {
             activeStore.dispatch(setCamEnabled(false));
         } else {
             await lk.enableCam();
-            if (lk.camTrack) {
-                const trackId = localTrackId(lk, 'video');
-                trackRegistry.register(trackId, lk.camTrack);
-                activeStore.dispatch(trackSubscribed({participantId: localId, kind: 'video', trackId}));
-            }
+            registerLocalCamTrack(activeStore, lk);
             activeStore.dispatch(setCamEnabled(true));
         }
     })().finally(() => {
@@ -639,11 +719,7 @@ export async function applyCamDeviceChange(): Promise<void> {
         activeStore.dispatch(trackUnsubscribed({participantId: localId, kind: 'video'}));
         await lk.disableCam();
         await lk.enableCam();
-        if (lk.camTrack) {
-            const newTrackId = localTrackId(lk, 'video');
-            trackRegistry.register(newTrackId, lk.camTrack);
-            activeStore.dispatch(trackSubscribed({participantId: localId, kind: 'video', trackId: newTrackId}));
-        }
+        registerLocalCamTrack(activeStore, lk);
     } catch (err) {
         activeStore.dispatch(setCamEnabled(false));
         // eslint-disable-next-line no-console
@@ -720,25 +796,23 @@ async function doToggleScreenShare(): Promise<void> {
     }
 }
 
-export function raiseLocalHand(): void {
-    if (!activeClient) {
-        return;
+// Runs an action against the live client; no-op when not in a meeting.
+function withClient(fn: (client: OpenTalkConferenceClient) => void): void {
+    if (activeClient) {
+        fn(activeClient);
     }
-    activeClient.raiseHand();
+}
+
+export function raiseLocalHand(): void {
+    withClient((client) => client.raiseHand());
 }
 
 export function lowerLocalHand(): void {
-    if (!activeClient) {
-        return;
-    }
-    activeClient.lowerHand();
+    withClient((client) => client.lowerHand());
 }
 
 export function forceMute(participantId: string): void {
-    if (!activeClient) {
-        return;
-    }
-    activeClient.forceMute([participantId]);
+    withClient((client) => client.forceMute([participantId]));
 }
 
 export function muteAll(): void {
@@ -751,56 +825,36 @@ export function muteAll(): void {
 }
 
 export function kick(participantId: string): void {
-    if (!activeClient) {
-        return;
-    }
-    activeClient.kick(participantId);
+    withClient((client) => client.kick(participantId));
 }
 
 export function ban(participantId: string): void {
-    if (!activeClient) {
-        return;
-    }
-    activeClient.ban(participantId);
+    withClient((client) => client.ban(participantId));
 }
 
 export function grantModerator(participantId: string): void {
-    if (!activeClient) {
-        return;
-    }
-    activeClient.grantModerator(participantId);
+    withClient((client) => client.grantModerator(participantId));
 }
 
 export function revokeModerator(participantId: string): void {
-    if (!activeClient) {
-        return;
-    }
-    activeClient.revokeModerator(participantId);
+    withClient((client) => client.revokeModerator(participantId));
 }
 
 export function resetHand(participantId: string): void {
-    if (!activeClient) {
-        return;
-    }
-    activeClient.resetRaisedHands(participantId);
+    withClient((client) => client.resetRaisedHands(participantId));
 }
 
 export function grantScreenShare(participantId: string): void {
-    if (!activeClient) {
-        return;
-    }
-    activeClient.grantScreenShare([participantId]);
+    withClient((client) => client.grantScreenShare([participantId]));
 }
 
 export function revokeScreenShare(participantId: string): void {
-    if (!activeClient) {
-        return;
-    }
-    activeClient.revokeScreenShare([participantId]);
+    withClient((client) => client.revokeScreenShare([participantId]));
 }
 
 // eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention
 export function _reset(): void {
+    cancelPendingRejoin();
     activeClient = null;
     activeLiveKit = null;
     activeStore = null;
@@ -815,25 +869,15 @@ export function debugState(): string {
         hasClient: activeClient !== null,
         hasLiveKit: activeLiveKit !== null,
         hasStore: activeStore !== null,
-        liveKitLocalIdentity: activeLiveKit ? activeLiveKit.getLocalIdentity() : null,
-        liveKitMicEnabled: activeLiveKit ? activeLiveKit.isMicEnabled() : null,
-        liveKitCamEnabled: activeLiveKit ? activeLiveKit.isCamEnabled() : null,
-        liveKitScreenShareEnabled: activeLiveKit ? activeLiveKit.isScreenShareEnabled() : null,
-        session: {
-            status: stateSlice.session?.status,
-            participantCount: stateSlice.session?.participantCount,
-            localParticipantId: stateSlice.session?.localParticipantId,
-            isHost: stateSlice.session?.isHost,
-            micEnabled: stateSlice.session?.micEnabled,
-            camEnabled: stateSlice.session?.camEnabled,
-            screenShareEnabled: stateSlice.session?.screenShareEnabled,
-            livekitConnected: stateSlice.session?.livekitConnected,
-            joinedAt: stateSlice.session?.joinedAt,
-        },
-        participantsOrder: stateSlice.participants?.order,
-        participantsById: stateSlice.participants?.byId,
-        tracksPerParticipant: stateSlice.tracks?.perParticipant,
-        tracksActiveSpeakers: stateSlice.tracks?.activeSpeakers,
+        liveKit: activeLiveKit ? {
+            identity: activeLiveKit.getLocalIdentity(),
+            mic: activeLiveKit.isMicEnabled(),
+            cam: activeLiveKit.isCamEnabled(),
+            screenShare: activeLiveKit.isScreenShareEnabled(),
+        } : null,
+        session: stateSlice.session,
+        participants: stateSlice.participants,
+        tracks: stateSlice.tracks,
     };
     return JSON.stringify(snapshot, null, 2);
 }
