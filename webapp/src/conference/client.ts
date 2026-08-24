@@ -54,6 +54,12 @@ export class OpenTalkConferenceClient {
         return this.room.leave();
     }
 
+    // Flags the next leave() as part of an unexpected-drop teardown so the
+    // resumption token survives for the auto-rejoin.
+    public markUnexpectedDrop(): void {
+        this.room.markUnexpectedDrop();
+    }
+
     public on(event: 'connected', cb: (data: ConnectedEvent) => void): () => void;
     public on(event: 'participant_joined', cb: (p: Participant) => void): () => void;
     public on(event: 'participant_left', cb: (data: {id: string}) => void): () => void;

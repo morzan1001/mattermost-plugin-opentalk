@@ -51,6 +51,7 @@ jest.mock('./client', () => {
             return Promise.resolve();
         });
         leave = jest.fn().mockResolvedValue(undefined);
+        markUnexpectedDrop = jest.fn();
         raiseHand = jest.fn();
         lowerHand = jest.fn();
         enableRaiseHands = jest.fn();
@@ -174,7 +175,10 @@ import {
 } from './controller';
 import {isElectron, getDesktopSources, captureDesktopStream} from './livekit/desktop_capturer';
 import {pickScreenSource} from './livekit/screen_picker';
+import * as trackRegistryMock from './livekit/track_registry';
 import {JoinCancelledError} from './signaling/conference_room';
+
+import {sessionReducer, setCamEnabled} from '../store/slice_session';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const helpers = require('./controller.test.helpers');
@@ -209,16 +213,33 @@ function makeTestStore(channelID?: string) {
     return store;
 }
 
+// Applies real session actions so getState() reflects dispatched state
+// changes — needed to pin ordering, e.g. media capture before teardown.
 function makeTestStoreWithSession(session: Record<string, unknown>) {
     dispatched = [];
+    const initial = sessionReducer(undefined as never, {type: '@@INIT'}) as unknown as Record<string, unknown>;
     const store = createStore(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (state: any = {[PLUGIN_KEY]: {session}}, action: AnyAction) => {
+        (state: any = {[PLUGIN_KEY]: {session: {...initial, ...session}}}, action: AnyAction) => {
             dispatched.push(action);
-            return state;
+            if (!action.type.startsWith('opentalk/session/')) {
+                return state;
+            }
+            return {...state,
+                [PLUGIN_KEY]: {
+                    ...state[PLUGIN_KEY],
+                    session: sessionReducer(state[PLUGIN_KEY].session, action),
+                },
+            };
         },
     );
     return store;
+}
+
+function reconnectAttemptsIn(actions: AnyAction[]): number[] {
+    return actions.
+        filter((a) => a.type === 'opentalk/session/set_reconnect_attempt').
+        map((a) => a.payload.attempt);
 }
 
 // ── fetch mock ────────────────────────────────────────────────────────────
@@ -271,12 +292,16 @@ describe('startConferenceConnection', () => {
         expect(c().connect).toHaveBeenCalledWith('room-1', 'ch-1', 'Alice', 'device-secret-xyz');
     });
 
-    it('is a no-op when already connected (duplicate call)', () => {
+    it('is a no-op when already connected (duplicate call)', async () => {
         const store = makeTestStore();
         startConferenceConnection('room-1', 'ch-1', 'Alice', store);
         const prevLen = dispatched.length;
+
+        // Only the stale-banner reset may dispatch; no second connection starts.
         startConferenceConnection('room-1', 'ch-1', 'Alice', store);
-        expect(dispatched.length).toBe(prevLen);
+
+        expect(dispatched.length).toBe(prevLen + 1);
+        expect(dispatched[dispatched.length - 1].type).toBe('opentalk/session/set_reconnect_attempt');
     });
 });
 
@@ -421,10 +446,9 @@ describe('"error" client event', () => {
         c().trigger('closed', {code: 1006, recoverable: true});
         await flush();
 
-        const notice = dispatched.find((a) => a.type === 'opentalk/notice/set');
-        expect(notice?.payload?.message).toBe('Lost connection to the meeting server');
-        expect(dispatched.find((a) => a.type === 'opentalk/participants/reset')).toBeDefined();
-        expect(jest.getTimerCount()).toBe(0);
+        // The recoverable close hands over to the auto-rejoin loop.
+        expect(reconnectAttemptsIn(dispatched)).toEqual([1]);
+        expect(dispatched.find((a) => a.type === 'opentalk/notice/set')).toBeUndefined();
     });
 
     it('reports a join-phase socket error immediately as a join failure', async () => {
@@ -476,18 +500,6 @@ describe('classified drop notices', () => {
         return dispatched.filter((a) => a.type === 'opentalk/notice/set');
     }
 
-    it('shows the connection-lost notice on a recoverable remote close', async () => {
-        await connectActive();
-        dispatched = [];
-
-        c().trigger('closed', {code: 1006, recoverable: true});
-        await flush();
-
-        expect(notices()).toHaveLength(1);
-        expect(notices()[0].payload?.kind).toBe('error');
-        expect(notices()[0].payload?.message).toBe('Lost connection to the meeting server');
-    });
-
     it('shows a neutral notice on a terminal remote close', async () => {
         await connectActive();
         dispatched = [];
@@ -497,30 +509,6 @@ describe('classified drop notices', () => {
 
         expect(notices()).toHaveLength(1);
         expect(notices()[0].payload?.message).toBe('The meeting connection was closed');
-    });
-
-    it('shows the media-drop notice when LiveKit drops unexpectedly', async () => {
-        await connectActive(true);
-        dispatched = [];
-
-        lkRoom().trigger('disconnected');
-        await flush();
-
-        expect(notices()).toHaveLength(1);
-        expect(notices()[0].payload?.message).toBe('Media connection dropped');
-    });
-
-    it('dispatches exactly one notice when signaling and media both drop', async () => {
-        await connectActive(true);
-        const staleLk = lkRoom();
-        dispatched = [];
-
-        c().trigger('closed', {code: 1006, recoverable: true});
-        await flush();
-        staleLk.trigger('disconnected');
-        await flush();
-
-        expect(notices()).toHaveLength(1);
     });
 
     it('defers a close during the join to the connect rejection path', async () => {
@@ -547,6 +535,400 @@ describe('classified drop notices', () => {
 
         expect(notices()).toHaveLength(1);
         expect(dispatched.find((a) => a.type === 'opentalk/session/connect_error')).toBeDefined();
+    });
+});
+
+describe('auto rejoin', () => {
+    const flush = async () => {
+        for (let i = 0; i < 5; i++) {
+            // eslint-disable-next-line no-await-in-loop
+            await Promise.resolve();
+        }
+    };
+
+    const advanceAndFlush = async (ms: number) => {
+        jest.advanceTimersByTime(ms);
+        await flush();
+    };
+
+    async function connectActive(withLiveKit = false) {
+        const store = makeTestStore();
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {
+            participants: [{id: 'self', displayName: 'Alice'}],
+            isHost: false,
+            ...(withLiveKit && {livekit: {url: 'wss://lk.example', token: 'tok'}}),
+        });
+        await Promise.resolve();
+        return store;
+    }
+
+    function reconnectAttempts(): number[] {
+        return reconnectAttemptsIn(dispatched);
+    }
+
+    function notices(): AnyAction[] {
+        return dispatched.filter((a) => a.type === 'opentalk/notice/set');
+    }
+
+    it('immediately rejoins through a fresh connection after a recoverable close', async () => {
+        await connectActive();
+        const firstClient = c();
+        dispatched = [];
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+
+        expect(reconnectAttempts()).toEqual([1]);
+        expect(c()).not.toBe(firstClient);
+
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: false});
+        await flush();
+
+        expect(dispatched.map((a) => a.type)).toContain('opentalk/session/connected');
+        expect(jest.getTimerCount()).toBeGreaterThan(0);
+        expect(notices()).toHaveLength(0);
+    });
+
+    it('retries every 5s and reports once after five failed attempts', async () => {
+        await connectActive();
+        let failures = 0;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => {
+            failures += 1;
+            return Promise.reject(new Error('server down'));
+        };
+        dispatched = [];
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+        for (let i = 2; i <= 5; i++) {
+            // eslint-disable-next-line no-await-in-loop
+            await advanceAndFlush(5000);
+            expect(reconnectAttempts()).toContain(i);
+        }
+
+        expect(failures).toBe(5);
+        expect(notices()).toHaveLength(1);
+        expect(notices()[0].payload?.message).toBe('Could not restore the meeting connection');
+
+        await advanceAndFlush(30 * 1000);
+        expect(failures).toBe(5);
+        expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('an explicit leave cancels a pending rejoin', async () => {
+        await connectActive();
+        let failures = 0;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => {
+            failures += 1;
+            return Promise.reject(new Error('server down'));
+        };
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+        expect(failures).toBe(1);
+
+        await leaveActiveConference();
+
+        // The leave itself clears the banner state and the scheduled retry.
+        expect(jest.getTimerCount()).toBe(0);
+        expect(reconnectAttemptsIn(dispatched)).toEqual([0, 1, 0]);
+        dispatched = [];
+
+        await advanceAndFlush(60 * 1000);
+
+        expect(failures).toBe(1);
+        expect(notices()).toHaveLength(0);
+        expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('a manual join cancels a pending rejoin', async () => {
+        await connectActive();
+        let failures = 0;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => {
+            failures += 1;
+            return Promise.reject(new Error('server down'));
+        };
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+        expect(failures).toBe(1);
+
+        helpers.reg.clientConnectFactory = null;
+        const store2 = makeTestStore();
+        startConferenceConnection('room-9', 'ch-9', 'Bob', store2);
+        await Promise.resolve();
+        dispatched = [];
+
+        await advanceAndFlush(60 * 1000);
+
+        expect(failures).toBe(1);
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Bob'}], isHost: false});
+        await flush();
+        expect(dispatched.map((a) => a.type)).toContain('opentalk/session/connected');
+        expect(reconnectAttempts()).toHaveLength(0);
+    });
+
+    it('a terminal close does not schedule a rejoin', async () => {
+        await connectActive();
+        let failures = 0;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => {
+            failures += 1;
+            return Promise.reject(new Error('server down'));
+        };
+        dispatched = [];
+
+        c().trigger('closed', {code: 1000, recoverable: false});
+        await flush();
+        await advanceAndFlush(30 * 1000);
+
+        expect(failures).toBe(0);
+        expect(reconnectAttempts()).toHaveLength(0);
+        expect(notices()[0]?.payload?.message).toBe('The meeting connection was closed');
+    });
+
+    it('a LiveKit-only drop rejoins and restores the pre-drop camera', async () => {
+        const store = makeTestStoreWithSession({channelID: 'ch-1', micEnabled: true, camEnabled: true});
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {
+            participants: [{id: 'self', displayName: 'Alice'}],
+            isHost: false,
+            livekit: {url: 'wss://lk.example', token: 'tok'},
+        });
+        await Promise.resolve();
+        lkRoom().trigger('connected');
+
+        // The camera went live during the call, as the slice would reflect.
+        store.dispatch(setCamEnabled(true));
+
+        const droppedLk = lkRoom();
+        const signalingBeforeDrop = c();
+
+        dispatched = [];
+        droppedLk.trigger('disconnected');
+        await flush();
+
+        expect(signalingBeforeDrop.markUnexpectedDrop).toHaveBeenCalled();
+        expect(reconnectAttempts()).toEqual([1]);
+
+        c().trigger('connected', {
+            participants: [{id: 'self', displayName: 'Alice'}],
+            isHost: false,
+            livekit: {url: 'wss://lk.example', token: 'tok'},
+        });
+        await flush();
+        const restoredLk = lkRoom();
+        expect(restoredLk).not.toBe(droppedLk);
+
+        restoredLk.camTrack = {kind: 'video'};
+        jest.mocked(trackRegistryMock.register).mockClear();
+        restoredLk.trigger('connected');
+        await flush();
+
+        expect(restoredLk.enableCam).toHaveBeenCalled();
+        expect(trackRegistryMock.register).toHaveBeenCalled();
+        expect(dispatched.some((a) => a.type === 'opentalk/tracks/subscribed' && a.payload?.kind === 'video' && a.payload?.participantId === 'local-id')).toBe(true);
+        expect(dispatched.some((a) => a.type === 'opentalk/session/set_cam_enabled' && a.payload?.value === true)).toBe(true);
+
+        // Mute-on-join stays authoritative for the mic even when it was live before the drop.
+        expect(dispatched.find((a) => a.type === 'opentalk/session/set_mic_enabled' && a.payload?.value === true)).toBeUndefined();
+    });
+
+    it('starts exactly one rejoin when signaling and media both drop', async () => {
+        await connectActive(true);
+        const droppedLk = lkRoom();
+        let joins = 0;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => {
+            joins += 1;
+            return Promise.resolve();
+        };
+        dispatched = [];
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        droppedLk.trigger('disconnected');
+        await flush();
+
+        expect(joins).toBe(1);
+        expect(reconnectAttempts()).toEqual([1]);
+    });
+
+    it('an explicit leave during an in-flight attempt stops the loop quietly', async () => {
+        await connectActive();
+        let failures = 0;
+        const attemptSink: {reject?: (err: Error) => void} = {};
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => {
+            failures += 1;
+            if (failures === 1) {
+                return Promise.reject(new Error('server down'));
+            }
+            return new Promise((_resolve, reject) => {
+                attemptSink.reject = reject;
+            });
+        };
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+        expect(failures).toBe(1);
+
+        await advanceAndFlush(5 * 1000);
+        expect(failures).toBe(2);
+
+        await leaveActiveConference();
+        attemptSink.reject?.(new JoinCancelledError());
+        await flush();
+
+        expect(failures).toBe(2);
+        expect(notices()).toHaveLength(0);
+        expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('a leave during the drop-teardown gap cancels the queued rejoin', async () => {
+        await connectActive(true);
+        const droppedLk = lkRoom();
+        dispatched = [];
+        let failures = 0;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => {
+            failures += 1;
+            return Promise.reject(new Error('server down'));
+        };
+
+        // Hold the LiveKit disconnect open so the leave lands inside the gap
+        // between drop and first rejoin attempt.
+        const sink: {resolve?: () => void} = {};
+        droppedLk.disconnect = jest.fn().mockReturnValue(new Promise<void>((resolve) => {
+            sink.resolve = resolve;
+        }));
+
+        droppedLk.trigger('disconnected');
+        await leaveActiveConference();
+        sink.resolve?.();
+        await flush();
+        await advanceAndFlush(60 * 1000);
+
+        expect(failures).toBe(0);
+        expect(reconnectAttempts()).toEqual([0]);
+        expect(notices()).toHaveLength(0);
+        expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('a terminal close during an attempt stops the loop with one terminal notice', async () => {
+        await connectActive();
+        let failures = 0;
+        const attemptSink: {reject?: (err: Error) => void} = {};
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => {
+            failures += 1;
+            if (failures === 1) {
+                return Promise.reject(new Error('server down'));
+            }
+            return new Promise((_resolve, reject) => {
+                attemptSink.reject = reject;
+            });
+        };
+        dispatched = [];
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+        expect(failures).toBe(1);
+
+        await advanceAndFlush(5 * 1000);
+        expect(failures).toBe(2);
+
+        // The retry's socket closes terminally before its join settles.
+        c().trigger('closed', {code: 1000, recoverable: false});
+        attemptSink.reject?.(new Error('socket closed before joinSuccess'));
+        await flush();
+
+        expect(failures).toBe(2);
+        expect(notices()).toHaveLength(1);
+        expect(notices()[0].payload?.message).toBe('The meeting connection was closed');
+
+        await advanceAndFlush(60 * 1000);
+        expect(failures).toBe(2);
+        expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('a manual join during an in-flight attempt takes over the connection', async () => {
+        const store = makeTestStoreWithSession({channelID: 'ch-1'});
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: false});
+        await Promise.resolve();
+
+        let failures = 0;
+        const attemptSink: {reject?: (err: Error) => void} = {};
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => {
+            failures += 1;
+            if (failures === 1) {
+                return Promise.reject(new Error('server down'));
+            }
+            return new Promise((_resolve, reject) => {
+                attemptSink.reject = reject;
+            });
+        };
+        dispatched = [];
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+        expect(failures).toBe(1);
+
+        await advanceAndFlush(5 * 1000);
+        expect(failures).toBe(2);
+
+        // The user joins another meeting while attempt 2 is still connecting.
+        helpers.reg.clientConnectFactory = (): Promise<void> => Promise.resolve(); // eslint-disable-line @typescript-eslint/no-explicit-any
+        startConferenceConnection('room-2', 'ch-2', 'Bob', store);
+        await flush();
+
+        expect(c().connect).toHaveBeenLastCalledWith('room-2', 'ch-2', 'Bob', 'device-secret-xyz');
+
+        // The superseded attempt's rejection must stay fully inert.
+        attemptSink.reject?.(new Error('server down'));
+        await flush();
+
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Bob'}], isHost: false});
+        await flush();
+
+        expect(dispatched.some((a) => a.type === 'opentalk/session/connected' && a.payload?.localParticipantId === 'self')).toBe(true);
+        expect(dispatched.filter((a) => a.type === 'opentalk/session/connect_error')).toHaveLength(1);
+        expect(reconnectAttempts()).toEqual([1, 2, 0]);
+        expect(notices()).toHaveLength(0);
+    });
+
+    it('stays quiet when media cannot connect during a rejoin attempt', async () => {
+        await connectActive(true);
+        helpers.reg.livekitConnectError = new Error('lk down');
+        dispatched = [];
+
+        lkRoom().trigger('disconnected');
+        await flush();
+
+        c().trigger('connected', {
+            participants: [{id: 'self', displayName: 'Alice'}],
+            isHost: false,
+            livekit: {url: 'wss://lk.example', token: 'tok'},
+        });
+        await flush();
+
+        expect(lkRoom().connect).toHaveBeenCalled();
+        expect(notices()).toHaveLength(0);
     });
 });
 

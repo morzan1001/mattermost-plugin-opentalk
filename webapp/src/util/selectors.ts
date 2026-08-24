@@ -51,7 +51,7 @@ export function selectJoinedAt(state: AnyState): number | undefined {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function selectSession(state: AnyState): import('../store/slice_session').SessionState {
-    return state?.[stateKey]?.session ?? {status: 'idle', participantCount: 0, micEnabled: false, camEnabled: false, screenShareEnabled: false, livekitConnected: false, isHost: false, isRoomOwner: false, expanded: false, minimized: false, raiseHandsEnabled: false};
+    return state?.[stateKey]?.session ?? {status: 'idle', participantCount: 0, micEnabled: false, camEnabled: false, screenShareEnabled: false, livekitConnected: false, isHost: false, isRoomOwner: false, expanded: false, minimized: false, raiseHandsEnabled: false, reconnectAttempt: 0};
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -72,6 +72,11 @@ export function selectScreenShareEnabled(state: AnyState): boolean {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function selectChannelID(state: AnyState): string | undefined {
     return state?.[stateKey]?.session?.channelID as string | undefined;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function selectReconnectAttempt(state: AnyState): number {
+    return state?.[stateKey]?.session?.reconnectAttempt ?? 0;
 }
 
 // Participants slice

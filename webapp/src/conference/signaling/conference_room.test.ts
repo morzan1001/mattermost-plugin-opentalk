@@ -237,6 +237,26 @@ describe('ConferenceRoom', () => {
         expect(room.getState()).toBe('closed');
     });
 
+    it('an explicit leave clears the resumption token', async () => {
+        const {room} = await makeConnectedRoom();
+        expect(window.localStorage.getItem('opentalk:resumption:room-1')).toBe('resumption-1');
+
+        await room.leave();
+
+        expect(window.localStorage.getItem('opentalk:resumption:room-1')).toBeNull();
+    });
+
+    it('leave() keeps the resumption token after an unexpected drop is marked', async () => {
+        const {room} = await makeConnectedRoom();
+
+        // The drop teardown's leave must not wipe the token the auto-rejoin
+        // resumes with.
+        room.markUnexpectedDrop();
+        await room.leave();
+
+        expect(window.localStorage.getItem('opentalk:resumption:room-1')).toBe('resumption-1');
+    });
+
     it('rejects connect() when the server sends inWaitingRoom instead of joinSuccess', async () => {
         const room = new ConferenceRoom(makeFakeAuth(), 'wss://rs.example');
         const connectPromise = room.connect('room-1', 'ch-1', 'alice', 'dev-1');

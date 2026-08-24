@@ -15,6 +15,7 @@ import {
     setRaiseHandsEnabled,
     setIsHost,
     setPinnedParticipant,
+    setReconnectAttempt,
 } from './slice_session';
 
 describe('sessionReducer', () => {
@@ -33,6 +34,7 @@ describe('sessionReducer', () => {
             joinedAt: undefined,
             localParticipantId: undefined,
             raiseHandsEnabled: false,
+            reconnectAttempt: 0,
         });
     });
 
@@ -54,6 +56,7 @@ describe('sessionReducer', () => {
             joinedAt: undefined,
             localParticipantId: undefined,
             raiseHandsEnabled: false,
+            reconnectAttempt: 0,
         });
     });
 
@@ -75,12 +78,14 @@ describe('sessionReducer', () => {
                 expanded: false,
                 minimized: false,
                 raiseHandsEnabled: true,
+                reconnectAttempt: 2,
             },
             connected({participantCount: 3}),
         );
         const after = Date.now();
         expect(next.status).toBe('connected');
         expect(next.participantCount).toBe(3);
+        expect(next.reconnectAttempt).toBe(0);
         expect(next.error).toBeUndefined();
         expect(next.joinedAt).toBeGreaterThanOrEqual(before);
         expect(next.joinedAt).toBeLessThanOrEqual(after);
@@ -102,6 +107,7 @@ describe('sessionReducer', () => {
                 expanded: false,
                 minimized: false,
                 raiseHandsEnabled: true,
+                reconnectAttempt: 0,
             },
             participantsChanged({participantCount: 4}),
         );
@@ -125,6 +131,7 @@ describe('sessionReducer', () => {
                 minimized: true,
                 joinedAt: 12345,
                 raiseHandsEnabled: true,
+                reconnectAttempt: 3,
             },
             disconnected(),
         );
@@ -142,6 +149,9 @@ describe('sessionReducer', () => {
             joinedAt: undefined,
             localParticipantId: undefined,
             raiseHandsEnabled: false,
+
+            // The banner must survive per-attempt teardowns mid-rejoin.
+            reconnectAttempt: 3,
         });
     });
 
@@ -162,6 +172,7 @@ describe('sessionReducer', () => {
                 minimized: false,
                 joinedAt: 99999,
                 raiseHandsEnabled: true,
+                reconnectAttempt: 1,
             },
             connectError({error: 'boom'}),
         );
@@ -170,6 +181,7 @@ describe('sessionReducer', () => {
         expect(next.expanded).toBe(false);
         expect(next.minimized).toBe(false);
         expect(next.joinedAt).toBeUndefined();
+        expect(next.reconnectAttempt).toBe(1);
     });
 
     it('toggles micEnabled', () => {
@@ -262,5 +274,18 @@ describe('sessionReducer', () => {
     it('clears the pin on disconnect', () => {
         const pinned = sessionReducer(undefined, setPinnedParticipant('p1'));
         expect(sessionReducer(pinned, disconnected()).pinnedParticipantId).toBeUndefined();
+    });
+
+    it('setReconnectAttempt stores and resets the attempt number', () => {
+        const s = sessionReducer(undefined, setReconnectAttempt(2));
+        expect(s.reconnectAttempt).toBe(2);
+        expect(sessionReducer(s, setReconnectAttempt(0)).reconnectAttempt).toBe(0);
+    });
+
+    it('connectStarted preserves a running rejoin attempt', () => {
+        const retrying = sessionReducer(undefined, setReconnectAttempt(3));
+        const next = sessionReducer(retrying, connectStarted({channelID: 'ch', roomID: 'r'}));
+        expect(next.status).toBe('connecting');
+        expect(next.reconnectAttempt).toBe(3);
     });
 });

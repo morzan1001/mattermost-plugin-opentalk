@@ -13,6 +13,7 @@ import IncomingCallModal from './components/incoming_call_modal/component';
 import MeetingMiniBar from './components/meeting_mini_bar/component';
 import NoticeBanner from './components/notice_banner/component';
 import PostTypeMeeting from './components/post_type_meeting/component';
+import ReconnectingBanner from './components/reconnecting_banner/component';
 import ScreenPickerModal from './components/screen_picker_modal/component';
 import SwitchCallModal from './components/switch_call_modal/component';
 import {
@@ -286,6 +287,7 @@ export default class Plugin {
         registry.registerRootComponent?.(IncomingCallModal);
         registry.registerRootComponent?.(SwitchCallModal);
         registry.registerRootComponent?.(ChannelCallToast);
+        registry.registerRootComponent?.(ReconnectingBanner);
         registry.registerRootComponent?.(ScreenPickerModal);
         registry.registerRootComponent?.(NoticeBanner);
 

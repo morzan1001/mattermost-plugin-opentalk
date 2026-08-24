@@ -93,6 +93,10 @@ export class ConferenceRoom {
     private localId: string = '';
     private closedEmitted = false;
     private joinCancelled = false;
+
+    // Set when a media-plane drop queues an auto-rejoin: the teardown's
+    // leave() must not clear the token that rejoin resumes with.
+    private keepResumption = false;
     private listeners: Record<EventName, Listener[]> = {
         connected: [],
         participant_joined: [],
@@ -114,6 +118,12 @@ export class ConferenceRoom {
 
     public getState(): RoomState {
         return this.state;
+    }
+
+    // Flags the next leave() as part of an unexpected-drop teardown so the
+    // resumption token survives for the auto-rejoin.
+    public markUnexpectedDrop(): void {
+        this.keepResumption = true;
     }
 
     public getParticipants(): Participant[] {
@@ -171,6 +181,7 @@ export class ConferenceRoom {
                     // leave a stale token behind.
                     if (restResumption) {
                         writeResumption(roomID, restResumption);
+                        this.keepResumption = false;
                     }
 
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -532,7 +543,13 @@ export class ConferenceRoom {
         this.socket?.disconnect();
         this.listener?.dispose();
         this.state = 'closed';
-        if (this.roomID) {
+
+        // An auto-rejoin teardown lands here with a still-connected room; the
+        // token must survive so the rejoin's REST join resumes instead of
+        // counting as a fresh participant.
+        if (this.keepResumption) {
+            this.keepResumption = false;
+        } else if (this.roomID) {
             clearResumption(this.roomID);
         }
 
