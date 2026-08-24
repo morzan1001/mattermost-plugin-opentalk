@@ -225,6 +225,61 @@ describe('IncomingCallModal', () => {
         );
     });
 
+    it('shows the newest non-dismissed call when several channels ring at once', () => {
+        const store = makeStore(
+            {status: 'idle'},
+            {byChannelID: {
+                'ch-1': makeCall({receivedAt: Date.now() - 5000}),
+                'ch-2': makeCall({
+                    channelID: 'ch-2',
+                    roomID: 'room-2',
+                    hostUserID: 'host-user-2',
+                    hostName: 'Bob Later',
+                    receivedAt: Date.now(),
+                }),
+            }},
+        );
+        renderModal(store);
+
+        expect(screen.getByText('Bob Later is calling')).toBeInTheDocument();
+        expect(screen.queryByText('Alice Tester is calling')).not.toBeInTheDocument();
+    });
+
+    it('Decline failure warns, keeps the entry and re-enables the buttons for a re-ring', async () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        (dismissIncomingCall as jest.Mock).mockRejectedValue(new Error('network down'));
+        const store = makeStore(
+            {status: 'idle'},
+            {byChannelID: {'ch-1': makeCall()}},
+        );
+        renderModal(store);
+
+        await act(async () => {
+            fireEvent.click(screen.getByText('Decline'));
+        });
+
+        expect(dismissIncomingCall).toHaveBeenCalledWith('ch-1', 'room-1');
+        expect(warnSpy).toHaveBeenCalledWith('[opentalk] dismiss failed:', 'network down');
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const dispatched = (store as any).dispatchedActions as unknown[];
+        expect(dispatched).not.toEqual(
+            expect.arrayContaining([
+                expect.objectContaining(incomingCallCleared({channelID: 'ch-1'})),
+            ]),
+        );
+
+        // Entry survived: a same-channel re-ring shows again with usable buttons.
+        await act(async () => {
+            store.dispatch(incomingCallReceived(makeCall()));
+        });
+        const acceptBtn = screen.getByRole('button', {name: 'Accept'}) as HTMLButtonElement;
+        expect(acceptBtn.disabled).toBe(false);
+        expect((screen.getByRole('button', {name: 'Decline'}) as HTMLButtonElement).disabled).toBe(false);
+
+        warnSpy.mockRestore();
+    });
+
     it('Decline calls dismissIncomingCall with (channelID, roomID), dispatches incomingCallDismissed then incomingCallCleared', async () => {
         jest.useFakeTimers();
         const store = makeStore(
@@ -354,6 +409,100 @@ describe('IncomingCallModal', () => {
                 ]),
             );
             expect(dismissIncomingCall).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('keyboard', () => {
+        it('focuses the Accept button when a call rings', () => {
+            const store = makeStore(
+                {status: 'idle'},
+                {byChannelID: {'ch-1': makeCall()}},
+            );
+            renderModal(store);
+
+            expect(document.activeElement).toBe(screen.getByRole('button', {name: 'Accept'}));
+        });
+
+        it('Enter accepts the current call', async () => {
+            const store = makeStore(
+                {status: 'idle'},
+                {byChannelID: {'ch-1': makeCall()}},
+            );
+            renderModal(store);
+
+            await act(async () => {
+                fireEvent.keyDown(window, {key: 'Enter'});
+            });
+
+            expect(startConferenceConnection).toHaveBeenCalledWith(
+                'room-1',
+                'ch-1',
+                'tester',
+                expect.any(Object),
+            );
+        });
+
+        it('Escape declines the current call', async () => {
+            jest.useFakeTimers();
+            const store = makeStore(
+                {status: 'idle'},
+                {byChannelID: {'ch-1': makeCall()}},
+            );
+            renderModal(store);
+
+            await act(async () => {
+                fireEvent.keyDown(window, {key: 'Escape'});
+            });
+
+            expect(dismissIncomingCall).toHaveBeenCalledWith('ch-1', 'room-1');
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const dispatched = (store as any).dispatchedActions as unknown[];
+            expect(dispatched).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining(incomingCallDismissed({channelID: 'ch-1'})),
+                ]),
+            );
+
+            jest.useRealTimers();
+        });
+    });
+
+    describe('avatar fallback', () => {
+        it('swaps the avatar image to host initials on image error', () => {
+            const store = makeStore(
+                {status: 'idle'},
+                {byChannelID: {'ch-1': makeCall({hostName: 'Alice Tester'})}},
+            );
+            renderModal(store);
+
+            expect(screen.queryByText('AT')).not.toBeInTheDocument();
+            fireEvent.error(screen.getByAltText('Alice Tester'));
+
+            expect(screen.queryByAltText('Alice Tester')).not.toBeInTheDocument();
+            expect(screen.getByText('AT')).toBeInTheDocument();
+        });
+
+        it('shows the image again when a different host calls next', () => {
+            const store = makeStore(
+                {status: 'idle'},
+                {byChannelID: {'ch-1': makeCall({hostName: 'Alice Tester'})}},
+            );
+            renderModal(store);
+            fireEvent.error(screen.getByAltText('Alice Tester'));
+            expect(screen.getByText('AT')).toBeInTheDocument();
+
+            act(() => {
+                store.dispatch(incomingCallReceived(makeCall({
+                    channelID: 'ch-2',
+                    roomID: 'room-2',
+                    hostUserID: 'host-user-2',
+                    hostName: 'Bob Fields',
+                })));
+            });
+
+            expect(screen.getByAltText('Bob Fields')).toBeInTheDocument();
+            expect(screen.queryByText('AT')).not.toBeInTheDocument();
         });
     });
 

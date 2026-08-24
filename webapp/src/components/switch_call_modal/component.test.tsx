@@ -106,6 +106,25 @@ describe('SwitchCallModal', () => {
         expect(screen.getByText('Cancel')).toBeInTheDocument();
     });
 
+    it('renders modal while the session is leaving the current meeting', () => {
+        const store = makeStore(
+            {status: 'leaving', channelID: 'ch-live'},
+            {byChannelID: {'ch-1': mockCall}},
+        );
+        renderModal(store);
+        expect(screen.getByTestId('switch-call-modal')).toBeInTheDocument();
+    });
+
+    it('returns null when every ringing entry is dismissed', () => {
+        const store = makeStore(
+            {status: 'connected', channelID: 'ch-live'},
+            {byChannelID: {'ch-1': {...mockCall, dismissed: true}}},
+        );
+        const {container} = renderModal(store);
+        expect(screen.queryByTestId('switch-call-modal')).not.toBeInTheDocument();
+        expect(container.firstChild).toBeNull();
+    });
+
     it('hidden when the ringing call is the channel the session is connecting to', () => {
         const store = makeStore(
             {status: 'connecting', channelID: 'ch-1'},

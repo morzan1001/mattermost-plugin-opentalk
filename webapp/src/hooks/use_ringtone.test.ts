@@ -92,6 +92,30 @@ describe('useRingtone', () => {
         expect(ctor).toHaveBeenCalledTimes(1);
     });
 
+    it('start() after stop() constructs a new Audio element', () => {
+        const ctor = jest.fn().mockImplementation((src: string) => new FakeAudio(src));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).Audio = ctor;
+
+        const {result} = renderHook(() => useRingtone());
+
+        act(() => {
+            result.current.start();
+        });
+        const first = ctor.mock.results[0].value;
+
+        act(() => {
+            result.current.stop();
+        });
+        act(() => {
+            result.current.start();
+        });
+        const second = ctor.mock.results[1].value;
+
+        expect(ctor).toHaveBeenCalledTimes(2);
+        expect(second).not.toBe(first);
+    });
+
     it('unmount stops the audio cleanly', () => {
         let captured: FakeAudio | null = null;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
