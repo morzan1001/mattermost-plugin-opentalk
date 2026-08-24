@@ -15,6 +15,7 @@ func NewRouter(handlers *Handlers) *mux.Router {
 	r.HandleFunc("/oauth/start", handlers.OAuthStart).Methods(nethttp.MethodGet)
 	r.HandleFunc("/oauth/callback", handlers.OAuthCallback).Methods(nethttp.MethodGet)
 	r.HandleFunc("/api/v1/me", handlers.Me).Methods(nethttp.MethodGet)
+	r.HandleFunc("/api/v1/ringtone", handlers.Ringtone).Methods(nethttp.MethodPost)
 	r.HandleFunc("/api/v1/meetings", handlers.MeetingsCreate).Methods(nethttp.MethodPost)
 	r.HandleFunc("/api/v1/meetings/{room_id}/join", handlers.MeetingsJoin).Methods(nethttp.MethodPost)
 	r.HandleFunc("/api/v1/meetings/end", handlers.MeetingsEnd).Methods(nethttp.MethodPost)
