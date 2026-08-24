@@ -32,7 +32,7 @@ import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_mee
 import {incomingCallReceived, incomingCallCleared, incomingCallsReset} from './store/slice_incoming_calls';
 import {setConnected} from './store/slice_oauth';
 import type {PluginRegistry} from './types/mattermost-webapp';
-import {registerOpenTalkUserSettings, ringtoneSettingKey} from './user_settings';
+import {registerOpenTalkUserSettings, readRingtone, writeRingtone, applyRingtoneLocal} from './user_settings';
 import {setModuleLocale, t} from './util/i18n';
 import {PLUGIN_STATE_KEY} from './util/selectors';
 
@@ -75,16 +75,6 @@ interface MeetingStartedMessage {
     };
 }
 
-// Default ON. User can opt out via the Settings modal, /opentalk ring off,
-// or window.opentalk.ringtone(false).
-function ringtoneEnabled(): boolean {
-    try {
-        return window.localStorage.getItem(ringtoneSettingKey) !== 'false';
-    } catch {
-        return true;
-    }
-}
-
 interface IncomingCallDismissedMessage {
     data: {
         channel_id: string;
@@ -124,24 +114,16 @@ export default class Plugin {
             end: endActiveMeeting,
 
             ringtone: (enabled: boolean): boolean => {
-                try {
-                    window.localStorage.setItem(ringtoneSettingKey, enabled ? 'true' : 'false');
-                } catch {
-                    /* swallow — quota or private mode */
-                }
+                writeRingtone(enabled);
                 return enabled;
             },
-            ringtoneStatus: (): boolean => ringtoneEnabled(),
+            ringtoneStatus: (): boolean => readRingtone(),
 
             // Emergency stop: wipes the incoming-calls slice and disables
             // the ringtone so any immediately-following event doesn't re-ring.
             killRing: (): void => {
                 store.dispatch(incomingCallsReset());
-                try {
-                    window.localStorage.setItem(ringtoneSettingKey, 'false');
-                } catch {
-                    /* swallow */
-                }
+                writeRingtone(false);
                 // eslint-disable-next-line no-console
                 console.warn('[opentalk] killRing: incoming-calls slice cleared, ringtone disabled');
             },
@@ -220,7 +202,9 @@ export default class Plugin {
             },
         );
 
-        // Slash-command fallback (/opentalk ring on|off) — persists to localStorage.
+        // Server-side ringtone changes (/opentalk ring on|off, other tabs)
+        // arrive here as authoritative echoes; applying them locally must not
+        // POST again or the broadcast would loop forever.
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_ring_setting_changed`,
             (msg: RingSettingChangedMessage) => {
@@ -229,11 +213,7 @@ export default class Plugin {
                 if (msg.data.mm_user_id !== myId) {
                     return;
                 }
-                try {
-                    window.localStorage.setItem(ringtoneSettingKey, msg.data.enabled ? 'true' : 'false');
-                } catch {
-                    /* swallow */
-                }
+                applyRingtoneLocal(msg.data.enabled);
             },
         );
 
@@ -294,6 +274,11 @@ export default class Plugin {
             try {
                 const me = await getConnectionStatus();
                 store.dispatch(setConnected(me.connected, me.email));
+
+                // Server snapshot is authoritative; apply without POSTing.
+                if (me.ringtone_enabled != null) {
+                    applyRingtoneLocal(me.ringtone_enabled);
+                }
             } catch {
                 // Non-fatal: the header button falls back to "please connect first".
             }

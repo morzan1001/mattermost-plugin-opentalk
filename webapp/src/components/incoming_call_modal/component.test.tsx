@@ -5,14 +5,17 @@ import {createStore} from 'redux';
 
 jest.mock('../../client/rest');
 jest.mock('../../conference/controller');
-jest.mock('../../hooks/use_ringtone', () => ({
-    useRingtone: () => ({start: jest.fn(), stop: jest.fn()}),
-}));
+jest.mock('../../hooks/use_ringtone', () => {
+    const start = jest.fn();
+    const stop = jest.fn();
+    return {useRingtone: () => ({start, stop})};
+});
 
 import IncomingCallModal from './component';
 
 import {dismissIncomingCall} from '../../client/rest';
 import {startConferenceConnection} from '../../conference/controller';
+import {useRingtone} from '../../hooks/use_ringtone';
 import {
     incomingCallDismissed,
     incomingCallCleared,
@@ -21,6 +24,7 @@ import {
     type IncomingCall,
     type IncomingCallsState,
 } from '../../store/slice_incoming_calls';
+import {RINGTONE_CHANGED_EVENT, ringtoneSettingKey} from '../../user_settings';
 import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;
@@ -97,11 +101,21 @@ function renderModal(store: ReturnType<typeof makeStore>) {
     );
 }
 
+// The mocked hook returns one stable {start, stop} pair; grab it to assert.
+function useRingtoneMock(): {start: jest.Mock; stop: jest.Mock} {
+    return useRingtone() as unknown as {start: jest.Mock; stop: jest.Mock};
+}
+
 beforeEach(() => {
     jest.clearAllMocks();
     (dismissIncomingCall as jest.Mock).mockResolvedValue(undefined);
     (startConferenceConnection as jest.Mock).mockResolvedValue(undefined);
+    window.localStorage.clear();
     jest.useRealTimers();
+});
+
+afterEach(() => {
+    window.localStorage.clear();
 });
 
 describe('IncomingCallModal', () => {
@@ -340,6 +354,89 @@ describe('IncomingCallModal', () => {
                 ]),
             );
             expect(dismissIncomingCall).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('mid-ring setting change', () => {
+        function renderRinging() {
+            const store = makeStore(
+                {status: 'idle'},
+                {byChannelID: {'ch-1': makeCall()}},
+            );
+            renderModal(store);
+        }
+
+        it('does not start the ringtone when the setting is off at ring time', () => {
+            window.localStorage.setItem(ringtoneSettingKey, 'false');
+            renderRinging();
+
+            expect(useRingtoneMock().start).not.toHaveBeenCalled();
+        });
+
+        it('stops the ringtone when the custom event flips the setting off mid-ring', () => {
+            renderRinging();
+            expect(useRingtoneMock().start).toHaveBeenCalledTimes(1);
+            expect(useRingtoneMock().stop).not.toHaveBeenCalled();
+
+            act(() => {
+                window.localStorage.setItem(ringtoneSettingKey, 'false');
+                window.dispatchEvent(new CustomEvent(RINGTONE_CHANGED_EVENT, {detail: false}));
+            });
+
+            expect(useRingtoneMock().stop).toHaveBeenCalledTimes(1);
+        });
+
+        it('keeps ringing when the custom event enables the setting mid-ring', () => {
+            renderRinging();
+
+            act(() => {
+                window.dispatchEvent(new CustomEvent(RINGTONE_CHANGED_EVENT, {detail: true}));
+            });
+
+            expect(useRingtoneMock().stop).not.toHaveBeenCalled();
+        });
+
+        it('stops the ringtone on a storage event for the ringtone key (other tab)', () => {
+            renderRinging();
+
+            act(() => {
+                window.localStorage.setItem(ringtoneSettingKey, 'false');
+                window.dispatchEvent(new StorageEvent('storage', {key: ringtoneSettingKey}));
+            });
+
+            expect(useRingtoneMock().stop).toHaveBeenCalledTimes(1);
+        });
+
+        it('ignores storage events for other keys', () => {
+            renderRinging();
+
+            act(() => {
+                window.localStorage.setItem(ringtoneSettingKey, 'false');
+                window.dispatchEvent(new StorageEvent('storage', {key: 'unrelated:key'}));
+            });
+
+            expect(useRingtoneMock().stop).not.toHaveBeenCalled();
+        });
+
+        it('removes the listeners when the modal tears down', () => {
+            const store = makeStore(
+                {status: 'idle'},
+                {byChannelID: {'ch-1': makeCall()}},
+            );
+            const {unmount} = renderModal(store);
+            unmount();
+
+            // Effect teardown stops the ring itself; baseline taken after it.
+            const stopsAfterTeardown = useRingtoneMock().stop.mock.calls.length;
+
+            act(() => {
+                window.localStorage.setItem(ringtoneSettingKey, 'false');
+                window.dispatchEvent(new CustomEvent(RINGTONE_CHANGED_EVENT, {detail: false}));
+                window.dispatchEvent(new StorageEvent('storage', {key: ringtoneSettingKey}));
+            });
+
+            // Only the effect-cleanup stop fired; no listener reacted afterwards.
+            expect(useRingtoneMock().stop).toHaveBeenCalledTimes(stopsAfterTeardown);
         });
     });
 });

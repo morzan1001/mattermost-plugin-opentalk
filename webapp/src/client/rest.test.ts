@@ -1,4 +1,4 @@
-import {joinMeeting} from './rest';
+import {joinMeeting, setRingtonePref} from './rest';
 
 describe('joinMeeting', () => {
     const mockFetch = jest.fn();
@@ -62,5 +62,34 @@ describe('joinMeeting', () => {
             text: async () => 'no active meeting in this channel',
         });
         await expect(joinMeeting('room-1', 'ch-1', 'dev')).rejects.toThrow(/404/);
+    });
+});
+
+describe('setRingtonePref', () => {
+    const mockFetch = jest.fn();
+    beforeEach(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = mockFetch;
+        mockFetch.mockReset();
+    });
+
+    it('POSTs the enabled flag to /api/v1/ringtone with anti-CSRF headers', async () => {
+        mockFetch.mockResolvedValue({ok: true, json: async () => ({enabled: true})});
+
+        await setRingtonePref(true);
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const [url, init] = mockFetch.mock.calls[0];
+        expect(url).toContain('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/ringtone');
+        expect(init.method).toBe('POST');
+        expect(init.credentials).toBe('include');
+        expect(init.headers['X-Requested-With']).toBe('XMLHttpRequest');
+        expect(init.headers['Content-Type']).toBe('application/json');
+        expect(JSON.parse(init.body)).toEqual({enabled: true});
+    });
+
+    it('throws on non-ok responses', async () => {
+        mockFetch.mockResolvedValue({ok: false, status: 500, text: async () => 'save failed'});
+        await expect(setRingtonePref(false)).rejects.toThrow(/500/);
     });
 });

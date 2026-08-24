@@ -15,6 +15,7 @@ export interface MeResponse {
     connected: boolean;
     email?: string;
     sub?: string;
+    ringtone_enabled?: boolean | null;
 }
 
 export async function getConnectionStatus(): Promise<MeResponse> {
@@ -120,6 +121,21 @@ export async function dismissIncomingCall(channelID: string, roomID: string): Pr
     });
     if (!r.ok && r.status !== 204) {
         throw new Error(`dismiss failed: ${r.status}`);
+    }
+}
+
+export async function setRingtonePref(enabled: boolean): Promise<void> {
+    const r = await fetch(pluginURL('/api/v1/ringtone'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'include',
+        body: JSON.stringify({enabled}),
+    });
+    if (!r.ok) {
+        throw new Error(`setRingtonePref failed: ${r.status}`);
     }
 }
 

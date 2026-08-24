@@ -9,24 +9,8 @@ import {
     getMuteOnJoin,
     setMuteOnJoin,
 } from '../../conference/livekit/devices';
-import {ringtoneSettingKey} from '../../user_settings';
+import {readRingtone, writeRingtone, RINGTONE_CHANGED_EVENT, ringtoneSettingKey} from '../../user_settings';
 import {useT} from '../../util/i18n';
-
-function readRingtone(): boolean {
-    try {
-        return window.localStorage.getItem(ringtoneSettingKey) !== 'false';
-    } catch {
-        return true;
-    }
-}
-
-function writeRingtone(enabled: boolean): void {
-    try {
-        window.localStorage.setItem(ringtoneSettingKey, enabled ? 'true' : 'false');
-    } catch {
-        // quota / private mode
-    }
-}
 
 interface DeviceOption {
     id: string;
@@ -82,6 +66,23 @@ export const OpenTalkSettingsSection: React.FC = () => {
         refresh();
         return () => {
             cancelled = true;
+        };
+    }, []);
+
+    // Converge on external writes: the browser 'storage' event reaches other
+    // tabs, the custom event same-tab writers (WS echoes, seeding, devtools).
+    useEffect(() => {
+        const sync = () => setRingtone(readRingtone());
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === ringtoneSettingKey) {
+                setRingtone(readRingtone());
+            }
+        };
+        window.addEventListener('storage', onStorage);
+        window.addEventListener(RINGTONE_CHANGED_EVENT, sync);
+        return () => {
+            window.removeEventListener('storage', onStorage);
+            window.removeEventListener(RINGTONE_CHANGED_EVENT, sync);
         };
     }, []);
 
