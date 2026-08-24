@@ -69,7 +69,7 @@
     "react-redux": "9.2.0",
     "redux": "5.0.1",
     "snakecase-keys": "9.0.2",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   },
   "jest": {
     "testPathIgnorePatterns": [
