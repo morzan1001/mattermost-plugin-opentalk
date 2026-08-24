@@ -239,3 +239,46 @@ func (s *Store) AddDismissal(channelID, roomID, mmUserID string) ([]string, erro
 func (s *Store) DeleteDismissals(channelID, roomID string) error {
 	return s.Delete(dismissalKey(channelID, roomID))
 }
+
+// RemoveDismissal drops mmUserID from the dismissal set for
+// (channelID, roomID) so a stale decline cannot complete a false
+// all-declined quorum after the user joined. Idempotent when absent;
+// same CAS retry discipline as AddDismissal.
+func (s *Store) RemoveDismissal(channelID, roomID, mmUserID string) error {
+	key := dismissalKey(channelID, roomID)
+	ttl := int64((1 * time.Hour).Seconds())
+	const maxAttempts = 5
+	for range maxAttempts {
+		oldRaw, appErr := s.api.KVGet(key)
+		if appErr != nil {
+			return appErr
+		}
+		if oldRaw == nil {
+			return nil
+		}
+		var set []string
+		if err := json.Unmarshal(oldRaw, &set); err != nil {
+			return err
+		}
+		next := slices.DeleteFunc(slices.Clone(set), func(u string) bool { return u == mmUserID })
+		if len(next) == len(set) {
+			return nil
+		}
+		raw, err := json.Marshal(next)
+		if err != nil {
+			return err
+		}
+		ok, appErr := s.api.KVSetWithOptions(key, raw, model.PluginKVSetOptions{
+			Atomic:          true,
+			OldValue:        oldRaw,
+			ExpireInSeconds: ttl,
+		})
+		if appErr != nil {
+			return appErr
+		}
+		if ok {
+			return nil
+		}
+	}
+	return fmt.Errorf("RemoveDismissal: CAS contention on %s", key)
+}

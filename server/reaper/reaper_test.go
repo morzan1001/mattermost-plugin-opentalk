@@ -350,3 +350,73 @@ func TestRunOnce_PostHeartbeat_FreshHeartbeat_NotEnded(t *testing.T) {
 
 	assert.Empty(t, ended, "actively-heartbeating meeting must not be ended")
 }
+
+// TestRunOnce_HeartbeatBetweenListAndDecision_SavesMeeting covers the race
+// where the list snapshot shows a stale LastHeartbeat but a webapp heartbeat
+// lands before the reaper's decision: the reload must see the fresh record
+// and skip the entry.
+func TestRunOnce_HeartbeatBetweenListAndDecision_SavesMeeting(t *testing.T) {
+	now := time.Now().UTC()
+	staleSnapshot := &store.ActiveMeeting{
+		ChannelID:             "ch-race",
+		RoomID:                "room-race",
+		CreatedAt:             now.Add(-time.Hour),
+		LastHeartbeat:         now.Add(-10 * time.Minute), // stale vs 5-min cutoff
+		HostHeartbeatReceived: true,
+	}
+	freshRecord := &store.ActiveMeeting{
+		ChannelID:             "ch-race",
+		RoomID:                "room-race",
+		CreatedAt:             now.Add(-time.Hour),
+		LastHeartbeat:         now, // heartbeat landed after the list snapshot
+		HostHeartbeatReceived: true,
+	}
+
+	api := &plugintest.API{}
+	mockLeaderAcquire(api)
+	api.On("KVList", 0, 200).Return([]string{meetingKVKey("ch-race")}, nil).Once()
+	api.On("KVList", 1, 200).Return([]string{}, nil).Maybe()
+	api.On("KVGet", meetingKVKey("ch-race")).Return(meetingBytes(t, staleSnapshot), nil).Once()
+	api.On("KVGet", meetingKVKey("ch-race")).Return(meetingBytes(t, freshRecord), nil).Once()
+
+	s := store.New(api)
+	var ended []*store.ActiveMeeting
+	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		func() []byte { return nil },
+		time.Minute, 5*time.Minute)
+
+	r.RunOnce()
+
+	assert.Empty(t, ended, "heartbeat landing between list and decision must save the meeting")
+	// leader election + list snapshot read + freshness reload.
+	api.AssertNumberOfCalls(t, "KVGet", 3)
+}
+
+// TestRunOnce_DeletedBetweenListAndDecision_SkipsEntry covers the reload
+// erroring because end/dismiss removed the record after the list snapshot.
+func TestRunOnce_DeletedBetweenListAndDecision_SkipsEntry(t *testing.T) {
+	staleSnapshot := &store.ActiveMeeting{
+		ChannelID:             "ch-gone",
+		RoomID:                "room-gone",
+		CreatedAt:             time.Now().UTC().Add(-time.Hour),
+		LastHeartbeat:         time.Now().UTC().Add(-10 * time.Minute),
+		HostHeartbeatReceived: true,
+	}
+
+	api := &plugintest.API{}
+	mockLeaderAcquire(api)
+	api.On("KVList", 0, 200).Return([]string{meetingKVKey("ch-gone")}, nil).Once()
+	api.On("KVList", 1, 200).Return([]string{}, nil).Maybe()
+	api.On("KVGet", meetingKVKey("ch-gone")).Return(meetingBytes(t, staleSnapshot), nil).Once()
+	api.On("KVGet", meetingKVKey("ch-gone")).Return([]byte(nil), nil).Once()
+
+	s := store.New(api)
+	var ended []*store.ActiveMeeting
+	r := New(api, s, func(am *store.ActiveMeeting) { ended = append(ended, am) },
+		func() []byte { return nil },
+		time.Minute, 5*time.Minute)
+
+	r.RunOnce()
+
+	assert.Empty(t, ended, "entry deleted after the snapshot must not be force-ended")
+}
