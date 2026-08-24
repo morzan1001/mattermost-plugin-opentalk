@@ -9,7 +9,7 @@ import {
     type IncomingCall,
 } from '../../store/slice_incoming_calls';
 import {useT} from '../../util/i18n';
-import {selectCurrentDisplayName, selectSessionStatus, selectIncomingCallsByChannelID} from '../../util/selectors';
+import {selectCurrentDisplayName, selectSession, selectSessionStatus, selectIncomingCallsByChannelID} from '../../util/selectors';
 
 const cancelStyle: React.CSSProperties = {
     background: 'transparent',
@@ -37,7 +37,7 @@ const SwitchCallModal: React.FC = () => {
     const store = useStore();
     const t = useT();
 
-    const sessionStatus = useSelector(selectSessionStatus);
+    const session = useSelector(selectSession);
 
     const byChannelID = useSelector(selectIncomingCallsByChannelID);
     const call = useMemo<IncomingCall | null>(() => {
@@ -62,7 +62,10 @@ const SwitchCallModal: React.FC = () => {
     // the refs runs the current onSwitch/onCancel (defined after this hook).
     const switchBtnRef = useRef<HTMLButtonElement>(null);
     const cancelBtnRef = useRef<HTMLButtonElement>(null);
-    const visible = sessionStatus !== 'idle' && call !== null;
+
+    // A ring for the channel the session is connecting to is the very call
+    // being accepted, not a switch offer -- Escape would decline it as MISSED.
+    const visible = session.status !== 'idle' && call !== null && call.channelID !== session.channelID;
     useEffect(() => {
         if (!visible) {
             return undefined;
@@ -81,7 +84,7 @@ const SwitchCallModal: React.FC = () => {
         return () => window.removeEventListener('keydown', onKey);
     }, [visible, call?.channelID]);
 
-    if (sessionStatus === 'idle' || call === null) {
+    if (session.status === 'idle' || call === null || call.channelID === session.channelID) {
         return null;
     }
 

@@ -7,6 +7,7 @@ import {useRingtone} from '../../hooks/use_ringtone';
 import {
     incomingCallDismissed,
     incomingCallCleared,
+    INCOMING_CALL_FRESHNESS_MS,
     type IncomingCall,
 } from '../../store/slice_incoming_calls';
 import {ringtoneSettingKey} from '../../user_settings';
@@ -65,29 +66,6 @@ const IncomingCallModal: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isShowingCall]);
 
-    // Countdown bar: reset to full with no animation, then animate down to 0%
-    // over 30s. The reset is essential -- this is a persistent root component,
-    // so without it barWidth stays at 0 from the previous ring and every ring
-    // after the first shows an empty bar.
-    useEffect(() => {
-        if (call === null) {
-            return undefined;
-        }
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setBarTransition('none');
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setBarWidth(100);
-        const rafId = requestAnimationFrame(() => {
-            setBarTransition('width 30s linear');
-            setBarWidth(0);
-        });
-        return () => {
-            cancelAnimationFrame(rafId);
-        };
-
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [call?.channelID, call?.receivedAt]);
-
     useEffect(() => {
         setAvatarError(false);
     }, [call?.hostUserID]);
@@ -140,9 +118,9 @@ const IncomingCallModal: React.FC = () => {
         dispatch(incomingCallCleared({channelID: call.channelID}));
     };
 
-    // Keep the auto-decline pointed at the *current* onDecline closure even
-    // when the effect re-runs only on channelID change. Without this the
-    // 30s timeout captures whichever `call` object was live at mount time.
+    // The scheduled auto-decline captures whichever onDecline closure was live
+    // when the timer was armed; route through a ref so it always declines the
+    // *current* call.
     const onDeclineRef = useRef(onDecline);
     const onAcceptRef = useRef(onAccept);
     useEffect(() => {
@@ -150,13 +128,35 @@ const IncomingCallModal: React.FC = () => {
         onAcceptRef.current = onAccept;
     });
 
+    // Countdown bar and auto-decline share one clock (time left until
+    // receivedAt + freshness), so a re-ring resets both; the bar reset keeps
+    // this persistent root component from showing a leftover empty bar.
+    // remaining <= 0: entry aged out unseen -- clear locally, no MISSED mark.
     useEffect(() => {
-        if (!isShowingCall) {
+        if (!isShowingCall || call === null) {
             return undefined;
         }
-        const id = window.setTimeout(() => onDeclineRef.current(), 30000);
-        return () => window.clearTimeout(id);
-    }, [isShowingCall, call?.channelID]);
+        const remaining = INCOMING_CALL_FRESHNESS_MS - (Date.now() - call.receivedAt);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setBarTransition('none');
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setBarWidth(100);
+        if (remaining <= 0) {
+            dispatch(incomingCallCleared({channelID: call.channelID}));
+            return undefined;
+        }
+        const rafId = requestAnimationFrame(() => {
+            setBarTransition(`width ${remaining}ms linear`);
+            setBarWidth(0);
+        });
+        const timeoutId = window.setTimeout(() => onDeclineRef.current(), remaining);
+        return () => {
+            cancelAnimationFrame(rafId);
+            window.clearTimeout(timeoutId);
+        };
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isShowingCall, call?.channelID, call?.receivedAt]);
 
     // Keyboard access to a ringing call: focus Accept, answer with Enter,
     // decline with Escape.

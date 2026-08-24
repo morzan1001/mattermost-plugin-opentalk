@@ -13,29 +13,43 @@ import IncomingCallModal from './component';
 
 import {dismissIncomingCall} from '../../client/rest';
 import {startConferenceConnection} from '../../conference/controller';
-import {incomingCallDismissed, incomingCallCleared} from '../../store/slice_incoming_calls';
+import {
+    incomingCallDismissed,
+    incomingCallCleared,
+    incomingCallReceived,
+    incomingCallsReducer,
+    type IncomingCall,
+    type IncomingCallsState,
+} from '../../store/slice_incoming_calls';
 import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;
 
-const mockCall = {
-    channelID: 'ch-1',
-    roomID: 'room-1',
-    hostUserID: 'host-user-1',
-    hostName: 'Alice Tester',
-    receivedAt: 1715000000000,
-    dismissed: false,
-};
+function makeCall(overrides: Partial<IncomingCall> = {}): IncomingCall {
+    return {
+        channelID: 'ch-1',
+        roomID: 'room-1',
+        hostUserID: 'host-user-1',
+        hostName: 'Alice Tester',
+        receivedAt: Date.now(),
+        dismissed: false,
+        ...overrides,
+    };
+}
 
+// Reducer-backed incoming-calls slice so tests can dispatch incomingCallReceived
+// mid-test (e.g. a same-channel re-ring) and have the modal observe it.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeStore(sessionOverrides: any = {}, incomingCalls: any = {byChannelID: {}}) {
+function makeStore(sessionOverrides: any = {}, initialIncomingCalls: IncomingCallsState = {byChannelID: {}}) {
     const dispatched: unknown[] = [];
 
     // Stable session object so tests can mutate status mid-flow (e.g. a mocked
     // startConferenceConnection flipping it to 'connected') and have selectors
     // observe the change through getState().
     const session = {status: 'idle', ...sessionOverrides};
-    const store = createStore(() => ({
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const reducer = (state: any, action: any) => ({
         entities: {
             users: {
                 currentUserId: 'u1',
@@ -46,9 +60,14 @@ function makeStore(sessionOverrides: any = {}, incomingCalls: any = {byChannelID
         },
         [stateKey]: {
             session,
-            incomingCalls,
+            incomingCalls: incomingCallsReducer(
+                state === undefined ? initialIncomingCalls : state[stateKey].incomingCalls,
+                action,
+            ),
         },
-    }));
+    });
+
+    const store = createStore(reducer);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (store as any).setSessionStatus = (s: string) => {
@@ -96,7 +115,7 @@ describe('IncomingCallModal', () => {
     it('returns null when user is already in a connected meeting', () => {
         const store = makeStore(
             {status: 'connected'},
-            {byChannelID: {'ch-1': mockCall}},
+            {byChannelID: {'ch-1': makeCall()}},
         );
         const {container} = renderModal(store);
         expect(screen.queryByTestId('incoming-call-modal')).not.toBeInTheDocument();
@@ -106,7 +125,7 @@ describe('IncomingCallModal', () => {
     it('returns null when session.status is connecting (SwitchCallModal handles non-idle states)', () => {
         const store = makeStore(
             {status: 'connecting'},
-            {byChannelID: {'ch-1': mockCall}},
+            {byChannelID: {'ch-1': makeCall()}},
         );
         const {container} = renderModal(store);
         expect(screen.queryByTestId('incoming-call-modal')).not.toBeInTheDocument();
@@ -116,7 +135,7 @@ describe('IncomingCallModal', () => {
     it('returns null when all incoming calls are dismissed', () => {
         const store = makeStore(
             {status: 'idle'},
-            {byChannelID: {'ch-1': {...mockCall, dismissed: true}}},
+            {byChannelID: {'ch-1': makeCall({dismissed: true})}},
         );
         const {container} = renderModal(store);
         expect(screen.queryByTestId('incoming-call-modal')).not.toBeInTheDocument();
@@ -126,7 +145,7 @@ describe('IncomingCallModal', () => {
     it('renders modal when there is a non-dismissed call and status is idle', () => {
         const store = makeStore(
             {status: 'idle'},
-            {byChannelID: {'ch-1': mockCall}},
+            {byChannelID: {'ch-1': makeCall()}},
         );
         renderModal(store);
         expect(screen.getByTestId('incoming-call-modal')).toBeInTheDocument();
@@ -137,7 +156,7 @@ describe('IncomingCallModal', () => {
     it('Accept calls startConferenceConnection with correct args and dispatches incomingCallCleared', async () => {
         const store = makeStore(
             {status: 'idle'},
-            {byChannelID: {'ch-1': mockCall}},
+            {byChannelID: {'ch-1': makeCall()}},
         );
 
         // A successful connect leaves the session non-idle; the modal only
@@ -172,7 +191,7 @@ describe('IncomingCallModal', () => {
     it('Accept that fails to connect keeps the ringing call (no incomingCallCleared)', async () => {
         const store = makeStore(
             {status: 'idle'},
-            {byChannelID: {'ch-1': mockCall}},
+            {byChannelID: {'ch-1': makeCall()}},
         );
 
         // startConferenceConnection swallows connect errors and stays 'idle';
@@ -196,7 +215,7 @@ describe('IncomingCallModal', () => {
         jest.useFakeTimers();
         const store = makeStore(
             {status: 'idle'},
-            {byChannelID: {'ch-1': mockCall}},
+            {byChannelID: {'ch-1': makeCall()}},
         );
         renderModal(store);
 
@@ -230,20 +249,97 @@ describe('IncomingCallModal', () => {
         jest.useRealTimers();
     });
 
-    it('auto-declines after 30s', async () => {
-        jest.useFakeTimers();
-        const store = makeStore(
-            {status: 'idle'},
-            {byChannelID: {'ch-1': mockCall}},
-        );
-        renderModal(store);
-
-        await act(async () => {
-            jest.advanceTimersByTime(30000);
+    describe('freshness window', () => {
+        afterEach(() => {
+            jest.useRealTimers();
         });
 
-        expect(dismissIncomingCall).toHaveBeenCalledWith('ch-1', 'room-1');
+        it('auto-declines a fresh call with dismissIncomingCall after 30s', async () => {
+            jest.useFakeTimers();
+            const store = makeStore(
+                {status: 'idle'},
+                {byChannelID: {'ch-1': makeCall()}},
+            );
+            renderModal(store);
 
-        jest.useRealTimers();
+            await act(async () => {
+                jest.advanceTimersByTime(29999);
+            });
+            expect(dismissIncomingCall).not.toHaveBeenCalled();
+
+            await act(async () => {
+                jest.advanceTimersByTime(1);
+            });
+
+            expect(dismissIncomingCall).toHaveBeenCalledWith('ch-1', 'room-1');
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const dispatched = (store as any).dispatchedActions as unknown[];
+            expect(dispatched).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining(incomingCallDismissed({channelID: 'ch-1'})),
+                ]),
+            );
+        });
+
+        it('re-ring on the same channel reschedules auto-decline to the new receivedAt + 30s', async () => {
+            jest.useFakeTimers();
+            const store = makeStore(
+                {status: 'idle'},
+                {byChannelID: {'ch-1': makeCall()}},
+            );
+            renderModal(store);
+
+            await act(async () => {
+                jest.advanceTimersByTime(20000);
+            });
+            expect(dismissIncomingCall).not.toHaveBeenCalled();
+
+            // Same-channel re-ring at t=20s: the deadline must move to t=50s.
+            await act(async () => {
+                store.dispatch(incomingCallReceived(makeCall()));
+            });
+
+            // Past the original t=30s deadline: must still be ringing.
+            await act(async () => {
+                jest.advanceTimersByTime(10000);
+            });
+            expect(dismissIncomingCall).not.toHaveBeenCalled();
+
+            await act(async () => {
+                jest.advanceTimersByTime(19999);
+            });
+            expect(dismissIncomingCall).not.toHaveBeenCalled();
+
+            await act(async () => {
+                jest.advanceTimersByTime(1);
+            });
+            expect(dismissIncomingCall).toHaveBeenCalledTimes(1);
+        });
+
+        it('stale entry (receivedAt 31s ago) expires locally without dismissIncomingCall or MISSED marking', () => {
+            const stale = makeCall({receivedAt: Date.now() - 31000});
+            const store = makeStore(
+                {status: 'idle'},
+                {byChannelID: {'ch-1': stale}},
+            );
+            renderModal(store);
+
+            expect(screen.queryByTestId('incoming-call-modal')).not.toBeInTheDocument();
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const dispatched = (store as any).dispatchedActions as unknown[];
+            expect(dispatched).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining(incomingCallCleared({channelID: 'ch-1'})),
+                ]),
+            );
+            expect(dispatched).not.toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining(incomingCallDismissed({channelID: 'ch-1'})),
+                ]),
+            );
+            expect(dismissIncomingCall).not.toHaveBeenCalled();
+        });
     });
 });

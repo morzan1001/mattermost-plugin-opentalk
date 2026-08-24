@@ -5,6 +5,10 @@ const ACTION_TYPES = {
     RESET: 'opentalk/incoming_calls/reset',
 } as const;
 
+// Rings older than this are expired at display time by IncomingCallModal,
+// so client clock skew cannot kill fresh rings at WS-receive time.
+export const INCOMING_CALL_FRESHNESS_MS = 30000;
+
 export interface IncomingCall {
     channelID: string;
     roomID: string;

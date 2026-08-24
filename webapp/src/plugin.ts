@@ -61,7 +61,6 @@ interface IncomingCallMessage {
         host_name: string;
         post_id?: string;
         dm_user_ids?: string[];
-        created_at_unix_ms?: number;
     };
 }
 
@@ -75,11 +74,6 @@ interface MeetingStartedMessage {
         created_at_unix_ms?: number;
     };
 }
-
-// Stale threshold: ignore incoming-call broadcasts older than this. Matches
-// the modal's auto-decline timer, so anything we'd have auto-dismissed by
-// now is also too old to ring for.
-const incomingCallFreshnessMs = 30000;
 
 // Default ON. User can opt out via the Settings modal, /opentalk ring off,
 // or window.opentalk.ringtone(false).
@@ -189,14 +183,10 @@ export default class Plugin {
         registry.registerWebSocketEventHandler?.(
             `custom_${pluginId}_incoming_call`,
             (msg: IncomingCallMessage) => {
-                const now = Date.now();
-                const createdAt = msg.data.created_at_unix_ms;
-                const ageMs = typeof createdAt === 'number' ? now - createdAt : -1;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const myId: string | undefined = (store.getState() as any)?.entities?.users?.currentUserId;
 
                 const ownCall = Boolean(myId && msg.data.host_user_id === myId);
-                const stale = typeof createdAt !== 'number' || ageMs > incomingCallFreshnessMs;
 
                 // Re-ring for the channel this session is already connected to:
                 // the SwitchCallModal would surface and its Cancel would flip
@@ -211,14 +201,12 @@ export default class Plugin {
                     channel_id: msg.data.channel_id,
                     host_user_id: msg.data.host_user_id,
                     my_id: myId,
-                    age_ms: ageMs,
                     own_call: ownCall,
-                    stale,
                     already_here: alreadyHere,
-                    will_dispatch: !ownCall && !stale && !alreadyHere,
+                    will_dispatch: !ownCall && !alreadyHere,
                 });
 
-                if (ownCall || stale || alreadyHere) {
+                if (ownCall || alreadyHere) {
                     return;
                 }
 
