@@ -46,7 +46,7 @@ export function applyRingtoneLocal(enabled: boolean): void {
 export function writeRingtone(enabled: boolean): void {
     applyRingtoneLocal(enabled);
     setRingtonePref(enabled).catch(() => {
-        /* offline or unauthorized; the local value stands until next write */
+        /* offline or unauthorized; the next server echo, snapshot seed or write replaces the local value */
     });
 }
 

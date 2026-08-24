@@ -60,7 +60,6 @@ interface IncomingCallMessage {
         host_user_id: string;
         host_name: string;
         post_id?: string;
-        dm_user_ids?: string[];
     };
 }
 
@@ -71,7 +70,6 @@ interface MeetingStartedMessage {
         host_user_id: string;
         host_name: string;
         post_id?: string;
-        created_at_unix_ms?: number;
     };
 }
 
