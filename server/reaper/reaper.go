@@ -184,6 +184,9 @@ func (r *Reaper) tick() {
 				"last_heartbeat", fresh.LastHeartbeat.Format(time.RFC3339),
 			)
 		}
+		// The freshness check narrows but cannot close the race: a heartbeat
+		// CAS landing between it and the delete still gets reaped, since MM KV
+		// has no conditional delete.
 		r.endMeeting(fresh)
 	}
 }

@@ -302,7 +302,8 @@ func (h *Handlers) MeetingsJoin(w nethttp.ResponseWriter, r *nethttp.Request) {
 
 	// A dismissal recorded for this user earlier (decline, or another device
 	// auto-declining) would otherwise complete a false all-declined quorum
-	// once they have joined.
+	// once they have joined. Not ordered against the Start roundtrip: a
+	// decline completing the quorum inside it still flips MISSED.
 	if rErr := h.Store.RemoveDismissal(body.ChannelID, roomID, mmUserID); rErr != nil && h.LogWarn != nil {
 		h.LogWarn("[opentalk] MeetingsJoin: RemoveDismissal failed", "err", rErr.Error())
 	}
