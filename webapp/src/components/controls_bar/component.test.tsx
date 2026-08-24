@@ -135,6 +135,11 @@ describe('ControlsBar', () => {
         const button = screen.getByTestId('controls-mute-all');
         fireEvent.click(button);
         expect(muteAll).toHaveBeenCalled();
+
+        // The two mic controls must stay distinguishable by label and glyph.
+        expect(button).toHaveAttribute('title', 'Mute everyone else');
+        expect(button.querySelector('svg circle')).not.toBeNull();
+        expect(screen.getByTitle('Unmute microphone')).toBeInTheDocument();
     });
 
     it('labels the hangup button with the end option only for the room owner', () => {

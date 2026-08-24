@@ -115,6 +115,7 @@ const ChannelCallToast: React.FC = () => {
                 type='button'
                 onClick={onDismiss}
                 style={dismissButtonStyle}
+                title={t({de: 'Hinweis ausblenden', en: 'Dismiss notification'})}
                 aria-label={t({de: 'Hinweis ausblenden', en: 'Dismiss notification'})}
             >
                 {'×'}

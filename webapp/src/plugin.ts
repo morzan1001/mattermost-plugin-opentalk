@@ -33,7 +33,7 @@ import {incomingCallReceived, incomingCallCleared, incomingCallsReset} from './s
 import {setConnected} from './store/slice_oauth';
 import type {PluginRegistry} from './types/mattermost-webapp';
 import {registerOpenTalkUserSettings, ringtoneSettingKey} from './user_settings';
-import {setModuleLocale} from './util/i18n';
+import {setModuleLocale, t} from './util/i18n';
 import {PLUGIN_STATE_KEY} from './util/selectors';
 
 const pluginId: string = manifest.id;
@@ -296,7 +296,7 @@ export default class Plugin {
             headerIcon,
             startMeetingAction(store),
             'OpenTalk',
-            'OpenTalk-Meeting starten',
+            t({de: 'OpenTalk-Meeting starten', en: 'Start OpenTalk meeting'}),
         );
 
         // Re-seed the connection snapshot after a websocket reconnect: the

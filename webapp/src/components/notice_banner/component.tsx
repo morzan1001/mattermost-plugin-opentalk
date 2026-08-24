@@ -58,6 +58,7 @@ const NoticeBanner: React.FC = () => {
             <button
                 type='button'
                 onClick={() => dispatch(noticeCleared())}
+                title={t({de: 'Schließen', en: 'Dismiss'})}
                 aria-label={t({de: 'Schließen', en: 'Dismiss'})}
                 style={{
                     background: 'transparent',

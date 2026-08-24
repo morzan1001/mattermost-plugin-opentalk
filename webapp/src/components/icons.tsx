@@ -69,6 +69,31 @@ export const MicOffIcon: React.FC<{size?: number}> = ({size = 20}) => (
     </svg>
 );
 
+// Participant group with the mute slash — visually distinct from MicOffIcon
+// so "mute all" is not confused with the self-mute toggle.
+export const MuteAllIcon: React.FC<{size?: number}> = ({size = 20}) => (
+    <svg
+        {...baseProps}
+        width={size}
+        height={size}
+    >
+        <line
+            x1='2'
+            x2='22'
+            y1='2'
+            y2='22'
+        />
+        <circle
+            cx='9'
+            cy='8'
+            r='3.5'
+        />
+        <path d='M2.5 20v-1.5a5 5 0 0 1 5-5h3a5 5 0 0 1 5 5V20'/>
+        <path d='M16 4.6a3.5 3.5 0 0 1 0 6.8'/>
+        <path d='M21.5 20v-1.5a5 5 0 0 0-3.5-4.77'/>
+    </svg>
+);
+
 export const CameraOffIcon: React.FC = () => (
     <svg {...baseProps}>
         <line

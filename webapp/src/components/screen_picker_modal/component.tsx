@@ -75,6 +75,7 @@ const ScreenPickerModal: React.FC = () => {
                             cursor: 'pointer',
                             padding: 4,
                         }}
+                        title={t({de: 'Schließen', en: 'Close'})}
                         aria-label={t({de: 'Schließen', en: 'Close'})}
                     >
                         {'×'}

@@ -386,6 +386,22 @@ describe('"connected" client event', () => {
 
         expect(lkRoom().connect).toHaveBeenCalledWith('wss://lk.example', 'tok-123');
     });
+
+    it('grants moderation rights to a non-owner who joins with the moderator role', async () => {
+        const store = makeTestStoreWithSession({});
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+
+        c().trigger('connected', {
+            participants: [{id: 'p-self', displayName: 'Alice', role: 'moderator'}],
+            isHost: false,
+        });
+
+        const session = (store.getState() as Record<string, Record<string, Record<string, unknown>>>)[PLUGIN_KEY].session;
+        expect(session.isHost).toBe(true);
+        expect(session.isRoomOwner).toBe(false);
+        expect(c().enableRaiseHands).toHaveBeenCalled();
+    });
 });
 
 describe('"closed" client event', () => {

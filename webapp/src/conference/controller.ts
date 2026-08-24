@@ -140,8 +140,7 @@ async function tearDownActiveConference(): Promise<void> {
             }
         }
 
-        // A LiveKit drop leaves the signaling socket joined (user still visible);
-        // ConferenceRoom.leave() closes it and is a no-op when already closed.
+        // A LiveKit drop leaves the socket joined; leave() closes it and no-ops when closed.
         if (c) {
             try {
                 await c.leave();
@@ -278,14 +277,15 @@ async function establishConference(
     };
 
     client.on('connected', (data) => {
-        const isHost = data.isHost === true;
-
-        const localParticipantId = data.participants[0]?.id;
+        // Moderation rights: ownership or moderator role at join; promotions arrive via role_updated.
+        const localUser = data.participants[0];
+        const isModerator = data.isHost === true || localUser?.role === 'moderator';
+        const localParticipantId = localUser?.id;
 
         store.dispatch(connected({
             participantCount: data.participants.length,
-            isHost,
-            isRoomOwner: isHost,
+            isHost: isModerator,
+            isRoomOwner: data.isHost === true,
             localParticipantId,
         }));
 
@@ -301,9 +301,8 @@ async function establishConference(
         startHeartbeat(channelID);
         setOpenTalkStatus();
 
-        // OpenTalk's raise-hands feature is OFF by default per room. Hosts
-        // turn it on so participants' raiseHand calls aren't silently dropped.
-        if (isHost) {
+        // Raise-hands is OFF per room; moderators enable it so raiseHand works.
+        if (isModerator) {
             client.enableRaiseHands();
         }
     });
