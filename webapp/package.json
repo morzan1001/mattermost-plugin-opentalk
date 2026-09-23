@@ -20,7 +20,7 @@
     "@babel/preset-env": "8.0.2",
     "@babel/preset-react": "8.0.1",
     "@babel/preset-typescript": "8.0.1",
-    "@babel/runtime": "8.0.0",
+    "@babel/runtime": "8.0.5",
     "@emotion/react": "11.14.0",
     "@mattermost/client": "11.9.0",
     "@mattermost/eslint-plugin": "1.1.0-0",
