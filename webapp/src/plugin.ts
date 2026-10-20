@@ -100,8 +100,6 @@ interface UserRemovedMessage {
 
 export default class Plugin {
     public initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): void {
-        // Pin the redux store so toggle handlers can dispatch without React-
-        // context indirection (useStore() returns null in MM RootComponents).
         setActiveStore(store);
 
         // Initial seed; the hook-based useT() picks up live changes.

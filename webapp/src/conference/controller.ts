@@ -104,7 +104,7 @@ function stopHeartbeat(): void {
     }
 }
 
-// Root components don't have a Redux Provider; hold the store module-level.
+// The toggle, leave and end entry points take no store argument and dispatch through this one.
 let activeStore: AnyStore | null = null;
 
 async function tearDownActiveConference(): Promise<void> {
