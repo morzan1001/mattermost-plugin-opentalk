@@ -30,6 +30,7 @@
     "@types/react-dom": "19.2.6",
     "@typescript-eslint/eslint-plugin": "8.72.0",
     "@typescript-eslint/parser": "8.72.0",
+    "@typescript/native": "npm:typescript@7.0.2",
     "babel-loader": "10.1.1",
     "babel-plugin-polyfill-corejs3": "^1.0.0",
     "css-loader": "7.1.5",
@@ -45,6 +46,7 @@
     "sass": "1.105.1",
     "sass-loader": "17.0.1",
     "style-loader": "4.0.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "webpack": "5.111.1",
     "webpack-cli": "7.2.3"
   },
@@ -56,8 +58,7 @@
     "react": "19.2.8",
     "react-redux": "9.2.0",
     "redux": "5.0.1",
-    "snakecase-keys": "9.0.2",
-    "typescript": "5.9.3"
+    "snakecase-keys": "9.0.2"
   },
   "jest": {
     "testPathIgnorePatterns": [
@@ -106,6 +107,9 @@
       "eslint-plugin-react-hooks": "$eslint-plugin-react-hooks",
       "@typescript-eslint/eslint-plugin": "$@typescript-eslint/eslint-plugin",
       "@typescript-eslint/parser": "$@typescript-eslint/parser"
+    },
+    "@mattermost/types": {
+      "typescript": "$typescript"
     }
   }
 }
