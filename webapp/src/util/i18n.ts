@@ -1,5 +1,7 @@
 import {useSelector} from 'react-redux';
 
+import {selectCurrentUserLocale} from './selectors';
+
 /**
  * A pair of translations for a single user-facing string.
  * Use as: t({de: '...', en: '...'}) — returns the matching variant
@@ -24,14 +26,7 @@ export function t(m: Translatable): string {
 }
 
 export function useT(): (m: Translatable) => string {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const locale = useSelector((s: any) => {
-        const id = s?.entities?.users?.currentUserId;
-        if (!id) {
-            return undefined;
-        }
-        return s?.entities?.users?.profiles?.[id]?.locale as string | undefined;
-    });
+    const locale = useSelector(selectCurrentUserLocale);
     const lang: 'de' | 'en' = isGermanLocale(locale) ? 'de' : 'en';
     return (m) => m[lang];
 }

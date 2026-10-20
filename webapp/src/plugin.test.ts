@@ -19,6 +19,7 @@ import manifest from './manifest';
 import Plugin from './plugin';
 import type {PluginRegistry} from './types/mattermost-webapp';
 import {RINGTONE_CHANGED_EVENT, ringtoneSettingKey} from './user_settings';
+import {setModuleLocale, t} from './util/i18n';
 import {PLUGIN_STATE_KEY} from './util/selectors';
 
 const pluginId: string = manifest.id;
@@ -95,6 +96,18 @@ describe('Plugin', () => {
         const {plugin, registry, store, registerReducer} = setup();
         plugin.initialize(registry, store);
         expect(registerReducer).toHaveBeenCalledTimes(1);
+    });
+
+    it("initialize seeds the imperative locale from the current user's profile", () => {
+        const s = setup();
+        (s.store.getState as jest.Mock).mockReturnValue(stateWith({entities: {users: {currentUserId: 'me', profiles: {me: {locale: 'de'}}}}}));
+        try {
+            s.plugin.initialize(s.registry, s.store);
+
+            expect(t({de: 'Hallo', en: 'Hello'})).toBe('Hallo');
+        } finally {
+            setModuleLocale(undefined);
+        }
     });
 
     it('initialize subscribes to the user_connected_state ws event', () => {
@@ -387,8 +400,7 @@ describe('Plugin', () => {
                 (s.store.getState as jest.Mock).mockReturnValue(stateWith());
                 s.plugin.initialize(s.registry, s.store);
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const returned = (window as any).opentalk.ringtone(false);
+                const returned = window.opentalk?.ringtone(false);
 
                 expect(returned).toBe(false);
                 expect(window.localStorage.getItem(ringtoneSettingKey)).toBe('false');
@@ -401,8 +413,7 @@ describe('Plugin', () => {
                 (s.store.getState as jest.Mock).mockReturnValue(stateWith());
                 s.plugin.initialize(s.registry, s.store);
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (window as any).opentalk.killRing();
+                window.opentalk?.killRing();
 
                 expect(s.dispatch).toHaveBeenCalledWith(
                     expect.objectContaining({type: 'opentalk/incoming_calls/reset'}),

@@ -46,7 +46,7 @@ import {
     type TrackKind,
 } from '../store/slice_tracks';
 import {t} from '../util/i18n';
-import {PLUGIN_STATE_KEY} from '../util/selectors';
+import {PLUGIN_STATE_KEY, selectCamEnabled, selectChannelID, selectLocalParticipantId, selectMicEnabled, selectReconnectAttempt} from '../util/selectors';
 
 const ALLOWED_ROLES = new Set<string>(['moderator', 'user', 'guest']);
 
@@ -154,8 +154,8 @@ async function tearDownActiveConference(): Promise<void> {
 }
 
 function readLocalMediaState(store: AnyStore): LocalMediaState {
-    const session = store.getState()?.[PLUGIN_STATE_KEY]?.session ?? {};
-    return {mic: session.micEnabled === true, cam: session.camEnabled === true};
+    const state = store.getState();
+    return {mic: selectMicEnabled(state), cam: selectCamEnabled(state)};
 }
 
 function cancelPendingRejoin(): void {
@@ -233,7 +233,7 @@ export async function startConferenceConnection(
 ): Promise<void> {
     // A manual join supersedes an in-flight rejoin; its client must be torn
     // down first or the join below would silently no-op.
-    const rejoining = (store.getState()?.[PLUGIN_STATE_KEY]?.session?.reconnectAttempt ?? 0) > 0;
+    const rejoining = selectReconnectAttempt(store.getState()) > 0;
     cancelPendingRejoin();
     store.dispatch(setReconnectAttempt(0));
     if (rejoining && activeClient) {
@@ -335,8 +335,7 @@ async function establishConference(
     });
     client.on('role_updated', ({participantId, newRole}) => {
         store.dispatch(participantRoleChanged({id: participantId, role: newRole}));
-        const localId = store.getState()?.[PLUGIN_STATE_KEY]?.session?.localParticipantId;
-        if (participantId === localId) {
+        if (participantId === selectLocalParticipantId(store.getState())) {
             store.dispatch(setIsHost(newRole === 'moderator'));
         }
     });
@@ -578,7 +577,7 @@ export async function endActiveMeeting(): Promise<void> {
         await leaveActiveConference();
         return;
     }
-    const channelID: string | undefined = store.getState()?.[PLUGIN_STATE_KEY]?.session?.channelID;
+    const channelID = selectChannelID(store.getState());
 
     // Kick everyone on the OpenTalk side first. Best-effort: never block teardown.
     activeClient?.sendDebrief();
@@ -817,7 +816,7 @@ export function muteAll(): void {
     if (!activeClient) {
         return;
     }
-    const selfId = activeStore?.getState()?.[PLUGIN_STATE_KEY]?.session?.localParticipantId;
+    const selfId = selectLocalParticipantId(activeStore?.getState());
     const others = activeClient.getParticipants().map((p) => p.id).filter((id) => id !== selfId);
     activeClient.forceMute(others);
 }

@@ -96,6 +96,12 @@ export function selectIncomingCallsByChannelID(state: AnyState): Record<string, 
     return state?.[stateKey]?.incomingCalls?.byChannelID ?? {};
 }
 
+// OAuth slice
+
+export function selectOAuthConnected(state: AnyState): boolean {
+    return state?.[stateKey]?.oauth?.connected === true;
+}
+
 // Notice slice
 
 export function selectNotice(state: AnyState): import('../store/slice_notice').NoticeState {
@@ -109,6 +115,18 @@ export function selectActiveMeetingsByChannelID(state: AnyState): Record<string,
 }
 
 // Mattermost entities — not in the plugin slice, but commonly used alongside plugin selectors
+
+export function selectCurrentUserId(state: AnyState): string | undefined {
+    return state?.entities?.users?.currentUserId as string | undefined;
+}
+
+export function selectCurrentUserLocale(state: AnyState): string | undefined {
+    const id = selectCurrentUserId(state);
+    if (!id) {
+        return undefined;
+    }
+    return state?.entities?.users?.profiles?.[id]?.locale as string | undefined;
+}
 
 export function selectCurrentChannelId(state: AnyState): string | undefined {
     return state?.entities?.channels?.currentChannelId as string | undefined;

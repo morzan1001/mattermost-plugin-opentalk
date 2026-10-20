@@ -34,7 +34,23 @@ import {setConnected} from './store/slice_oauth';
 import type {PluginRegistry} from './types/mattermost-webapp';
 import {registerOpenTalkUserSettings, readRingtone, writeRingtone, applyRingtoneLocal} from './user_settings';
 import {setModuleLocale, t} from './util/i18n';
-import {PLUGIN_STATE_KEY} from './util/selectors';
+import {selectCurrentUserId, selectCurrentUserLocale, selectSession} from './util/selectors';
+
+declare global {
+    interface Window {
+        opentalk?: {
+            state: typeof debugState;
+            toggleMic: typeof toggleMic;
+            toggleCam: typeof toggleCam;
+            toggleScreenShare: typeof toggleScreenShare;
+            leave: typeof leaveActiveConference;
+            end: typeof endActiveMeeting;
+            ringtone: (enabled: boolean) => boolean;
+            ringtoneStatus: () => boolean;
+            killRing: () => void;
+        };
+    }
+}
 
 const pluginId: string = manifest.id;
 
@@ -103,15 +119,12 @@ export default class Plugin {
         setActiveStore(store);
 
         // Initial seed; the hook-based useT() picks up live changes.
-        const state = store.getState() as any;
-        const myId = state?.entities?.users?.currentUserId;
-        setModuleLocale(state?.entities?.users?.profiles?.[myId]?.locale);
+        setModuleLocale(selectCurrentUserLocale(store.getState()));
 
         initDeviceCache();
 
         // Browser-devtools handle: window.opentalk.state() / toggleMic() etc.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).opentalk = {
+        window.opentalk = {
             state: debugState,
             toggleMic,
             toggleCam,
@@ -146,9 +159,8 @@ export default class Plugin {
         registry.registerWebSocketEventHandler(
             `custom_${pluginId}_meeting_ended`,
             (msg: MeetingEndedMessage) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const session: any = (store.getState() as any)?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk']?.session;
-                if (session?.status !== 'idle' && session?.channelID === msg.data.channel_id) {
+                const session = selectSession(store.getState());
+                if (session.status !== 'idle' && session.channelID === msg.data.channel_id) {
                     leaveActiveConference();
                 }
                 store.dispatch(incomingCallCleared({channelID: msg.data.channel_id}));
@@ -171,17 +183,15 @@ export default class Plugin {
         registry.registerWebSocketEventHandler(
             `custom_${pluginId}_incoming_call`,
             (msg: IncomingCallMessage) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const myId: string | undefined = (store.getState() as any)?.entities?.users?.currentUserId;
+                const myId = selectCurrentUserId(store.getState());
 
                 const ownCall = Boolean(myId && msg.data.host_user_id === myId);
 
                 // Re-ring for the channel this session is already connected to:
                 // the SwitchCallModal would surface and its Cancel would flip
                 // the live meeting to MISSED. Never ring for your own live call.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const ownSession: any = (store.getState() as any)?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk']?.session;
-                const alreadyHere = ownSession?.status !== 'idle' && ownSession?.channelID === msg.data.channel_id;
+                const ownSession = selectSession(store.getState());
+                const alreadyHere = ownSession.status !== 'idle' && ownSession.channelID === msg.data.channel_id;
 
                 // Verbose-level only; visible when devtools is set to Verbose.
                 // eslint-disable-next-line no-console
@@ -214,9 +224,7 @@ export default class Plugin {
         registry.registerWebSocketEventHandler(
             `custom_${pluginId}_ring_setting_changed`,
             (msg: RingSettingChangedMessage) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const myId = (store.getState() as any)?.entities?.users?.currentUserId;
-                if (msg.data.mm_user_id !== myId) {
+                if (msg.data.mm_user_id !== selectCurrentUserId(store.getState())) {
                     return;
                 }
                 applyRingtoneLocal(msg.data.enabled);
@@ -227,9 +235,7 @@ export default class Plugin {
         registry.registerWebSocketEventHandler(
             `custom_${pluginId}_incoming_call_dismissed`,
             (msg: IncomingCallDismissedMessage) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const myId = (store.getState() as any)?.entities?.users?.currentUserId;
-                if (msg.data.mm_user_id === myId) {
+                if (msg.data.mm_user_id === selectCurrentUserId(store.getState())) {
                     store.dispatch(incomingCallCleared({channelID: msg.data.channel_id}));
                 }
             },
@@ -240,11 +246,9 @@ export default class Plugin {
         registry.registerWebSocketEventHandler(
             'user_removed',
             (msg: UserRemovedMessage) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const s: any = store.getState();
-                const myId = s?.entities?.users?.currentUserId;
-                const session = s?.[PLUGIN_STATE_KEY]?.session;
-                if (msg.broadcast.user_id === myId && session?.status !== 'idle' && session?.channelID === msg.data.channel_id) {
+                const state = store.getState();
+                const session = selectSession(state);
+                if (msg.broadcast.user_id === selectCurrentUserId(state) && session.status !== 'idle' && session.channelID === msg.data.channel_id) {
                     leaveActiveConference();
                 }
             },

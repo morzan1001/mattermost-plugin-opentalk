@@ -8,11 +8,7 @@ import manifest from '../../manifest';
 import {noticeSet} from '../../store/slice_notice';
 import {selectCurrentDisplayName} from '../../util/display_name';
 import {t} from '../../util/i18n';
-import {PLUGIN_STATE_KEY} from '../../util/selectors';
-
-interface PluginState {
-    oauth?: {connected: boolean};
-}
+import {selectOAuthConnected} from '../../util/selectors';
 
 export function startMeetingAction(store: Store<GlobalState, Action>) {
     return async (channel?: {id: string}) => {
@@ -25,10 +21,7 @@ export function startMeetingAction(store: Store<GlobalState, Action>) {
             return;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const state = store.getState() as any;
-        const ps: PluginState = state[PLUGIN_STATE_KEY] || {};
-        if (!ps.oauth?.connected) {
+        if (!selectOAuthConnected(store.getState())) {
             // Not connected: open the OAuth flow directly instead of telling the
             // user to type a slash command.
             window.open(`/plugins/${manifest.id}/oauth/start`, '_blank', 'noopener');
