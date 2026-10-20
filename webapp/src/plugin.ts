@@ -17,6 +17,7 @@ import ReconnectingBanner from './components/reconnecting_banner/component';
 import ScreenPickerModal from './components/screen_picker_modal/component';
 import SwitchCallModal from './components/switch_call_modal/component';
 import {
+    activeConferenceChannelID,
     setActiveStore,
     toggleMic,
     toggleCam,
@@ -159,8 +160,7 @@ export default class Plugin {
         registry.registerWebSocketEventHandler(
             `custom_${pluginId}_meeting_ended`,
             (msg: MeetingEndedMessage) => {
-                const session = selectSession(store.getState());
-                if (session.status !== 'idle' && session.channelID === msg.data.channel_id) {
+                if (activeConferenceChannelID() === msg.data.channel_id) {
                     leaveActiveConference();
                 }
                 store.dispatch(incomingCallCleared({channelID: msg.data.channel_id}));
@@ -246,9 +246,7 @@ export default class Plugin {
         registry.registerWebSocketEventHandler(
             'user_removed',
             (msg: UserRemovedMessage) => {
-                const state = store.getState();
-                const session = selectSession(state);
-                if (msg.broadcast.user_id === selectCurrentUserId(state) && session.status !== 'idle' && session.channelID === msg.data.channel_id) {
+                if (msg.broadcast.user_id === selectCurrentUserId(store.getState()) && activeConferenceChannelID() === msg.data.channel_id) {
                     leaveActiveConference();
                 }
             },

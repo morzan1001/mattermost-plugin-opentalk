@@ -7,6 +7,7 @@ jest.mock('./client/rest', () => ({
 jest.mock('./conference/controller', () => ({
     ...jest.requireActual('./conference/controller'),
     leaveActiveConference: jest.fn(() => Promise.resolve()),
+    activeConferenceChannelID: jest.fn(),
 }));
 
 import type {Action, Store} from 'redux';
@@ -14,7 +15,7 @@ import type {Action, Store} from 'redux';
 import type {GlobalState} from '@mattermost/types/store';
 
 import {getConnectionStatus, setRingtonePref} from './client/rest';
-import {leaveActiveConference} from './conference/controller';
+import {activeConferenceChannelID, leaveActiveConference} from './conference/controller';
 import manifest from './manifest';
 import Plugin from './plugin';
 import type {PluginRegistry} from './types/mattermost-webapp';
@@ -219,6 +220,56 @@ describe('Plugin', () => {
         expect(dispatchedReceived(s.dispatch)).toHaveLength(1);
     });
 
+    // Between rejoin attempts the session slice is idle and has dropped the channel.
+    function reconnecting(s: ReturnType<typeof setup>) {
+        (s.store.getState as jest.Mock).mockReturnValue(
+            stateWith({[PLUGIN_STATE_KEY]: {session: {status: 'idle', reconnectAttempt: 1}}}),
+        );
+        jest.mocked(activeConferenceChannelID).mockReturnValue('ch-1');
+    }
+
+    describe('meeting_ended ws handler', () => {
+        beforeEach(() => {
+            (getConnectionStatus as jest.Mock).mockResolvedValue({connected: false});
+            (leaveActiveConference as jest.Mock).mockClear();
+            jest.mocked(activeConferenceChannelID).mockReturnValue(undefined);
+        });
+
+        it('leaves the meeting that ended', () => {
+            const s = setup();
+            (s.store.getState as jest.Mock).mockReturnValue(
+                stateWith({[PLUGIN_STATE_KEY]: {session: {status: 'connected', channelID: 'ch-1'}}}),
+            );
+            jest.mocked(activeConferenceChannelID).mockReturnValue('ch-1');
+            const handler = wsHandler(s, 'meeting_ended');
+
+            handler({data: {channel_id: 'ch-1', room_id: 'room-1'}});
+
+            expect(leaveActiveConference).toHaveBeenCalledTimes(1);
+        });
+
+        it('leaves a pending reconnect to the meeting that ended', () => {
+            const s = setup();
+            reconnecting(s);
+            const handler = wsHandler(s, 'meeting_ended');
+
+            handler({data: {channel_id: 'ch-1', room_id: 'room-1'}});
+
+            expect(leaveActiveConference).toHaveBeenCalledTimes(1);
+        });
+
+        it("stays when another channel's meeting ends", () => {
+            const s = setup();
+            reconnecting(s);
+            const handler = wsHandler(s, 'meeting_ended');
+
+            handler({data: {channel_id: 'ch-2', room_id: 'room-2'}});
+
+            expect(leaveActiveConference).not.toHaveBeenCalled();
+            expect(s.dispatch).toHaveBeenCalledWith(expect.objectContaining({type: 'opentalk/active_meetings/ended'}));
+        });
+    });
+
     describe('user_removed ws handler', () => {
         function userRemovedHandler(s: ReturnType<typeof setup>) {
             s.plugin.initialize(s.registry, s.store);
@@ -233,16 +284,32 @@ describe('Plugin', () => {
             (s.store.getState as jest.Mock).mockReturnValue(
                 stateWith({[PLUGIN_STATE_KEY]: {session: {status: 'connected', channelID: 'ch-1'}}}),
             );
+            jest.mocked(activeConferenceChannelID).mockReturnValue('ch-1');
         }
 
         beforeEach(() => {
             (getConnectionStatus as jest.Mock).mockResolvedValue({connected: false});
             (leaveActiveConference as jest.Mock).mockClear();
+            jest.mocked(activeConferenceChannelID).mockReturnValue(undefined);
         });
 
         it('leaves the meeting when the current user is removed from its channel', () => {
             const s = setup();
             inMeeting(s);
+            const handler = userRemovedHandler(s);
+
+            handler({
+                event: 'user_removed',
+                data: {channel_id: 'ch-1', remover_id: 'admin'},
+                broadcast: {omit_users: null, user_id: 'me', channel_id: '', team_id: ''},
+            });
+
+            expect(leaveActiveConference).toHaveBeenCalledTimes(1);
+        });
+
+        it('leaves a pending reconnect when the current user is removed from its channel', () => {
+            const s = setup();
+            reconnecting(s);
             const handler = userRemovedHandler(s);
 
             handler({

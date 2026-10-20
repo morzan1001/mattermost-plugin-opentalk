@@ -565,6 +565,11 @@ function bringUpLiveKit(url: string, token: string, store: AnyStore, onMediaDrop
     });
 }
 
+// Between rejoin attempts the session slice is idle and has dropped the channel; the pending rejoin still holds it.
+export function activeConferenceChannelID(): string | undefined {
+    return pendingRejoin?.channelID ?? selectChannelID(activeStore?.getState());
+}
+
 export async function leaveActiveConference(): Promise<void> {
     cancelPendingRejoin();
     activeStore?.dispatch(setReconnectAttempt(0));

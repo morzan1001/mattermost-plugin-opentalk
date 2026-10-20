@@ -152,6 +152,7 @@ jest.mock('./livekit/track_registry', () => ({
 
 // ── module under test ─────────────────────────────────────────────────────
 import {
+    activeConferenceChannelID,
     setActiveStore,
     startConferenceConnection,
     leaveActiveConference,
@@ -179,6 +180,7 @@ import {JoinCancelledError} from './signaling/conference_room';
 
 import {endMeeting} from '../client/rest';
 import {sessionReducer, setCamEnabled} from '../store/slice_session';
+import {selectSession} from '../util/selectors';
 
 const helpers = require('./controller.test.helpers');
 
@@ -1073,6 +1075,54 @@ describe('stale session events after teardown', () => {
 
         expect(dispatched.find((a) => a.type === 'opentalk/session/connect_error')?.payload?.error).toBe('boom');
         expect(dispatched.find((a) => a.type === 'opentalk/notice/set')).toBeDefined();
+    });
+});
+
+describe('activeConferenceChannelID', () => {
+    const flush = async () => {
+        for (let i = 0; i < 5; i++) {
+            // eslint-disable-next-line no-await-in-loop
+            await Promise.resolve();
+        }
+    };
+
+    async function connectActive() {
+        const store = makeTestStoreWithSession({});
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: false});
+        await Promise.resolve();
+        return store;
+    }
+
+    it('reports the channel of the connected conference', async () => {
+        await connectActive();
+
+        expect(activeConferenceChannelID()).toBe('ch-1');
+    });
+
+    it('keeps reporting the channel while a rejoin waits for its next attempt', async () => {
+        const store = await connectActive();
+        helpers.reg.clientConnectFactory = (): Promise<void> => Promise.reject(new Error('server down'));
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+
+        const session = selectSession(store.getState());
+        expect(session).toMatchObject({status: 'idle', reconnectAttempt: 1});
+        expect(session.channelID).toBeUndefined();
+        expect(activeConferenceChannelID()).toBe('ch-1');
+    });
+
+    it('reports no channel once the conference is left', async () => {
+        await connectActive();
+        helpers.reg.clientConnectFactory = (): Promise<void> => Promise.reject(new Error('server down'));
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+
+        await leaveActiveConference();
+
+        expect(activeConferenceChannelID()).toBeUndefined();
     });
 });
 
