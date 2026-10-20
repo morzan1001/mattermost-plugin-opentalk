@@ -22,7 +22,7 @@ class FakeWebSocket {
 
 beforeEach(() => {
     FakeWebSocket.instances = [];
-    (global as any).WebSocket = FakeWebSocket;
+    global.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
     window.localStorage.clear();
 });
 

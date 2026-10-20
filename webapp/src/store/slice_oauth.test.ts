@@ -2,7 +2,7 @@ import {oauthReducer, setConnected} from './slice_oauth';
 
 describe('oauthReducer', () => {
     it('starts disconnected', () => {
-        expect(oauthReducer(undefined, {type: '@@INIT'} as any)).toEqual({connected: false});
+        expect(oauthReducer(undefined, {type: '@@INIT'})).toEqual({connected: false});
     });
 
     it('reflects setConnected(true, email)', () => {

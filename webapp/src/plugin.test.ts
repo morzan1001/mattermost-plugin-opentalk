@@ -9,6 +9,10 @@ jest.mock('./conference/controller', () => ({
     leaveActiveConference: jest.fn(() => Promise.resolve()),
 }));
 
+import type {Action, Store} from 'redux';
+
+import type {GlobalState} from '@mattermost/types/store';
+
 import {getConnectionStatus, setRingtonePref} from './client/rest';
 import {leaveActiveConference} from './conference/controller';
 import manifest from './manifest';
@@ -45,7 +49,8 @@ describe('Plugin', () => {
             registerUserSettings: jest.fn(),
         };
         const dispatch = jest.fn();
-        const store = {dispatch, getState: jest.fn(), subscribe: jest.fn()} as any;
+        const fakeStore = {dispatch, getState: jest.fn(), subscribe: jest.fn()};
+        const store = fakeStore as typeof fakeStore & Store<GlobalState, Action>;
         return {plugin, registry, store, registerReducer, registerWebSocketEventHandler, dispatch};
     }
 

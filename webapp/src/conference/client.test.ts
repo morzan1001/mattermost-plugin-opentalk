@@ -24,8 +24,8 @@ const mockFetch = jest.fn();
 
 beforeEach(() => {
     FakeWebSocket.instances = [];
-    (global as any).WebSocket = FakeWebSocket;
-    (global as any).fetch = mockFetch;
+    global.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    global.fetch = mockFetch;
     mockFetch.mockReset();
     window.localStorage.clear();
 });

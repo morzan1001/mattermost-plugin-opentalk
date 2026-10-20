@@ -1,4 +1,5 @@
 import {render, screen, fireEvent} from '@testing-library/react';
+import type {ComponentProps} from 'react';
 import {Provider} from 'react-redux';
 import {createStore} from 'redux';
 
@@ -10,9 +11,10 @@ import PostTypeMeeting from './component';
 
 import {startConferenceConnection} from '../../conference/controller';
 
-const basePost = {
+type MeetingPost = ComponentProps<typeof PostTypeMeeting>['post'];
+
+const basePost: MeetingPost = {
     id: 'post-1',
-    type: 'custom_opentalk_meeting',
     channel_id: 'ch-1',
     props: {
         room_id: 'room-1',
@@ -39,7 +41,7 @@ function makeStore() {
     }));
 }
 
-function renderWithStore(post: any) {
+function renderWithStore(post: MeetingPost) {
     return render(
         <Provider store={makeStore()}>
             <PostTypeMeeting post={post}/>
@@ -53,14 +55,14 @@ describe('PostTypeMeeting', () => {
     });
 
     it('renders host + join button for STARTED meeting', () => {
-        renderWithStore(basePost as any);
+        renderWithStore(basePost);
         expect(screen.getByText(/alice/)).toBeInTheDocument();
         const join = screen.getByRole('button', {name: /Join meeting/i});
         expect(join).toBeInTheDocument();
     });
 
     it('calls startConferenceConnection when JOIN clicked', () => {
-        renderWithStore(basePost as any);
+        renderWithStore(basePost);
         fireEvent.click(screen.getByRole('button', {name: /Join meeting/i}));
         expect(startConferenceConnection).toHaveBeenCalledWith(
             'room-1',
@@ -71,14 +73,14 @@ describe('PostTypeMeeting', () => {
     });
 
     it('shows dial-in line if SIP props present', () => {
-        const p = {...basePost, props: {...basePost.props, dial_in_number: '+49 30 555 1234', dial_in_pin: '4242'}};
-        renderWithStore(p as any);
+        const p: MeetingPost = {...basePost, props: {...basePost.props, dial_in_number: '+49 30 555 1234', dial_in_pin: '4242'}};
+        renderWithStore(p);
         expect(screen.getByText(/PIN 4242/)).toBeInTheDocument();
         expect(screen.getByText(/4242/)).toBeInTheDocument();
     });
 
     it('shows ENDED state without JOIN button + duration', () => {
-        const p = {
+        const p: MeetingPost = {
             ...basePost,
             props: {
                 ...basePost.props,
@@ -87,15 +89,15 @@ describe('PostTypeMeeting', () => {
                 duration_seconds: 900,
             },
         };
-        renderWithStore(p as any);
+        renderWithStore(p);
         expect(screen.queryByRole('button', {name: /Join meeting/i})).toBeNull();
         expect(screen.getByText(/Meeting ended/)).toBeInTheDocument();
         expect(screen.getByText(/15:00/)).toBeInTheDocument();
     });
 
     it('shows MISSED state', () => {
-        const p = {...basePost, props: {...basePost.props, status: 'MISSED'}};
-        renderWithStore(p as any);
+        const p: MeetingPost = {...basePost, props: {...basePost.props, status: 'MISSED'}};
+        renderWithStore(p);
         expect(screen.queryByRole('button', {name: /Join meeting/i})).toBeNull();
         expect(screen.getByText(/Meeting missed/)).toBeInTheDocument();
     });

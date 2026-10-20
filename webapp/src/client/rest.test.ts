@@ -3,7 +3,7 @@ import {createMeeting, dismissIncomingCall, heartbeat, joinMeeting, setRingtoneP
 describe('joinMeeting', () => {
     const mockFetch = jest.fn();
     beforeEach(() => {
-        (global as any).fetch = mockFetch;
+        global.fetch = mockFetch;
         mockFetch.mockReset();
     });
 
@@ -68,8 +68,7 @@ describe('joinMeeting', () => {
 describe('setRingtonePref', () => {
     const mockFetch = jest.fn();
     beforeEach(() => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (global as any).fetch = mockFetch;
+        global.fetch = mockFetch;
         mockFetch.mockReset();
     });
 
