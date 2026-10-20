@@ -18,7 +18,7 @@ jest.mock('../../conference/livekit/screen_picker', () => {
         resolveScreenPicker: jest.fn(),
 
         // Helper exposed only in tests to push state changes.
-        __fireState: (state: {open: boolean; sources: any[]}) => {
+        fireState: (state: {open: boolean; sources: any[]}) => {
             if (mockCb) {
                 mockCb(state);
             }
@@ -28,7 +28,7 @@ jest.mock('../../conference/livekit/screen_picker', () => {
 
 import ScreenPickerModal from './component';
 
-// Use requireMock to access the full mock including __fireState helper.
+// Use requireMock to access the full mock including fireState helper.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPicker: any = jest.requireMock('../../conference/livekit/screen_picker');
 
@@ -65,7 +65,7 @@ describe('ScreenPickerModal', () => {
     it('renders tiles when subscriber state opens with sources', () => {
         renderModal();
         act(() => {
-            mockPicker.__fireState({
+            mockPicker.fireState({
                 open: true,
                 sources: [
                     {id: 'screen:0:0', name: 'Entire Screen', thumbnailURL: ''},
@@ -82,7 +82,7 @@ describe('ScreenPickerModal', () => {
     it('clicking a tile calls resolveScreenPicker with the source id', () => {
         renderModal();
         act(() => {
-            mockPicker.__fireState({
+            mockPicker.fireState({
                 open: true,
                 sources: [{id: 'screen:0:0', name: 'Screen', thumbnailURL: ''}],
             });
@@ -95,7 +95,7 @@ describe('ScreenPickerModal', () => {
     it('pressing ESC calls resolveScreenPicker(null)', () => {
         renderModal();
         act(() => {
-            mockPicker.__fireState({
+            mockPicker.fireState({
                 open: true,
                 sources: [{id: 'screen:0:0', name: 'Screen', thumbnailURL: ''}],
             });

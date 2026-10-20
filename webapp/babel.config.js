@@ -14,6 +14,7 @@ const config = {
             debug: false,
             shippedProposals: true,
         }],
+
         // Babel 8 treats an unset BABEL_ENV/NODE_ENV, as in the webpack build, as development.
         ['@babel/preset-react', {runtime: 'automatic', development: false}],
 

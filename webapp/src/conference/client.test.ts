@@ -8,7 +8,7 @@ class FakeWebSocket {
     public onclose?: (e: CloseEvent) => void;
     public onerror?: (e: Event) => void;
     public sent: string[] = [];
-    constructor(public url: string, _protocols?: string | string[]) {
+    constructor(public url: string) {
         FakeWebSocket.instances.push(this);
     }
     send(d: string) {

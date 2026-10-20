@@ -47,7 +47,7 @@ beforeEach(() => {
 
 describe('LiveKitRoom', () => {
     it('registers event handlers on the underlying Room', () => {
-        new LiveKitRoom();
+        expect(() => new LiveKitRoom()).not.toThrow();
         const eventNames = mockRoomOn.mock.calls.map((c) => c[0]);
         expect(eventNames).toContain('disconnected');
         expect(eventNames).toContain('track_subscribed');

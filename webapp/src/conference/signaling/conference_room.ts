@@ -189,14 +189,14 @@ export class ConferenceRoom {
 
                     // OpenTalk's joinSuccess lists only the OTHER participants;
                     // our own user info is at the top-level (id, display_name, role).
-                    const self = this.normalizeParticipant({
+                    const local = this.normalizeParticipant({
                         id: payload.id,
                         display_name: payload.displayName ?? payload.display_name,
                         role: payload.role,
                     });
-                    const list = [self, ...others];
+                    const list = [local, ...others];
                     this.participants = list;
-                    this.localId = self.id;
+                    this.localId = local.id;
                     this.state = 'connected';
 
                     // Normalize livekit bootstrap if present in joinSuccess.

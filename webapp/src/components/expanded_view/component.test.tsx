@@ -6,6 +6,8 @@ import ExpandedView from './component';
 
 import {resetHand, leaveActiveConference, endActiveMeeting, toggleMic} from '../../conference/controller';
 import * as trackRegistry from '../../conference/livekit/track_registry';
+import {setExpanded} from '../../store/slice_session';
+import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 jest.mock('../../conference/controller', () => ({
     leaveActiveConference: jest.fn().mockResolvedValue(undefined),
@@ -23,9 +25,6 @@ jest.mock('../../conference/livekit/track_registry', () => {
     const {makeTrackRegistryMock} = require('../../test/track_registry_mock');
     return makeTrackRegistryMock((id: string) => ({attach: jest.fn(), detach: jest.fn(), sid: id}));
 });
-
-import {setExpanded} from '../../store/slice_session';
-import {PLUGIN_STATE_KEY} from '../../util/selectors';
 
 const stateKey = PLUGIN_STATE_KEY;
 
