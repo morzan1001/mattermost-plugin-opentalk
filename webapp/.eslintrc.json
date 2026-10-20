@@ -4,7 +4,27 @@
     "plugin:@mattermost/react",
     "plugin:react/jsx-runtime"
   ],
+  "plugins": [
+    "@stylistic"
+  ],
   "rules": {
-    "header/header": "off"
-  }
+    "header/header": "off",
+
+    // typescript-eslint v8 dropped its formatting rules, which @mattermost/eslint-plugin 1.x still configures.
+    "@typescript-eslint/indent": "off",
+    "@typescript-eslint/member-delimiter-style": "off",
+    "@typescript-eslint/type-annotation-spacing": "off",
+    "@stylistic/indent": [2, 4, {"SwitchCase": 0}],
+    "@stylistic/member-delimiter-style": 2,
+    "@stylistic/type-annotation-spacing": 2
+  },
+  "overrides": [
+    {
+      // Jest mock factories and the CommonJS build configs load modules with require().
+      "files": ["*.test.*", "*.config.js"],
+      "rules": {
+        "@typescript-eslint/no-require-imports": "off"
+      }
+    }
+  ]
 }
