@@ -37,6 +37,19 @@ function makeStore(connected: boolean) {
 }
 
 describe('startMeetingAction', () => {
+    it('asks for a channel and skips fetch when the App Bar calls it without one', async () => {
+        const store = makeStore(true);
+        const action = startMeetingAction(store);
+        await action(undefined);
+        expect(mockFetch).not.toHaveBeenCalled();
+        expect(mockOpen).not.toHaveBeenCalled();
+        expect(store.dispatch).toHaveBeenCalledTimes(1);
+        expect(store.dispatch.mock.calls[0][0]).toEqual({
+            type: 'opentalk/notice/set',
+            payload: {kind: 'info', message: 'Open a channel first to start an OpenTalk meeting.'},
+        });
+    });
+
     it('opens the connect flow when not connected and skips fetch', async () => {
         const store = makeStore(false);
         const action = startMeetingAction(store);

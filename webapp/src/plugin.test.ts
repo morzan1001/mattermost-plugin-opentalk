@@ -7,16 +7,29 @@ jest.mock('./client/rest', () => ({
 import {getConnectionStatus, setRingtonePref} from './client/rest';
 import manifest from './manifest';
 import Plugin from './plugin';
+import type {PluginRegistry} from './types/mattermost-webapp';
 import {RINGTONE_CHANGED_EVENT, ringtoneSettingKey} from './user_settings';
 import {PLUGIN_STATE_KEY} from './util/selectors';
 
 const pluginId: string = manifest.id;
 
+async function flushPromises(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 describe('Plugin', () => {
     function setup() {
         const registerReducer = jest.fn();
         const registerWebSocketEventHandler = jest.fn();
-        const registry = {registerReducer, registerWebSocketEventHandler} as any;
+        const registry: PluginRegistry = {
+            registerReducer,
+            registerWebSocketEventHandler,
+            registerPostTypeComponent: jest.fn(),
+            registerRootComponent: jest.fn(),
+            registerChannelHeaderButtonAction: jest.fn(),
+            registerReconnectHandler: jest.fn(),
+            registerUserSettings: jest.fn(),
+        };
         const dispatch = jest.fn();
         const store = {dispatch, getState: jest.fn(), subscribe: jest.fn()} as any;
         return {plugin: new Plugin(), registry, store, registerReducer, registerWebSocketEventHandler, dispatch};
@@ -31,8 +44,8 @@ describe('Plugin', () => {
         };
     }
 
-    async function incomingHandler(setupResult: ReturnType<typeof setup>) {
-        await setupResult.plugin.initialize(setupResult.registry, setupResult.store);
+    function incomingHandler(setupResult: ReturnType<typeof setup>) {
+        setupResult.plugin.initialize(setupResult.registry, setupResult.store);
         const handler = setupResult.registerWebSocketEventHandler.mock.calls.find(
             ([event]: [string]) => event === `custom_${pluginId}_incoming_call`,
         )?.[1];
@@ -59,24 +72,24 @@ describe('Plugin', () => {
         );
     }
 
-    it('initialize registers a reducer', async () => {
+    it('initialize registers a reducer', () => {
         const {plugin, registry, store, registerReducer} = setup();
-        await plugin.initialize(registry, store);
+        plugin.initialize(registry, store);
         expect(registerReducer).toHaveBeenCalledTimes(1);
     });
 
-    it('initialize subscribes to the user_connected_state ws event', async () => {
+    it('initialize subscribes to the user_connected_state ws event', () => {
         const {plugin, registry, store, registerWebSocketEventHandler} = setup();
-        await plugin.initialize(registry, store);
+        plugin.initialize(registry, store);
         expect(registerWebSocketEventHandler).toHaveBeenCalledWith(
             `custom_${pluginId}_user_connected_state`,
             expect.any(Function),
         );
     });
 
-    it('ws-event-handler dispatches setConnected on incoming message', async () => {
+    it('ws-event-handler dispatches setConnected on incoming message', () => {
         const {plugin, registry, store, registerWebSocketEventHandler, dispatch} = setup();
-        await plugin.initialize(registry, store);
+        plugin.initialize(registry, store);
         const handler = registerWebSocketEventHandler.mock.calls[0][1];
         handler({data: {mm_user_id: 'u1', connected: true, email: 'a@b'}});
         expect(dispatch).toHaveBeenCalledWith({
@@ -91,12 +104,12 @@ describe('Plugin', () => {
         expect(() => plugin.uninitialize()).not.toThrow();
     });
 
-    it('incoming_call handler dispatches even when ringtone is disabled', async () => {
+    it('incoming_call handler dispatches even when ringtone is disabled', () => {
         const s = setup();
         (s.store.getState as jest.Mock).mockReturnValue(stateWith());
         try {
             window.localStorage.setItem(ringtoneSettingKey, 'false');
-            const handler = await incomingHandler(s);
+            const handler = incomingHandler(s);
 
             handler(foreignCallMsg());
 
@@ -106,32 +119,32 @@ describe('Plugin', () => {
         }
     });
 
-    it('incoming_call handler dispatches rings without a server timestamp (staleness is owned by the modal)', async () => {
+    it('incoming_call handler dispatches rings without a server timestamp (staleness is owned by the modal)', () => {
         const s = setup();
         (s.store.getState as jest.Mock).mockReturnValue(stateWith());
-        const handler = await incomingHandler(s);
+        const handler = incomingHandler(s);
 
         handler(foreignCallMsg({created_at_unix_ms: Date.now() - 60000}));
 
         expect(dispatchedReceived(s.dispatch)).toHaveLength(1);
     });
 
-    it('incoming_call handler drops rings for calls hosted by myself', async () => {
+    it('incoming_call handler drops rings for calls hosted by myself', () => {
         const s = setup();
         (s.store.getState as jest.Mock).mockReturnValue(stateWith());
-        const handler = await incomingHandler(s);
+        const handler = incomingHandler(s);
 
         handler(foreignCallMsg({host_user_id: 'me'}));
 
         expect(dispatchedReceived(s.dispatch)).toHaveLength(0);
     });
 
-    it('incoming_call handler drops re-rings for the channel the session is already in', async () => {
+    it('incoming_call handler drops re-rings for the channel the session is already in', () => {
         const s = setup();
         (s.store.getState as jest.Mock).mockReturnValue(
             stateWith({[PLUGIN_STATE_KEY]: {session: {status: 'connected', channelID: 'ch-1'}}}),
         );
-        const handler = await incomingHandler(s);
+        const handler = incomingHandler(s);
 
         handler(foreignCallMsg({channel_id: 'ch-1'}));
         expect(dispatchedReceived(s.dispatch)).toHaveLength(0);
@@ -141,8 +154,8 @@ describe('Plugin', () => {
         expect(dispatchedReceived(s.dispatch)).toHaveLength(1);
     });
 
-    async function wsHandler(s: ReturnType<typeof setup>, eventName: string) {
-        await s.plugin.initialize(s.registry, s.store);
+    function wsHandler(s: ReturnType<typeof setup>, eventName: string) {
+        s.plugin.initialize(s.registry, s.store);
         const handler = s.registerWebSocketEventHandler.mock.calls.find(
             ([event]: [string]) => event === `custom_${pluginId}_${eventName}`,
         )?.[1];
@@ -170,11 +183,31 @@ describe('Plugin', () => {
         });
 
         describe('connection seeding', () => {
+            it('initialize returns without waiting for the snapshot, which is applied once it arrives', async () => {
+                const s = setup();
+                let resolveMe: (me: {connected: boolean; email: string}) => void = () => {};
+                (getConnectionStatus as jest.Mock).mockReturnValue(new Promise((resolve) => {
+                    resolveMe = resolve;
+                }));
+
+                expect(s.plugin.initialize(s.registry, s.store)).toBeUndefined();
+
+                expect(s.registerReducer).toHaveBeenCalledTimes(1);
+                expect(s.registry.registerChannelHeaderButtonAction).toHaveBeenCalledTimes(1);
+                expect(s.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({type: 'opentalk/oauth/set_connected'}));
+
+                resolveMe({connected: true, email: 'a@b'});
+                await flushPromises();
+
+                expect(s.dispatch).toHaveBeenCalledWith({type: 'opentalk/oauth/set_connected', connected: true, email: 'a@b'});
+            });
+
             it('applies me.ringtone_enabled locally without echoing a POST', async () => {
                 const s = setup();
                 (getConnectionStatus as jest.Mock).mockResolvedValue({connected: true, ringtone_enabled: false});
 
-                await s.plugin.initialize(s.registry, s.store);
+                s.plugin.initialize(s.registry, s.store);
+                await flushPromises();
 
                 expect(window.localStorage.getItem(ringtoneSettingKey)).toBe('false');
                 expect(events).toHaveLength(1);
@@ -186,7 +219,8 @@ describe('Plugin', () => {
                 const s = setup();
                 (getConnectionStatus as jest.Mock).mockResolvedValue({connected: false, ringtone_enabled: true});
 
-                await s.plugin.initialize(s.registry, s.store);
+                s.plugin.initialize(s.registry, s.store);
+                await flushPromises();
 
                 expect(window.localStorage.getItem(ringtoneSettingKey)).toBe('true');
                 expect(events[0].detail).toBe(true);
@@ -196,7 +230,8 @@ describe('Plugin', () => {
                 const s = setup();
                 (getConnectionStatus as jest.Mock).mockResolvedValue({connected: true});
 
-                await s.plugin.initialize(s.registry, s.store);
+                s.plugin.initialize(s.registry, s.store);
+                await flushPromises();
 
                 expect(window.localStorage.getItem(ringtoneSettingKey)).toBeNull();
                 expect(events).toHaveLength(0);
@@ -205,10 +240,10 @@ describe('Plugin', () => {
         });
 
         describe('ring_setting_changed ws handler', () => {
-            it('stores the change locally for the own user without POSTing', async () => {
+            it('stores the change locally for the own user without POSTing', () => {
                 const s = setup();
                 (s.store.getState as jest.Mock).mockReturnValue(stateWith());
-                const handler = await wsHandler(s, 'ring_setting_changed');
+                const handler = wsHandler(s, 'ring_setting_changed');
 
                 handler({data: {mm_user_id: 'me', enabled: false}});
 
@@ -218,10 +253,10 @@ describe('Plugin', () => {
                 expect(setRingtonePref).not.toHaveBeenCalled();
             });
 
-            it('ignores changes for other users', async () => {
+            it('ignores changes for other users', () => {
                 const s = setup();
                 (s.store.getState as jest.Mock).mockReturnValue(stateWith());
-                const handler = await wsHandler(s, 'ring_setting_changed');
+                const handler = wsHandler(s, 'ring_setting_changed');
 
                 handler({data: {mm_user_id: 'someone-else', enabled: false}});
 
@@ -231,10 +266,10 @@ describe('Plugin', () => {
         });
 
         describe('window.opentalk handle', () => {
-            it('ringtone() persists and POSTs the preference', async () => {
+            it('ringtone() persists and POSTs the preference', () => {
                 const s = setup();
                 (s.store.getState as jest.Mock).mockReturnValue(stateWith());
-                await s.plugin.initialize(s.registry, s.store);
+                s.plugin.initialize(s.registry, s.store);
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const returned = (window as any).opentalk.ringtone(false);
@@ -245,10 +280,10 @@ describe('Plugin', () => {
                 expect(setRingtonePref).toHaveBeenCalledWith(false);
             });
 
-            it('killRing clears the slice and disables the ringtone persistently', async () => {
+            it('killRing clears the slice and disables the ringtone persistently', () => {
                 const s = setup();
                 (s.store.getState as jest.Mock).mockReturnValue(stateWith());
-                await s.plugin.initialize(s.registry, s.store);
+                s.plugin.initialize(s.registry, s.store);
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (window as any).opentalk.killRing();

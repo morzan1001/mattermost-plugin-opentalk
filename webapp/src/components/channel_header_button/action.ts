@@ -15,7 +15,16 @@ interface PluginState {
 }
 
 export function startMeetingAction(store: Store<GlobalState, Action>) {
-    return async (channel: {id: string}) => {
+    return async (channel?: {id: string}) => {
+        // The App Bar also offers this action in Threads and Drafts, where no channel is open.
+        if (!channel) {
+            store.dispatch(noticeSet({
+                kind: 'info',
+                message: t({de: 'Öffne zuerst einen Kanal, um ein OpenTalk-Meeting zu starten.', en: 'Open a channel first to start an OpenTalk meeting.'}),
+            }));
+            return;
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const state = store.getState() as any;
         const ps: PluginState = state[PLUGIN_STATE_KEY] || {};

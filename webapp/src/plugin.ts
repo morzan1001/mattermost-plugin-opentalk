@@ -89,7 +89,7 @@ interface RingSettingChangedMessage {
 }
 
 export default class Plugin {
-    public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): Promise<void> {
+    public initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): void {
         // Pin the redux store so toggle handlers can dispatch without React-
         // context indirection (useStore() returns null in MM RootComponents).
         setActiveStore(store);
@@ -127,15 +127,15 @@ export default class Plugin {
             },
         };
 
-        registry.registerReducer?.(reducer);
-        registry.registerWebSocketEventHandler?.(
+        registry.registerReducer(reducer);
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_user_connected_state`,
             (msg: ConnectedStateMessage) => {
                 store.dispatch(setConnected(msg.data.connected === true, msg.data.email));
             },
         );
 
-        registry.registerWebSocketEventHandler?.(
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_meeting_ended`,
             (msg: MeetingEndedMessage) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,7 +147,7 @@ export default class Plugin {
                 store.dispatch(activeMeetingEnded({channelID: msg.data.channel_id}));
             },
         );
-        registry.registerWebSocketEventHandler?.(
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_meeting_started`,
             (msg: MeetingStartedMessage) => {
                 store.dispatch(activeMeetingStarted({
@@ -160,7 +160,7 @@ export default class Plugin {
                 }));
             },
         );
-        registry.registerWebSocketEventHandler?.(
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_incoming_call`,
             (msg: IncomingCallMessage) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -203,7 +203,7 @@ export default class Plugin {
         // Server-side ringtone changes (/opentalk ring on|off, other tabs)
         // arrive here as authoritative echoes; applying them locally must not
         // POST again or the broadcast would loop forever.
-        registry.registerWebSocketEventHandler?.(
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_ring_setting_changed`,
             (msg: RingSettingChangedMessage) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -216,7 +216,7 @@ export default class Plugin {
         );
 
         // Sync dismissals across tabs of the same user.
-        registry.registerWebSocketEventHandler?.(
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_incoming_call_dismissed`,
             (msg: IncomingCallDismissedMessage) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -231,7 +231,7 @@ export default class Plugin {
         // Leave the local call when the current user is removed from the
         // meeting's channel, so a kicked/removed user is not left in a ghost
         // session in a channel they can no longer access.
-        registry.registerWebSocketEventHandler?.(
+        registry.registerWebSocketEventHandler(
             'user_removed',
             (msg: {data?: {channel_id?: string; user_id?: string}}) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -246,19 +246,19 @@ export default class Plugin {
             },
         );
 
-        registry.registerPostTypeComponent?.('custom_opentalk_meeting', PostTypeMeeting);
-        registry.registerRootComponent?.(MeetingMiniBar);
-        registry.registerRootComponent?.(AudioRenderer);
-        registry.registerRootComponent?.(ExpandedView);
-        registry.registerRootComponent?.(IncomingCallModal);
-        registry.registerRootComponent?.(SwitchCallModal);
-        registry.registerRootComponent?.(ChannelCallToast);
-        registry.registerRootComponent?.(ReconnectingBanner);
-        registry.registerRootComponent?.(ScreenPickerModal);
-        registry.registerRootComponent?.(NoticeBanner);
+        registry.registerPostTypeComponent('custom_opentalk_meeting', PostTypeMeeting);
+        registry.registerRootComponent(MeetingMiniBar);
+        registry.registerRootComponent(AudioRenderer);
+        registry.registerRootComponent(ExpandedView);
+        registry.registerRootComponent(IncomingCallModal);
+        registry.registerRootComponent(SwitchCallModal);
+        registry.registerRootComponent(ChannelCallToast);
+        registry.registerRootComponent(ReconnectingBanner);
+        registry.registerRootComponent(ScreenPickerModal);
+        registry.registerRootComponent(NoticeBanner);
 
         const headerIcon = React.createElement(OpenTalkIcon);
-        registry.registerChannelHeaderButtonAction?.(
+        registry.registerChannelHeaderButtonAction(
             headerIcon,
             startMeetingAction(store),
             'OpenTalk',
@@ -281,13 +281,14 @@ export default class Plugin {
                 // Non-fatal: the header button falls back to "please connect first".
             }
         };
-        registry.registerReconnectHandler?.(() => {
+        registry.registerReconnectHandler(() => {
             seedConnectionStatus();
         });
 
         // Seed OAuth state immediately on load — the WS broadcast only delivers
-        // state changes, not the current snapshot on page load.
-        await seedConnectionStatus();
+        // state changes, not the current snapshot on page load. Not awaited:
+        // Mattermost holds its first render until every plugin's initialize settles.
+        seedConnectionStatus();
     }
 
     public uninitialize(): void {

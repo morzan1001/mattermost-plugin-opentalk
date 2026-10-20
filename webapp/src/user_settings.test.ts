@@ -36,11 +36,6 @@ describe('registerOpenTalkUserSettings', () => {
         expect(arg.sections[0].component).toBe(OpenTalkSettingsSection);
         expect(arg.sections[0].settings).toBeUndefined();
     });
-
-    it('is a no-op when registerUserSettings is absent', () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        expect(() => registerOpenTalkUserSettings({} as any)).not.toThrow();
-    });
 });
 
 describe('ringtone setting helpers', () => {

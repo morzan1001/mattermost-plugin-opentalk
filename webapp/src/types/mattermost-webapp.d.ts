@@ -1,10 +1,18 @@
+import type {ComponentType, ReactNode} from 'react';
+import type {Reducer} from 'redux';
+
+// The part of Mattermost 12's webapp/channels/src/plugins/registry.ts this plugin uses.
 export interface PluginRegistry {
-    registerChannelHeaderButtonAction?: (icon: any, action: any, dropdownText?: string, tooltipText?: string) => string;
-    registerPostTypeComponent?: (typeName: string, component: any) => string;
-    registerWebSocketEventHandler?: (event: string, handler: (msg: any) => void) => void;
-    registerReducer?: (reducer: any) => void;
-    registerRootComponent?: (component: any) => string;
-    registerReconnectHandler?: (handler: () => void) => void;
-    registerTranslations?: (getTranslations: (locale: string) => Record<string, string>) => void;
-    [key: string]: any;
+    registerChannelHeaderButtonAction: (icon: ReactNode, action: (channel?: {id: string}) => void, dropdownText: ReactNode, tooltipText: ReactNode) => string;
+    registerPostTypeComponent: <TPost>(typeName: string, component: ComponentType<{post: TPost}>) => string;
+    registerWebSocketEventHandler: <TData>(event: string, handler: (msg: {data: TData}) => void) => void;
+    registerReducer: (reducer: Reducer) => void;
+    registerRootComponent: (component: ComponentType) => string;
+    registerReconnectHandler: (handler: () => void) => void;
+    registerUserSettings: (setting: {
+        id: string;
+        uiName: string;
+        icon?: string;
+        sections: Array<{title: string; component: ComponentType}>;
+    }) => void;
 }

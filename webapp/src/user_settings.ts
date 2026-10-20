@@ -52,13 +52,7 @@ export function writeRingtone(enabled: boolean): void {
 
 export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
     initDeviceCache();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const reg: any = registry;
-    if (typeof reg.registerUserSettings !== 'function') {
-        return;
-    }
-
-    reg.registerUserSettings({
+    registry.registerUserSettings({
         id: pluginID,
         uiName: 'OpenTalk',
         icon: 'icon-phone-outline',
