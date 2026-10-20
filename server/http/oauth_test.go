@@ -26,7 +26,7 @@ func stubOIDCClient(t *testing.T) *oidc.Client {
 	srv = httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/.well-known/openid-configuration" {
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"issuer":                                srv.URL,
 				"authorization_endpoint":                srv.URL + "/auth",
 				"token_endpoint":                        srv.URL + "/token",
@@ -88,7 +88,7 @@ func stubOIDCFullClient(t *testing.T) *oidc.Client {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"issuer":                                srv.URL,
 				"authorization_endpoint":                srv.URL + "/auth",
 				"token_endpoint":                        srv.URL + "/token",
@@ -97,20 +97,20 @@ func stubOIDCFullClient(t *testing.T) *oidc.Client {
 				"id_token_signing_alg_values_supported": []string{"RS256"},
 			})
 		case "/token":
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"access_token":  "access-jwt",
 				"refresh_token": "refresh-jwt",
 				"token_type":    "Bearer",
 				"expires_in":    300,
 			})
 		case "/userinfo":
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"sub":   "kc-sub-1",
 				"email": "alice@example.com",
 				"name":  "Alice Tester",
 			})
 		case "/jwks":
-			json.NewEncoder(w).Encode(map[string]any{"keys": []any{}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"keys": []any{}})
 		}
 	}))
 	t.Cleanup(srv.Close)

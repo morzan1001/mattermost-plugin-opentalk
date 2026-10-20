@@ -27,9 +27,11 @@ import (
 
 const pluginID = "com.github.morzan1001.mattermost-plugin-opentalk"
 
-const botUsername = "opentalk-bot"
-const botDisplayName = "OpenTalk Bot"
-const botDescription = "Posts about OpenTalk meetings created from Mattermost."
+const (
+	botUsername    = "opentalk-bot"
+	botDisplayName = "OpenTalk Bot"
+	botDescription = "Posts about OpenTalk meetings created from Mattermost."
+)
 
 type Plugin struct {
 	plugin.MattermostPlugin

@@ -58,7 +58,7 @@ func TestEnd_HostUpdatesPostAndDeletesMeeting(t *testing.T) {
 		return &model.Post{
 			Id:    postID,
 			Type:  "custom_opentalk_meeting",
-			Props: model.StringInterface{"status": "STARTED", "started_at": int64(time.Now().Add(-5 * time.Minute).Unix())},
+			Props: model.StringInterface{"status": "STARTED", "started_at": time.Now().Add(-5 * time.Minute).Unix()},
 		}, nil
 	}
 	h.PostUpdater = func(p *model.Post) error {

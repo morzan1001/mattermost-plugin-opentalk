@@ -56,7 +56,6 @@ func setupAPIWithMeetings(t *testing.T, meetings []*store.ActiveMeeting) *plugin
 	api.On("KVList", 1, 200).Return([]string{}, nil).Maybe()
 
 	for _, am := range meetings {
-		am := am
 		api.On("KVGet", meetingKVKey(am.ChannelID)).Return(meetingBytes(t, am), nil)
 	}
 
@@ -233,14 +232,12 @@ func TestStartStop_ConcurrentSafe(t *testing.T) {
 		50*time.Millisecond, 5*time.Minute)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 4; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 4 {
+		wg.Go(func() {
 			r.Start()
 			time.Sleep(5 * time.Millisecond)
 			r.Stop()
-		}()
+		})
 	}
 	wg.Wait()
 }

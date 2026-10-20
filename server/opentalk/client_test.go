@@ -27,7 +27,7 @@ func TestDoRequest_GetWithBearer(t *testing.T) {
 		receivedAuth = r.Header.Get("Authorization")
 		receivedAccept = r.Header.Get("Accept")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"hello": "world"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"hello": "world"})
 	}))
 	defer server.Close()
 
@@ -43,10 +43,10 @@ func TestDoRequest_GetWithBearer(t *testing.T) {
 func TestDoRequest_PostBodyJSON(t *testing.T) {
 	var receivedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedBody)
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&receivedBody))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{"id": "room-1"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"id": "room-1"})
 	}))
 	defer server.Close()
 
@@ -62,7 +62,7 @@ func TestDoRequest_PostBodyJSON(t *testing.T) {
 func TestDoRequest_NonOKReturnsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(`{"error":"forbidden","detail":"no permission"}`))
+		_, _ = w.Write([]byte(`{"error":"forbidden","detail":"no permission"}`))
 	}))
 	defer server.Close()
 

@@ -16,11 +16,11 @@ func TestCreateRoom_PostsAndParses(t *testing.T) {
 		require.Equal(t, http.MethodPost, r.Method)
 		require.Equal(t, "/v1/rooms", r.URL.Path)
 		require.Equal(t, "Bearer access-jwt", r.Header.Get("Authorization"))
-		json.NewDecoder(r.Body).Decode(&receivedBody)
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&receivedBody))
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
             "id": "ab123",
             "created_by": {
                 "id": "u1",
@@ -47,7 +47,7 @@ func TestCreateRoom_PostsAndParses(t *testing.T) {
 func TestCreateRoom_PropagatesAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error":"unauthorized"}`))
+		_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
 	}))
 	defer server.Close()
 
@@ -64,7 +64,7 @@ func TestStartRoom_RegisteredUser(t *testing.T) {
 		require.Equal(t, "/v1/rooms/room-1/start", r.URL.Path)
 		require.Equal(t, "Bearer tok", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"ticket":"room-1#abc123","resumption":"res-456"}`))
+		_, _ = w.Write([]byte(`{"ticket":"room-1#abc123","resumption":"res-456"}`))
 	}))
 	defer server.Close()
 
@@ -84,7 +84,7 @@ func TestStartInvited_GuestSendsNoAuth(t *testing.T) {
 		require.Equal(t, "/v1/rooms/room-1/start_invited", r.URL.Path)
 		receivedAuth = r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"ticket":"room-1#guest","resumption":"res-guest"}`))
+		_, _ = w.Write([]byte(`{"ticket":"room-1#guest","resumption":"res-guest"}`))
 	}))
 	defer server.Close()
 

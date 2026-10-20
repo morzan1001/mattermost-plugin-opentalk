@@ -104,14 +104,10 @@ func (r *Reaper) acquireOrRenewLeader() bool {
 	if raw != nil && !bytes.Equal(raw, r.nodeID) {
 		return false
 	}
-	ttlSeconds := int64(r.leaderTTL.Seconds())
-	if ttlSeconds < 1 {
-		ttlSeconds = 1
-	}
 	opts := model.PluginKVSetOptions{
 		Atomic:          true,
 		OldValue:        raw,
-		ExpireInSeconds: ttlSeconds,
+		ExpireInSeconds: max(int64(r.leaderTTL.Seconds()), 1),
 	}
 	ok, sErr := r.api.KVSetWithOptions(leaderKey, r.nodeID, opts)
 	if sErr != nil {
