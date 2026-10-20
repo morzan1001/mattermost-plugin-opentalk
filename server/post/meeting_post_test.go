@@ -106,8 +106,8 @@ func TestBuildMeetingPost_AttachmentSTARTED_Channel(t *testing.T) {
 	rawAtt := post.GetProp("attachments")
 	require.NotNil(t, rawAtt, "post.props.attachments must be populated")
 
-	atts, ok := rawAtt.([]*model.SlackAttachment)
-	require.True(t, ok, "attachments must be []*model.SlackAttachment, got %T", rawAtt)
+	atts, ok := rawAtt.([]*model.MessageAttachment)
+	require.True(t, ok, "attachments must be []*model.MessageAttachment, got %T", rawAtt)
 	require.Len(t, atts, 1)
 
 	att := atts[0]
@@ -139,7 +139,7 @@ func TestBuildMeetingPost_AttachmentSTARTED_DM(t *testing.T) {
 
 	post := BuildMeetingPost(am, "https://opentalk.example", "alice", "Alice Tester", "en", true)
 	rawAtt := post.GetProp("attachments")
-	atts, ok := rawAtt.([]*model.SlackAttachment)
+	atts, ok := rawAtt.([]*model.MessageAttachment)
 	require.True(t, ok)
 	require.Len(t, atts, 1)
 
