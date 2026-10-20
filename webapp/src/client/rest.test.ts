@@ -97,8 +97,7 @@ describe('setRingtonePref', () => {
 describe('state-changing requests', () => {
     const mockFetch = jest.fn();
     beforeEach(() => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (global as any).fetch = mockFetch;
+        global.fetch = mockFetch;
         mockFetch.mockReset();
         mockFetch.mockResolvedValue({ok: true, status: 200, json: async () => ({})});
     });
