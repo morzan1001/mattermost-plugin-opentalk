@@ -13,9 +13,9 @@ import (
 func TestCreateRoom_PostsAndParses(t *testing.T) {
 	var receivedBody CreateRoomRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
-		require.Equal(t, "/v1/rooms", r.URL.Path)
-		require.Equal(t, "Bearer access-jwt", r.Header.Get("Authorization"))
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/rooms", r.URL.Path)
+		assert.Equal(t, "Bearer access-jwt", r.Header.Get("Authorization"))
 		assert.NoError(t, json.NewDecoder(r.Body).Decode(&receivedBody))
 
 		w.Header().Set("Content-Type", "application/json")
@@ -61,8 +61,8 @@ func TestCreateRoom_PropagatesAPIError(t *testing.T) {
 
 func TestStartRoom_RegisteredUser(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/rooms/room-1/start", r.URL.Path)
-		require.Equal(t, "Bearer tok", r.Header.Get("Authorization"))
+		assert.Equal(t, "/v1/rooms/room-1/start", r.URL.Path)
+		assert.Equal(t, "Bearer tok", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ticket":"room-1#abc123","resumption":"res-456"}`))
 	}))
@@ -81,7 +81,7 @@ func TestStartRoom_RegisteredUser(t *testing.T) {
 func TestStartInvited_GuestSendsNoAuth(t *testing.T) {
 	var receivedAuth string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/rooms/room-1/start_invited", r.URL.Path)
+		assert.Equal(t, "/v1/rooms/room-1/start_invited", r.URL.Path)
 		receivedAuth = r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ticket":"room-1#guest","resumption":"res-guest"}`))
