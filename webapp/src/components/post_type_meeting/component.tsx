@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import {useStore, useSelector} from 'react-redux';
 
 import {startConferenceConnection} from '../../conference/controller';

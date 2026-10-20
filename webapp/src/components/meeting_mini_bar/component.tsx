@@ -1,4 +1,5 @@
-import React, {useLayoutEffect, useMemo, useRef, useState} from 'react';
+import type React from 'react';
+import {useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {useSelector, useDispatch} from 'react-redux';
 
 import {SelfPreview} from './self_preview';

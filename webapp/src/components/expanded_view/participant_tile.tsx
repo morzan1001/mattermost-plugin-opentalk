@@ -1,4 +1,5 @@
-import React, {useRef, useState} from 'react';
+import type React from 'react';
+import {useRef, useState} from 'react';
 import {useDispatch, useSelector} from 'react-redux';
 
 import * as trackRegistry from '../../conference/livekit/track_registry';

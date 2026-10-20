@@ -33,7 +33,7 @@ Prerequisites:
 make dist
 ```
 
-This produces `dist/com.github.morzan1001.mattermost-plugin-opentalk-<version>.tar.gz`. Upload it in the Mattermost System Console under **Plugin Management → Upload Plugin**.
+This produces `dist/com.github.morzan1001.mattermost-plugin-opentalk-<version>.tar.gz`. Upload it in the Mattermost System Console under **Plugin Management → Upload Plugin**. The plugin requires Mattermost 12.0 or later.
 
 ## Keycloak setup
 

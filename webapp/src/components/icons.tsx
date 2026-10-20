@@ -3,7 +3,7 @@
  * Lucide style: 20x20, currentColor, 2px stroke. Drop-in for buttons and
  * channel-header decorations — no extra npm dependency.
  */
-import React from 'react';
+import type React from 'react';
 
 const baseProps = {
     width: 20,

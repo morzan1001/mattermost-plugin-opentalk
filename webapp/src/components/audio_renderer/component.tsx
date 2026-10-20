@@ -1,4 +1,5 @@
-import React, {useCallback, useMemo, useRef, useState} from 'react';
+import type React from 'react';
+import {useCallback, useMemo, useRef, useState} from 'react';
 import {useSelector} from 'react-redux';
 
 import {useAttachTrack} from '../../hooks/use_attach_track';
