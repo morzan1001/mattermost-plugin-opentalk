@@ -25,7 +25,7 @@ import {
     endActiveMeeting,
     debugState,
 } from './conference/controller';
-import {initDeviceCache} from './conference/livekit/devices';
+import {disposeDeviceCache, initDeviceCache} from './conference/livekit/devices';
 import manifest from './manifest';
 import reducer from './store/reducer';
 import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
@@ -297,7 +297,10 @@ export default class Plugin {
         seedConnectionStatus();
     }
 
+    // Mattermost unmounts our components on disable, upgrade or failed init, but module state such as a live call survives.
     public uninitialize(): void {
-        // no-op
+        leaveActiveConference();
+        disposeDeviceCache();
+        Reflect.deleteProperty(window, 'opentalk');
     }
 }

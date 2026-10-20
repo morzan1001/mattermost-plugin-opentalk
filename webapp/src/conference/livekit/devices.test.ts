@@ -8,7 +8,7 @@ import {
     setPreferredCamId,
     getMuteOnJoin,
     setMuteOnJoin,
-    _resetDeviceCache,
+    disposeDeviceCache,
 } from './devices';
 
 // ---------------------------------------------------------------------------
@@ -24,7 +24,7 @@ function makeDevice(kind: 'audioinput' | 'videoinput', deviceId: string, label: 
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-    _resetDeviceCache();
+    disposeDeviceCache();
     window.localStorage.clear();
 
     // Reset mediaDevices mock
@@ -34,6 +34,7 @@ beforeEach(() => {
         value: {
             enumerateDevices: jest.fn().mockResolvedValue([]),
             addEventListener: jest.fn(),
+            removeEventListener: jest.fn(),
         },
     });
 });
@@ -92,6 +93,27 @@ describe('initDeviceCache — refresh populates cache from enumerateDevices', ()
         initDeviceCache();
         initDeviceCache();
         expect(navigator.mediaDevices.addEventListener).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('disposeDeviceCache', () => {
+    it('removes the devicechange listener and empties the cache', async () => {
+        (navigator.mediaDevices.enumerateDevices as jest.Mock).mockResolvedValue([makeDevice('audioinput', 'mic-1', 'Mic')]);
+        initDeviceCache();
+        await flushPromises();
+
+        disposeDeviceCache();
+
+        const [event, listener] = (navigator.mediaDevices.addEventListener as jest.Mock).mock.calls[0];
+        expect(navigator.mediaDevices.removeEventListener).toHaveBeenCalledWith(event, listener);
+        expect(getAudioDevices()).toEqual([]);
+    });
+
+    it('lets a later init install the listener again', () => {
+        initDeviceCache();
+        disposeDeviceCache();
+        initDeviceCache();
+        expect(navigator.mediaDevices.addEventListener).toHaveBeenCalledTimes(2);
     });
 });
 

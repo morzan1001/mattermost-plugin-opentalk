@@ -24,7 +24,15 @@ async function flushPromises(): Promise<void> {
 }
 
 describe('Plugin', () => {
+    const plugins: Plugin[] = [];
+
+    afterEach(() => {
+        plugins.splice(0).forEach((plugin) => plugin.uninitialize());
+    });
+
     function setup() {
+        const plugin = new Plugin();
+        plugins.push(plugin);
         const registerReducer = jest.fn();
         const registerWebSocketEventHandler = jest.fn();
         const registry: PluginRegistry = {
@@ -38,7 +46,7 @@ describe('Plugin', () => {
         };
         const dispatch = jest.fn();
         const store = {dispatch, getState: jest.fn(), subscribe: jest.fn()} as any;
-        return {plugin: new Plugin(), registry, store, registerReducer, registerWebSocketEventHandler, dispatch};
+        return {plugin, registry, store, registerReducer, registerWebSocketEventHandler, dispatch};
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,9 +113,42 @@ describe('Plugin', () => {
         });
     });
 
-    it('uninitialize is callable without throwing', () => {
-        const {plugin} = setup();
-        expect(() => plugin.uninitialize()).not.toThrow();
+    describe('uninitialize', () => {
+        beforeEach(() => {
+            (getConnectionStatus as jest.Mock).mockResolvedValue({connected: false});
+            (leaveActiveConference as jest.Mock).mockClear();
+        });
+
+        afterEach(() => {
+            Reflect.deleteProperty(navigator, 'mediaDevices');
+        });
+
+        it('leaves the active conference and drops the devtools handle', () => {
+            const s = setup();
+            s.plugin.initialize(s.registry, s.store);
+            expect(window).toHaveProperty('opentalk');
+
+            s.plugin.uninitialize();
+
+            expect(leaveActiveConference).toHaveBeenCalledTimes(1);
+            expect(window).not.toHaveProperty('opentalk');
+        });
+
+        it('removes the devicechange listener initialize installed', () => {
+            const addEventListener = jest.fn();
+            const removeEventListener = jest.fn();
+            Object.defineProperty(navigator, 'mediaDevices', {
+                configurable: true,
+                value: {enumerateDevices: jest.fn().mockResolvedValue([]), addEventListener, removeEventListener},
+            });
+            const s = setup();
+            s.plugin.initialize(s.registry, s.store);
+
+            s.plugin.uninitialize();
+
+            expect(addEventListener).toHaveBeenCalledWith('devicechange', expect.any(Function));
+            expect(removeEventListener).toHaveBeenCalledWith('devicechange', addEventListener.mock.calls[0][1]);
+        });
     });
 
     it('incoming_call handler dispatches even when ringtone is disabled', () => {
