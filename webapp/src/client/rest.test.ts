@@ -1,4 +1,4 @@
-import {joinMeeting, setRingtonePref} from './rest';
+import {createMeeting, dismissIncomingCall, heartbeat, joinMeeting, setRingtonePref} from './rest';
 
 describe('joinMeeting', () => {
     const mockFetch = jest.fn();
@@ -91,5 +91,45 @@ describe('setRingtonePref', () => {
     it('throws on non-ok responses', async () => {
         mockFetch.mockResolvedValue({ok: false, status: 500, text: async () => 'save failed'});
         await expect(setRingtonePref(false)).rejects.toThrow(/500/);
+    });
+});
+
+describe('state-changing requests', () => {
+    const mockFetch = jest.fn();
+    beforeEach(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (global as any).fetch = mockFetch;
+        mockFetch.mockReset();
+        mockFetch.mockResolvedValue({ok: true, status: 200, json: async () => ({})});
+    });
+
+    afterEach(() => {
+        document.cookie = 'MMUSERID=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        document.cookie = 'MMCSRF=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    });
+
+    it.each([
+        ['createMeeting', () => createMeeting('ch-1', 'dev')],
+        ['joinMeeting', () => joinMeeting('room-1', 'ch-1', 'dev')],
+        ['heartbeat', () => heartbeat('ch-1')],
+        ['dismissIncomingCall', () => dismissIncomingCall('ch-1', 'room-1')],
+        ['setRingtonePref', () => setRingtonePref(true)],
+    ])('%s sends the MMCSRF cookie as X-CSRF-Token', async (_name, call) => {
+        document.cookie = 'MMUSERID=user-1';
+        document.cookie = 'MMCSRF=csrf-token';
+
+        await call();
+
+        const [, init] = mockFetch.mock.calls[0];
+        expect(init.headers['X-CSRF-Token']).toBe('csrf-token');
+        expect(init.headers['X-Requested-With']).toBe('XMLHttpRequest');
+    });
+
+    it('omits X-CSRF-Token without an MMCSRF cookie', async () => {
+        await heartbeat('ch-1');
+
+        const [, init] = mockFetch.mock.calls[0];
+        expect(init.headers).not.toHaveProperty('X-CSRF-Token');
+        expect(init.headers['X-Requested-With']).toBe('XMLHttpRequest');
     });
 });

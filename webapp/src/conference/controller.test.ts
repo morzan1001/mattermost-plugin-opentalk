@@ -124,6 +124,7 @@ jest.mock('./livekit/room', () => {
 
 // ── other mocks ───────────────────────────────────────────────────────────
 jest.mock('../client/rest', () => ({
+    ...jest.requireActual('../client/rest'),
     getOrCreateDeviceSecret: jest.fn().mockReturnValue('device-secret-xyz'),
     heartbeat: jest.fn().mockResolvedValue(undefined),
 }));
@@ -1155,6 +1156,27 @@ describe('endActiveMeeting', () => {
         );
         expect(endCall).toBeDefined();
         expect(endCall![1].method).toBe('POST');
+    });
+
+    it('sends the MMCSRF cookie as X-CSRF-Token with the end call', async () => {
+        const store = makeTestStore('ch-end');
+        setActiveStore(store);
+        startConferenceConnection('room-1', 'ch-end', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: true});
+        mockFetch.mockResolvedValue({ok: true});
+        document.cookie = 'MMCSRF=csrf-token';
+
+        try {
+            await endActiveMeeting();
+        } finally {
+            document.cookie = 'MMCSRF=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        }
+
+        const endCall = mockFetch.mock.calls.find(
+            ([url]: [string]) => String(url).includes('/api/v1/meetings/end'),
+        );
+        expect(endCall![1].headers['X-CSRF-Token']).toBe('csrf-token');
     });
 
     it('surfaces a notice and still leaves when the end REST call fails', async () => {

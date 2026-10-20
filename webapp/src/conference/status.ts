@@ -1,3 +1,4 @@
+import {csrfHeaders} from '../client/rest';
 import {t} from '../util/i18n';
 
 const PRIOR_STATUS_KEY = 'opentalk:prior-status:v1';
@@ -72,7 +73,7 @@ async function setOpenTalkStatusAsync(epoch: number): Promise<void> {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
+            ...csrfHeaders(),
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -101,7 +102,7 @@ export function clearOpenTalkStatus(): void {
     if (!prior || !prior.emoji) {
         fetch('/api/v4/users/me/status/custom', {
             method: 'DELETE',
-            headers: {'X-Requested-With': 'XMLHttpRequest'},
+            headers: csrfHeaders(),
             credentials: 'include',
         }).catch(() => { /* swallow */ });
         return;
@@ -110,7 +111,7 @@ export function clearOpenTalkStatus(): void {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
+            ...csrfHeaders(),
         },
         credentials: 'include',
         body: JSON.stringify(prior),

@@ -10,7 +10,7 @@ import {JoinCancelledError} from './signaling/conference_room';
 import type {Participant} from './signaling/modules/core';
 import {clearOpenTalkStatus, setOpenTalkStatus} from './status';
 
-import {getOrCreateDeviceSecret, heartbeat} from '../client/rest';
+import {csrfHeaders, getOrCreateDeviceSecret, heartbeat} from '../client/rest';
 import {noticeSet} from '../store/slice_notice';
 import {
     participantAdded,
@@ -594,7 +594,7 @@ export async function endActiveMeeting(): Promise<void> {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
+                ...csrfHeaders(),
             },
             credentials: 'include',
             body: JSON.stringify({channel_id: channelID}),

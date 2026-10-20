@@ -53,6 +53,21 @@ describe('OpenTalk custom status', () => {
         expect(statusWrites()).toEqual([[STATUS_URL, expect.objectContaining({method: 'DELETE'})]]);
     });
 
+    it('sends the MMCSRF cookie as X-CSRF-Token on its writes', async () => {
+        document.cookie = 'MMCSRF=csrf-token';
+        try {
+            mockCurrentStatus();
+            status.setOpenTalkStatus();
+            await flushPromises();
+            status.clearOpenTalkStatus();
+
+            const methods = statusWrites().map(([, init]) => [init.method, init.headers['X-CSRF-Token']]);
+            expect(methods).toEqual([['PUT', 'csrf-token'], ['DELETE', 'csrf-token']]);
+        } finally {
+            document.cookie = 'MMCSRF=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        }
+    });
+
     it('restores the prior status once and does not delete it on a repeated clear', async () => {
         const vacation = {emoji: 'palm_tree', text: 'Vacation'};
         mockCurrentStatus(vacation);
