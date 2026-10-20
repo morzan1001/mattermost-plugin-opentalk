@@ -9,7 +9,7 @@ export interface UseDraggableResult {
     style: React.CSSProperties;
     handleProps: DragHandle;
     isDragging: boolean;
-    nodeRef: React.MutableRefObject<HTMLDivElement | null>;
+    nodeRef: React.RefObject<HTMLDivElement | null>;
 }
 
 interface Offsets {

@@ -1,6 +1,5 @@
-import {renderHook, act} from '@testing-library/react';
-import React from 'react';
-import ReactDOM from 'react-dom';
+import {render, renderHook} from '@testing-library/react';
+import React, {useLayoutEffect} from 'react';
 
 import {useCallShortcuts} from './use_call_shortcuts';
 import type {CallShortcutHandlers} from './use_call_shortcuts';
@@ -58,35 +57,28 @@ function ShortcutHarness({handlers}: {handlers: CallShortcutHandlers}) {
     return null;
 }
 
+// Fires after the harness's layout effects but before its passive ones, as a real keydown can.
+function KeydownInLayoutPhase() {
+    useLayoutEffect(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', {key: 'm'}));
+    });
+    return null;
+}
+
 it('uses the latest handlers even when a keydown races the passive-effect flush', () => {
     const h1 = makeHandlers();
     const h2 = makeHandlers();
-    const container = document.createElement('div');
-    document.body.appendChild(container);
 
-    // Legacy ReactDOM.render, unlike createRoot, commits synchronously (flushing layout effects)
-    // without also flushing the passive effect - the only way to reproduce, deterministically, the
-    // gap a real keydown (delivered outside React's root) can land in between the two.
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const {rerender} = render(React.createElement(ShortcutHarness, {handlers: h1}));
+    rerender(
+        React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(ShortcutHarness, {handlers: h2}),
+            React.createElement(KeydownInLayoutPhase),
+        ),
+    );
 
-    try {
-        act(() => {
-            // eslint-disable-next-line react/no-deprecated
-            ReactDOM.render(React.createElement(ShortcutHarness, {handlers: h1}), container);
-        });
-
-        // eslint-disable-next-line react/no-deprecated
-        ReactDOM.render(React.createElement(ShortcutHarness, {handlers: h2}), container);
-        window.dispatchEvent(new KeyboardEvent('keydown', {key: 'm'}));
-
-        expect(h2.onToggleMic).toHaveBeenCalled();
-        expect(h1.onToggleMic).not.toHaveBeenCalled();
-    } finally {
-        act(() => {
-            // eslint-disable-next-line react/no-deprecated
-            ReactDOM.unmountComponentAtNode(container);
-        });
-        document.body.removeChild(container);
-        consoleError.mockRestore();
-    }
+    expect(h2.onToggleMic).toHaveBeenCalled();
+    expect(h1.onToggleMic).not.toHaveBeenCalled();
 });

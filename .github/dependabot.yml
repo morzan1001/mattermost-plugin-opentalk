@@ -21,6 +21,8 @@ updates:
       # Pinned via Mattermost; update on Mattermost-server bumps only.
       - dependency-name: react
       - dependency-name: react-dom
+      - dependency-name: "@types/react"
+      - dependency-name: "@types/react-dom"
       - dependency-name: redux
       - dependency-name: react-redux
 
