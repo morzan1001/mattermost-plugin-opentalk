@@ -26,7 +26,6 @@ async function refresh(): Promise<void> {
 }
 
 function onDeviceChange(): void {
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     refresh();
 }
 
@@ -36,7 +35,6 @@ export function initDeviceCache(): void {
         return;
     }
     listenerInstalled = true;
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     refresh();
     if (typeof navigator !== 'undefined' && navigator.mediaDevices?.addEventListener) {
         navigator.mediaDevices.addEventListener('devicechange', onDeviceChange);

@@ -12,13 +12,11 @@ export function useFullscreen(targetRef: React.RefObject<HTMLElement | null>): {
 
     const toggle = useCallback(() => {
         if (document.fullscreenElement) {
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises
             document.exitFullscreen();
             return;
         }
 
         // Browsers reject this outside a user gesture; the caller is a click handler.
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         targetRef.current?.requestFullscreen();
     }, [targetRef]);
 

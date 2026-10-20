@@ -24,7 +24,6 @@ function makeStoreWithLocale(locale: string | undefined) {
 }
 
 function wrapper(store: ReturnType<typeof makeStoreWithLocale>) {
-    // eslint-disable-next-line react/display-name
     return ({children}: {children: React.ReactNode}) =>
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         React.createElement(Provider, {store} as any, children);

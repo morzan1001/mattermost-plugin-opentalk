@@ -154,7 +154,6 @@ async function tearDownActiveConference(): Promise<void> {
 }
 
 function readLocalMediaState(store: AnyStore): LocalMediaState {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const session = store.getState()?.[PLUGIN_STATE_KEY]?.session ?? {};
     return {mic: session.micEnabled === true, cam: session.camEnabled === true};
 }
@@ -579,7 +578,6 @@ export async function endActiveMeeting(): Promise<void> {
         await leaveActiveConference();
         return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const channelID: string | undefined = store.getState()?.[PLUGIN_STATE_KEY]?.session?.channelID;
 
     // Kick everyone on the OpenTalk side first. Best-effort: never block teardown.

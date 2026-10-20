@@ -146,7 +146,6 @@ const IncomingCallModal: React.FC = () => {
         const remaining = INCOMING_CALL_FRESHNESS_MS - (Date.now() - call.receivedAt);
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setBarTransition('none');
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setBarWidth(100);
         if (remaining <= 0) {
             dispatch(incomingCallCleared({channelID: call.channelID}));

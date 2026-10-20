@@ -1,4 +1,3 @@
-// eslint-disable-next-line import/order
 import {createStore} from 'redux';
 
 // ── shared registry for mock instances ───────────────────────────────────
@@ -20,7 +19,6 @@ jest.mock('./controller.test.helpers', () => {
 
 // ── mock: ./client ────────────────────────────────────────────────────────
 jest.mock('./client', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const helpers = require('./controller.test.helpers');
 
     // Minimal EventEmitter built entirely inside the factory.
@@ -73,7 +71,6 @@ jest.mock('./client', () => {
 
 // ── mock: ./livekit/room ──────────────────────────────────────────────────
 jest.mock('./livekit/room', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const helpers = require('./controller.test.helpers');
 
     class MockLiveKitRoom {
@@ -172,7 +169,7 @@ import {
     resetHand,
     grantScreenShare,
     revokeScreenShare,
-    _reset, // eslint-disable-line no-underscore-dangle
+    _reset,
 } from './controller';
 import {isElectron, getDesktopSources, captureDesktopStream} from './livekit/desktop_capturer';
 import {pickScreenSource} from './livekit/screen_picker';
@@ -181,7 +178,6 @@ import {JoinCancelledError} from './signaling/conference_room';
 
 import {sessionReducer, setCamEnabled} from '../store/slice_session';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const helpers = require('./controller.test.helpers');
 
 // ── convenience accessors ─────────────────────────────────────────────────
@@ -253,7 +249,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-    _reset(); // eslint-disable-line no-underscore-dangle
+    _reset();
     helpers.reg.client = null;
     helpers.reg.lk = null;
     helpers.reg.livekitConnectError = null;
@@ -472,7 +468,6 @@ describe('"error" client event', () => {
         const store = makeTestStore();
         let rejectConnect!: (e: Error) => void;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => new Promise((_resolve, reject) => {
             rejectConnect = reject;
         });
@@ -531,7 +526,6 @@ describe('classified drop notices', () => {
     it('defers a close during the join to the connect rejection path', async () => {
         let rejectConnect!: (e: Error) => void;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => new Promise((_resolve, reject) => {
             rejectConnect = reject;
         });
@@ -612,7 +606,6 @@ describe('auto rejoin', () => {
         await connectActive();
         let failures = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             return Promise.reject(new Error('server down'));
@@ -640,7 +633,6 @@ describe('auto rejoin', () => {
         await connectActive();
         let failures = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             return Promise.reject(new Error('server down'));
@@ -667,7 +659,6 @@ describe('auto rejoin', () => {
         await connectActive();
         let failures = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             return Promise.reject(new Error('server down'));
@@ -695,7 +686,6 @@ describe('auto rejoin', () => {
         await connectActive();
         let failures = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             return Promise.reject(new Error('server down'));
@@ -764,7 +754,6 @@ describe('auto rejoin', () => {
         const droppedLk = lkRoom();
         let joins = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             joins += 1;
             return Promise.resolve();
@@ -784,7 +773,6 @@ describe('auto rejoin', () => {
         let failures = 0;
         const attemptSink: {reject?: (err: Error) => void} = {};
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             if (failures === 1) {
@@ -817,7 +805,6 @@ describe('auto rejoin', () => {
         dispatched = [];
         let failures = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             return Promise.reject(new Error('server down'));
@@ -847,7 +834,6 @@ describe('auto rejoin', () => {
         let failures = 0;
         const attemptSink: {reject?: (err: Error) => void} = {};
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             if (failures === 1) {
@@ -890,7 +876,6 @@ describe('auto rejoin', () => {
         let failures = 0;
         const attemptSink: {reject?: (err: Error) => void} = {};
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             if (failures === 1) {
@@ -910,7 +895,7 @@ describe('auto rejoin', () => {
         expect(failures).toBe(2);
 
         // The user joins another meeting while attempt 2 is still connecting.
-        helpers.reg.clientConnectFactory = (): Promise<void> => Promise.resolve(); // eslint-disable-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => Promise.resolve();
         startConferenceConnection('room-2', 'ch-2', 'Bob', store);
         await flush();
 

@@ -350,7 +350,6 @@ export class ConferenceRoom {
                 // Only fatal before the join completes -- a moderation/control
                 // error mid-call (e.g. a rejected kick) must not tear down a
                 // live session.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const failIfConnecting = (msg: string) => {
                     if (this.state !== 'connected') {
                         this.emit('error', new Error(msg));

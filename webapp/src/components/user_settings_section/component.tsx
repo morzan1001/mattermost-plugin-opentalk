@@ -63,7 +63,6 @@ export const OpenTalkSettingsSection: React.FC = () => {
                 console.warn('[opentalk] enumerateDevices failed:', e);
             }
         };
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         refresh();
         return () => {
             cancelled = true;
