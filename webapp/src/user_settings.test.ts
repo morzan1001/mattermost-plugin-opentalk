@@ -5,9 +5,6 @@ jest.mock('./client/rest', () => ({
 jest.mock('./components/user_settings_section/component', () => ({
     OpenTalkSettingsSection: () => null,
 }));
-jest.mock('./conference/livekit/devices', () => ({
-    initDeviceCache: jest.fn(),
-}));
 
 import {setRingtonePref} from './client/rest';
 import {OpenTalkSettingsSection} from './components/user_settings_section/component';
