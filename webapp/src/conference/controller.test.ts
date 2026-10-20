@@ -124,6 +124,7 @@ jest.mock('../client/rest', () => ({
     ...jest.requireActual('../client/rest'),
     getOrCreateDeviceSecret: jest.fn().mockReturnValue('device-secret-xyz'),
     heartbeat: jest.fn().mockResolvedValue(undefined),
+    endMeeting: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('./livekit/desktop_capturer', () => ({
@@ -176,6 +177,7 @@ import {pickScreenSource} from './livekit/screen_picker';
 import * as trackRegistryMock from './livekit/track_registry';
 import {JoinCancelledError} from './signaling/conference_room';
 
+import {endMeeting} from '../client/rest';
 import {sessionReducer, setCamEnabled} from '../store/slice_session';
 
 const helpers = require('./controller.test.helpers');
@@ -1125,43 +1127,20 @@ describe('leaveActiveConference', () => {
 });
 
 describe('endActiveMeeting', () => {
-    it('calls leaveActiveConference then POSTs /api/v1/meetings/end', async () => {
+    it('leaves, then ends the meeting of the session channel', async () => {
         const store = makeTestStore('ch-end');
         setActiveStore(store);
 
         startConferenceConnection('room-1', 'ch-end', 'Alice', store);
         await Promise.resolve();
         c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: false});
+        const clientRef = c();
 
-        mockFetch.mockResolvedValue({ok: true});
         await endActiveMeeting();
 
-        const endCall = mockFetch.mock.calls.find(
-            ([url]: [string]) => String(url).includes('/api/v1/meetings/end'),
-        );
-        expect(endCall).toBeDefined();
-        expect(endCall![1].method).toBe('POST');
-    });
-
-    it('sends the MMCSRF cookie as X-CSRF-Token with the end call', async () => {
-        const store = makeTestStore('ch-end');
-        setActiveStore(store);
-        startConferenceConnection('room-1', 'ch-end', 'Alice', store);
-        await Promise.resolve();
-        c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: true});
-        mockFetch.mockResolvedValue({ok: true});
-        document.cookie = 'MMCSRF=csrf-token';
-
-        try {
-            await endActiveMeeting();
-        } finally {
-            document.cookie = 'MMCSRF=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-        }
-
-        const endCall = mockFetch.mock.calls.find(
-            ([url]: [string]) => String(url).includes('/api/v1/meetings/end'),
-        );
-        expect(endCall![1].headers['X-CSRF-Token']).toBe('csrf-token');
+        expect(endMeeting).toHaveBeenCalledTimes(1);
+        expect(endMeeting).toHaveBeenCalledWith('ch-end');
+        expect(clientRef.leave.mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(endMeeting).mock.invocationCallOrder[0]);
     });
 
     it('surfaces a notice and still leaves when the end REST call fails', async () => {
@@ -1173,7 +1152,7 @@ describe('endActiveMeeting', () => {
         c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: true});
 
         const clientRef = c();
-        mockFetch.mockResolvedValue({ok: false, status: 403, json: async () => ({})});
+        jest.mocked(endMeeting).mockRejectedValueOnce(new Error('endMeeting failed: 403'));
         dispatched = [];
 
         await endActiveMeeting();

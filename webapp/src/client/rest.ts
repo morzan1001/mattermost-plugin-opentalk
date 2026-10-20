@@ -123,6 +123,21 @@ export async function heartbeat(channelID: string): Promise<void> {
     }
 }
 
+export async function endMeeting(channelID: string): Promise<void> {
+    const r = await fetch(pluginURL('/api/v1/meetings/end'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...csrfHeaders(),
+        },
+        credentials: 'include',
+        body: JSON.stringify({channel_id: channelID}),
+    });
+    if (!r.ok) {
+        throw new Error(`endMeeting failed: ${r.status}`);
+    }
+}
+
 export async function dismissIncomingCall(channelID: string, roomID: string): Promise<void> {
     const r = await fetch(pluginURL('/api/v1/meetings/dismiss'), {
         method: 'POST',

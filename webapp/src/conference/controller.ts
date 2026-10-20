@@ -10,7 +10,7 @@ import {JoinCancelledError} from './signaling/conference_room';
 import type {Participant} from './signaling/modules/core';
 import {clearOpenTalkStatus, setOpenTalkStatus} from './status';
 
-import {csrfHeaders, getOrCreateDeviceSecret, heartbeat} from '../client/rest';
+import {endMeeting, getOrCreateDeviceSecret, heartbeat} from '../client/rest';
 import {noticeSet} from '../store/slice_notice';
 import {
     participantAdded,
@@ -587,18 +587,7 @@ export async function endActiveMeeting(): Promise<void> {
         return;
     }
     try {
-        const res = await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/end', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...csrfHeaders(),
-            },
-            credentials: 'include',
-            body: JSON.stringify({channel_id: channelID}),
-        });
-        if (!res.ok) {
-            throw new Error(`endMeeting failed: ${res.status}`);
-        }
+        await endMeeting(channelID);
     } catch (err) {
         // The server-side meeting stays "in progress" until the reaper; surface
         // it so the user knows the channel is still blocked for a restart.

@@ -1,4 +1,4 @@
-import {createMeeting, dismissIncomingCall, heartbeat, joinMeeting, setRingtonePref} from './rest';
+import {createMeeting, dismissIncomingCall, endMeeting, heartbeat, joinMeeting, setRingtonePref} from './rest';
 
 describe('joinMeeting', () => {
     const mockFetch = jest.fn();
@@ -93,6 +93,33 @@ describe('setRingtonePref', () => {
     });
 });
 
+describe('endMeeting', () => {
+    const mockFetch = jest.fn();
+    beforeEach(() => {
+        global.fetch = mockFetch;
+        mockFetch.mockReset();
+    });
+
+    it('POSTs the channel to /api/v1/meetings/end', async () => {
+        mockFetch.mockResolvedValue({ok: true});
+
+        await endMeeting('ch-1');
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const [url, init] = mockFetch.mock.calls[0];
+        expect(url).toBe('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/end');
+        expect(init.method).toBe('POST');
+        expect(init.credentials).toBe('include');
+        expect(init.headers['Content-Type']).toBe('application/json');
+        expect(JSON.parse(init.body)).toEqual({channel_id: 'ch-1'});
+    });
+
+    it('throws on non-ok responses', async () => {
+        mockFetch.mockResolvedValue({ok: false, status: 403});
+        await expect(endMeeting('ch-1')).rejects.toThrow('endMeeting failed: 403');
+    });
+});
+
 describe('state-changing requests', () => {
     const mockFetch = jest.fn();
     beforeEach(() => {
@@ -111,6 +138,7 @@ describe('state-changing requests', () => {
         ['joinMeeting', () => joinMeeting('room-1', 'ch-1', 'dev')],
         ['heartbeat', () => heartbeat('ch-1')],
         ['dismissIncomingCall', () => dismissIncomingCall('ch-1', 'room-1')],
+        ['endMeeting', () => endMeeting('ch-1')],
         ['setRingtonePref', () => setRingtonePref(true)],
     ])('%s sends the MMCSRF cookie as X-CSRF-Token', async (_name, call) => {
         document.cookie = 'MMUSERID=user-1';
