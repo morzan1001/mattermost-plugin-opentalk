@@ -88,6 +88,16 @@ interface RingSettingChangedMessage {
     };
 }
 
+// Only the copy addressed to the removed user (broadcast.user_id) carries data.channel_id.
+interface UserRemovedMessage {
+    data: {
+        channel_id?: string;
+    };
+    broadcast: {
+        user_id: string;
+    };
+}
+
 export default class Plugin {
     public initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): void {
         // Pin the redux store so toggle handlers can dispatch without React-
@@ -228,19 +238,15 @@ export default class Plugin {
         );
         registerOpenTalkUserSettings(registry);
 
-        // Leave the local call when the current user is removed from the
-        // meeting's channel, so a kicked/removed user is not left in a ghost
-        // session in a channel they can no longer access.
+        // A user removed from the meeting's channel must not stay in a ghost session.
         registry.registerWebSocketEventHandler(
             'user_removed',
-            (msg: {data?: {channel_id?: string; user_id?: string}}) => {
+            (msg: UserRemovedMessage) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const s: any = store.getState();
                 const myId = s?.entities?.users?.currentUserId;
-                const removedUserId = msg?.data?.user_id;
-                const channelID = msg?.data?.channel_id;
                 const session = s?.[PLUGIN_STATE_KEY]?.session;
-                if (removedUserId === myId && session?.status !== 'idle' && session?.channelID === channelID) {
+                if (msg.broadcast.user_id === myId && session?.status !== 'idle' && session?.channelID === msg.data.channel_id) {
                     leaveActiveConference();
                 }
             },

@@ -4,7 +4,13 @@ jest.mock('./client/rest', () => ({
     setRingtonePref: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('./conference/controller', () => ({
+    ...jest.requireActual('./conference/controller'),
+    leaveActiveConference: jest.fn(() => Promise.resolve()),
+}));
+
 import {getConnectionStatus, setRingtonePref} from './client/rest';
+import {leaveActiveConference} from './conference/controller';
 import manifest from './manifest';
 import Plugin from './plugin';
 import type {PluginRegistry} from './types/mattermost-webapp';
@@ -152,6 +158,70 @@ describe('Plugin', () => {
         // A ring for another channel still comes through.
         handler(foreignCallMsg({channel_id: 'ch-2', room_id: 'room-2'}));
         expect(dispatchedReceived(s.dispatch)).toHaveLength(1);
+    });
+
+    describe('user_removed ws handler', () => {
+        function userRemovedHandler(s: ReturnType<typeof setup>) {
+            s.plugin.initialize(s.registry, s.store);
+            const handler = s.registerWebSocketEventHandler.mock.calls.find(
+                ([event]: [string]) => event === 'user_removed',
+            )?.[1];
+            expect(handler).toBeDefined();
+            return handler;
+        }
+
+        function inMeeting(s: ReturnType<typeof setup>) {
+            (s.store.getState as jest.Mock).mockReturnValue(
+                stateWith({[PLUGIN_STATE_KEY]: {session: {status: 'connected', channelID: 'ch-1'}}}),
+            );
+        }
+
+        beforeEach(() => {
+            (getConnectionStatus as jest.Mock).mockResolvedValue({connected: false});
+            (leaveActiveConference as jest.Mock).mockClear();
+        });
+
+        it('leaves the meeting when the current user is removed from its channel', () => {
+            const s = setup();
+            inMeeting(s);
+            const handler = userRemovedHandler(s);
+
+            handler({
+                event: 'user_removed',
+                data: {channel_id: 'ch-1', remover_id: 'admin'},
+                broadcast: {omit_users: null, user_id: 'me', channel_id: '', team_id: ''},
+            });
+
+            expect(leaveActiveConference).toHaveBeenCalledTimes(1);
+        });
+
+        it('stays when the current user is removed from another channel', () => {
+            const s = setup();
+            inMeeting(s);
+            const handler = userRemovedHandler(s);
+
+            handler({
+                event: 'user_removed',
+                data: {channel_id: 'ch-2', remover_id: 'admin'},
+                broadcast: {omit_users: null, user_id: 'me', channel_id: '', team_id: ''},
+            });
+
+            expect(leaveActiveConference).not.toHaveBeenCalled();
+        });
+
+        it('stays when another member is removed from the meeting channel', () => {
+            const s = setup();
+            inMeeting(s);
+            const handler = userRemovedHandler(s);
+
+            handler({
+                event: 'user_removed',
+                data: {user_id: 'someone-else', remover_id: 'admin'},
+                broadcast: {omit_users: null, user_id: '', channel_id: 'ch-1', team_id: ''},
+            });
+
+            expect(leaveActiveConference).not.toHaveBeenCalled();
+        });
     });
 
     function wsHandler(s: ReturnType<typeof setup>, eventName: string) {
