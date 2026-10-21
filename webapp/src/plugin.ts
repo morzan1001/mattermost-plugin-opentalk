@@ -301,6 +301,6 @@ export default class Plugin {
     public uninitialize(): void {
         leaveActiveConference();
         disposeDeviceCache();
-        Reflect.deleteProperty(window, 'opentalk');
+        delete window.opentalk;
     }
 }
