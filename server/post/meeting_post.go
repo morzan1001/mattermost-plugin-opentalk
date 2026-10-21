@@ -112,7 +112,7 @@ func BuildMeetingPost(am *store.ActiveMeeting, frontendURL, hostUsername, hostDi
 
 // buildStartedAttachment returns the Slack-style card for the initial meeting post.
 // hostDisplayName is used here because attachments are visual fallbacks (mattermost-mobile).
-func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostDisplayName, locale string, isDM bool) []*model.SlackAttachment {
+func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostDisplayName, locale string, isDM bool) []*model.MessageAttachment {
 	inviteURL := fmt.Sprintf("%s/invite/%s", frontendURL, am.InviteCode)
 	startedAt := am.CreatedAt
 
@@ -183,7 +183,7 @@ func buildStartedAttachment(am *store.ActiveMeeting, frontendURL, hostDisplayNam
 		})
 	}
 
-	return []*model.SlackAttachment{{
+	return []*model.MessageAttachment{{
 		Title:   title,
 		Text:    body,
 		Color:   "#00B59C",
@@ -238,7 +238,7 @@ func rebuildAttachmentForStatus(p *model.Post, status string, when time.Time, du
 				EN: fmt.Sprintf("Ended %s, duration %s.", formatRelativeAge(when, locale), formatDuration(durationSeconds)),
 			})
 		}
-		p.AddProp("attachments", []*model.SlackAttachment{{
+		p.AddProp("attachments", []*model.MessageAttachment{{
 			Title: i18n.T(locale, i18n.Translatable{DE: "OpenTalk-Meeting (beendet)", EN: "OpenTalk meeting (ended)"}),
 			Text:  text,
 			Color: "#9e9e9e",
@@ -246,7 +246,7 @@ func rebuildAttachmentForStatus(p *model.Post, status string, when time.Time, du
 		return
 	}
 
-	p.AddProp("attachments", []*model.SlackAttachment{{
+	p.AddProp("attachments", []*model.MessageAttachment{{
 		Title: i18n.T(locale, i18n.Translatable{DE: "OpenTalk-Meeting (verpasst)", EN: "OpenTalk meeting (missed)"}),
 		Text:  i18n.T(locale, i18n.Translatable{DE: fmt.Sprintf("Verpasster Anruf von %s.", hostName), EN: fmt.Sprintf("Missed call from %s.", hostName)}),
 		Color: "#9e9e9e",

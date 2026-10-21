@@ -1,5 +1,4 @@
 import {render, screen, fireEvent, act} from '@testing-library/react';
-import React from 'react';
 import {Provider} from 'react-redux';
 import {createStore} from 'redux';
 
@@ -278,6 +277,31 @@ describe('IncomingCallModal', () => {
         expect((screen.getByRole('button', {name: 'Decline'}) as HTMLButtonElement).disabled).toBe(false);
 
         warnSpy.mockRestore();
+    });
+
+    it('enables the buttons for the next ring while an earlier decline is still in flight', async () => {
+        (dismissIncomingCall as jest.Mock).mockReturnValue(new Promise(() => {}));
+        const store = makeStore(
+            {status: 'idle'},
+            {byChannelID: {'ch-1': makeCall()}},
+        );
+        renderModal(store);
+
+        await act(async () => {
+            fireEvent.click(screen.getByText('Decline'));
+        });
+        act(() => {
+            store.dispatch(incomingCallReceived(makeCall({
+                channelID: 'ch-2',
+                roomID: 'room-2',
+                hostUserID: 'host-user-2',
+                hostName: 'Bob Fields',
+            })));
+        });
+
+        expect(screen.getByText('Bob Fields is calling')).toBeInTheDocument();
+        expect((screen.getByRole('button', {name: 'Accept'}) as HTMLButtonElement).disabled).toBe(false);
+        expect((screen.getByRole('button', {name: 'Decline'}) as HTMLButtonElement).disabled).toBe(false);
     });
 
     it('Decline calls dismissIncomingCall with (channelID, roomID), dispatches incomingCallDismissed then incomingCallCleared', async () => {

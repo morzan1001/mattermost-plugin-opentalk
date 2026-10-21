@@ -12,11 +12,11 @@ import (
 
 func TestCreateInvite_PostsAndParses(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
-		require.Equal(t, "/v1/rooms/room-1/invites", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/rooms/room-1/invites", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
             "invite_code":"inv-uuid-1",
             "room_id":"room-1",
             "active":true,

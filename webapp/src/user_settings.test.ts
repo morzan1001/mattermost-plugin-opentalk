@@ -5,9 +5,6 @@ jest.mock('./client/rest', () => ({
 jest.mock('./components/user_settings_section/component', () => ({
     OpenTalkSettingsSection: () => null,
 }));
-jest.mock('./conference/livekit/devices', () => ({
-    initDeviceCache: jest.fn(),
-}));
 
 import {setRingtonePref} from './client/rest';
 import {OpenTalkSettingsSection} from './components/user_settings_section/component';
@@ -35,11 +32,6 @@ describe('registerOpenTalkUserSettings', () => {
         expect(arg.sections).toHaveLength(1);
         expect(arg.sections[0].component).toBe(OpenTalkSettingsSection);
         expect(arg.sections[0].settings).toBeUndefined();
-    });
-
-    it('is a no-op when registerUserSettings is absent', () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        expect(() => registerOpenTalkUserSettings({} as any)).not.toThrow();
     });
 });
 

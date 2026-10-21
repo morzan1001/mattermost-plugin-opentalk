@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/crypto"
+	"github.com/morzan1001/mattermost-plugin-opentalk/server/post"
 	"github.com/morzan1001/mattermost-plugin-opentalk/server/store"
 )
 
@@ -67,6 +68,36 @@ func TestPlugin_OnDeactivate(t *testing.T) {
 		p := &Plugin{}
 		err := p.OnDeactivate()
 		assert.NoError(t, err)
+	})
+}
+
+func TestPlugin_NotificationWillBePushed(t *testing.T) {
+	// The bare mock fails the test on any API call, so the hook must decide on the push alone.
+	newPlugin := func() *Plugin {
+		p := &Plugin{}
+		p.SetAPI(&plugintest.API{})
+		return p
+	}
+
+	t.Run("rejects the standard push for the meeting post", func(t *testing.T) {
+		push := &model.PushNotification{PostId: "post-1", PostType: post.MeetingPostType, SenderId: "bot-user-id"}
+		replacement, reason := newPlugin().NotificationWillBePushed(push, "user-1")
+		assert.Nil(t, replacement)
+		assert.NotEmpty(t, reason)
+	})
+
+	t.Run("allows pushes for other posts unmodified", func(t *testing.T) {
+		push := &model.PushNotification{PostId: "post-2", PostType: model.PostTypeDefault}
+		replacement, reason := newPlugin().NotificationWillBePushed(push, "user-1")
+		assert.Nil(t, replacement)
+		assert.Empty(t, reason)
+	})
+
+	t.Run("allows the plugin's own call push unmodified", func(t *testing.T) {
+		push := &model.PushNotification{ChannelId: "channel-1", SenderId: "bot-user-id", Message: "Incoming call from Alice"}
+		replacement, reason := newPlugin().NotificationWillBePushed(push, "user-1")
+		assert.Nil(t, replacement)
+		assert.Empty(t, reason)
 	})
 }
 

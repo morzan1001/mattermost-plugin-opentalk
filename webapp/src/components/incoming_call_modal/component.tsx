@@ -1,4 +1,5 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import type React from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {useDispatch, useSelector, useStore} from 'react-redux';
 
 import {dismissIncomingCall} from '../../client/rest';
@@ -75,18 +76,15 @@ const IncomingCallModal: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isShowingCall]);
 
-    useEffect(() => {
-        setAvatarError(false);
-    }, [call?.hostUserID]);
-
-    // Persistent root component: busy/avatarError carry over between mounts
-    // of the same component instance. Reset them whenever a fresh call lands
-    // or the modal hides, otherwise the Accept/Decline buttons stay disabled
-    // for the next ring after the user accepted an earlier one.
-    useEffect(() => {
+    // Persistent root component: reset per-call state when a different call
+    // shows or the modal hides, or the next ring inherits disabled buttons.
+    const shownCallKey = isShowingCall ? `${call.channelID}:${call.roomID}:${call.hostUserID}` : null;
+    const [prevShownCallKey, setPrevShownCallKey] = useState(shownCallKey);
+    if (shownCallKey !== prevShownCallKey) {
+        setPrevShownCallKey(shownCallKey);
         setBusy(false);
         setAvatarError(false);
-    }, [isShowingCall, call?.channelID, call?.roomID]);
+    }
 
     const onDecline = async () => {
         if (!call) {
@@ -148,7 +146,6 @@ const IncomingCallModal: React.FC = () => {
         const remaining = INCOMING_CALL_FRESHNESS_MS - (Date.now() - call.receivedAt);
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setBarTransition('none');
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setBarWidth(100);
         if (remaining <= 0) {
             dispatch(incomingCallCleared({channelID: call.channelID}));

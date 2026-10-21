@@ -9,6 +9,9 @@ import {
     selectPinnedParticipantId,
     selectScreenSharerId,
     selectChannelDisplayName,
+    selectCurrentUserId,
+    selectCurrentUserLocale,
+    selectOAuthConnected,
     PLUGIN_STATE_KEY,
 } from './selectors';
 
@@ -118,6 +121,34 @@ describe('selectChannelDisplayName', () => {
         const state = {entities: {channels: {channels: {c1: {display_name: 'Team'}}}}};
         expect(selectChannelDisplayName(state, 'c1')).toBe('Team');
         expect(selectChannelDisplayName(state, undefined)).toBeUndefined();
+    });
+});
+
+describe('selectOAuthConnected', () => {
+    it('reads the OpenTalk connection flag', () => {
+        expect(selectOAuthConnected({[PLUGIN_STATE_KEY]: {oauth: {connected: true}}})).toBe(true);
+        expect(selectOAuthConnected({[PLUGIN_STATE_KEY]: {oauth: {connected: false}}})).toBe(false);
+        expect(selectOAuthConnected({})).toBe(false);
+    });
+});
+
+describe('selectCurrentUserId', () => {
+    it('reads the Mattermost current user id', () => {
+        expect(selectCurrentUserId({entities: {users: {currentUserId: 'u1'}}})).toBe('u1');
+        expect(selectCurrentUserId({})).toBeUndefined();
+    });
+});
+
+describe('selectCurrentUserLocale', () => {
+    it("reads the current user's profile locale", () => {
+        const state = {entities: {users: {currentUserId: 'u1', profiles: {u1: {locale: 'de'}, u2: {locale: 'fr'}}}}};
+        expect(selectCurrentUserLocale(state)).toBe('de');
+    });
+
+    it('returns undefined without a current user or profile', () => {
+        expect(selectCurrentUserLocale({entities: {users: {profiles: {u1: {locale: 'de'}}}}})).toBeUndefined();
+        expect(selectCurrentUserLocale({entities: {users: {currentUserId: 'u1', profiles: {}}}})).toBeUndefined();
+        expect(selectCurrentUserLocale(null)).toBeUndefined();
     });
 });
 

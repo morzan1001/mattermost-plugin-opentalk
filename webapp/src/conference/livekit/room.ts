@@ -179,7 +179,6 @@ export class LiveKitRoom {
         // When user stops via OS share-controls, the track ends. Tear down our
         // publication so isScreenShareEnabled() flips back to false.
         videoTrack.addEventListener('ended', () => {
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises
             this.disableScreenShare();
         });
     }

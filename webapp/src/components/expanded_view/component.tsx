@@ -1,4 +1,5 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import type React from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import ReactDOM from 'react-dom';
 import {useDispatch, useSelector} from 'react-redux';
 

@@ -27,9 +27,11 @@ import (
 
 const pluginID = "com.github.morzan1001.mattermost-plugin-opentalk"
 
-const botUsername = "opentalk-bot"
-const botDisplayName = "OpenTalk Bot"
-const botDescription = "Posts about OpenTalk meetings created from Mattermost."
+const (
+	botUsername    = "opentalk-bot"
+	botDisplayName = "OpenTalk Bot"
+	botDescription = "Posts about OpenTalk meetings created from Mattermost."
+)
 
 type Plugin struct {
 	plugin.MattermostPlugin
@@ -181,25 +183,14 @@ func (p *Plugin) endMeetingFromReaper(am *store.ActiveMeeting) {
 	}, &model.WebsocketBroadcast{ChannelId: am.ChannelID})
 }
 
-// NotificationWillBePushed suppresses the standard MM push for our
-// custom_opentalk_meeting bot post -- we already send our own call-flavored
-// push from notifyMeetingStarted. Our own push carries no PostId (identified
-// by that omission, it returns early above); the standard bot-post push
-// carries the post id and its Type, and is the one we cancel here. A
-// SenderId guard cannot separate the two: both are authored by the bot, so
-// both carry SenderId == botUserID and the standard push would slip through.
+// NotificationWillBePushed drops the standard push for the meeting bot post; notifyMeetingStarted's
+// call push has no PostType (SenderId cannot separate them, the bot authors both).
+// A non-nil return counts as a modification, so allowed pushes return nil.
 func (p *Plugin) NotificationWillBePushed(push *model.PushNotification, mmUserID string) (*model.PushNotification, string) {
-	if push == nil || push.PostId == "" {
-		return push, ""
-	}
-	pp, appErr := p.API.GetPost(push.PostId)
-	if appErr != nil || pp == nil {
-		return push, ""
-	}
-	if pp.Type == "custom_opentalk_meeting" {
+	if push != nil && push.PostType == post.MeetingPostType {
 		return nil, "opentalk plugin owns this notification"
 	}
-	return push, ""
+	return nil, ""
 }
 
 // UserHasBeenDeactivated purges the deactivated user's encrypted UserInfo so a
@@ -547,9 +538,7 @@ func (p *Plugin) notifyMeetingStarted(am *store.ActiveMeeting) {
 				EN: "Incoming call",
 			})
 		}
-		// No PostId: the NotificationWillBePushed hook cancels the standard
-		// bot-post push by its post id + Type, and identifies this call push
-		// to keep by the absence of a PostId.
+		// Leave PostType empty: NotificationWillBePushed drops pushes typed as the meeting post.
 		push := &model.PushNotification{
 			Version:     model.PushMessageV2,
 			Type:        model.PushTypeMessage,

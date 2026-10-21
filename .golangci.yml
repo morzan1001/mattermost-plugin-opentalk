@@ -61,4 +61,4 @@ formatters:
           replacement: any
     goimports:
       local-prefixes:
-        - github.com/mattermost/mattermost-plugin-starter-template
+        - github.com/morzan1001/mattermost-plugin-opentalk

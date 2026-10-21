@@ -34,7 +34,7 @@ func mockOIDCServer(t *testing.T, tokenResp ...map[string]any) (*httptest.Server
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"issuer":                                srv.URL,
 				"authorization_endpoint":                srv.URL + "/auth",
 				"token_endpoint":                        srv.URL + "/token",
@@ -45,15 +45,15 @@ func mockOIDCServer(t *testing.T, tokenResp ...map[string]any) (*httptest.Server
 		case "/token":
 			_ = r.ParseForm()
 			*tokenForm = r.PostForm
-			json.NewEncoder(w).Encode(token)
+			_ = json.NewEncoder(w).Encode(token)
 		case "/userinfo":
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"sub":   "kc-sub-1",
 				"email": "alice@example.com",
 				"name":  "Alice Tester",
 			})
 		case "/jwks":
-			json.NewEncoder(w).Encode(map[string]any{"keys": []any{}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"keys": []any{}})
 		default:
 			http.NotFound(w, r)
 		}

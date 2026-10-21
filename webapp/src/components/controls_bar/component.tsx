@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import {useSelector, useDispatch} from 'react-redux';
 
 import {toggleMic, toggleCam, toggleScreenShare, raiseLocalHand, lowerLocalHand, muteAll} from '../../conference/controller';

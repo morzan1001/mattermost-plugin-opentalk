@@ -17,6 +17,7 @@ import ReconnectingBanner from './components/reconnecting_banner/component';
 import ScreenPickerModal from './components/screen_picker_modal/component';
 import SwitchCallModal from './components/switch_call_modal/component';
 import {
+    activeConferenceChannelID,
     setActiveStore,
     toggleMic,
     toggleCam,
@@ -25,7 +26,7 @@ import {
     endActiveMeeting,
     debugState,
 } from './conference/controller';
-import {initDeviceCache} from './conference/livekit/devices';
+import {disposeDeviceCache, initDeviceCache} from './conference/livekit/devices';
 import manifest from './manifest';
 import reducer from './store/reducer';
 import {activeMeetingStarted, activeMeetingEnded} from './store/slice_active_meetings';
@@ -34,7 +35,23 @@ import {setConnected} from './store/slice_oauth';
 import type {PluginRegistry} from './types/mattermost-webapp';
 import {registerOpenTalkUserSettings, readRingtone, writeRingtone, applyRingtoneLocal} from './user_settings';
 import {setModuleLocale, t} from './util/i18n';
-import {PLUGIN_STATE_KEY} from './util/selectors';
+import {selectCurrentUserId, selectCurrentUserLocale, selectSession} from './util/selectors';
+
+declare global {
+    interface Window {
+        opentalk?: {
+            state: typeof debugState;
+            toggleMic: typeof toggleMic;
+            toggleCam: typeof toggleCam;
+            toggleScreenShare: typeof toggleScreenShare;
+            leave: typeof leaveActiveConference;
+            end: typeof endActiveMeeting;
+            ringtone: (enabled: boolean) => boolean;
+            ringtoneStatus: () => boolean;
+            killRing: () => void;
+        };
+    }
+}
 
 const pluginId: string = manifest.id;
 
@@ -88,22 +105,27 @@ interface RingSettingChangedMessage {
     };
 }
 
+// Only the copy addressed to the removed user (broadcast.user_id) carries data.channel_id.
+interface UserRemovedMessage {
+    data: {
+        channel_id?: string;
+    };
+    broadcast: {
+        user_id: string;
+    };
+}
+
 export default class Plugin {
-    public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): Promise<void> {
-        // Pin the redux store so toggle handlers can dispatch without React-
-        // context indirection (useStore() returns null in MM RootComponents).
+    public initialize(registry: PluginRegistry, store: Store<GlobalState, Action>): void {
         setActiveStore(store);
 
         // Initial seed; the hook-based useT() picks up live changes.
-        const state = store.getState() as any;
-        const myId = state?.entities?.users?.currentUserId;
-        setModuleLocale(state?.entities?.users?.profiles?.[myId]?.locale);
+        setModuleLocale(selectCurrentUserLocale(store.getState()));
 
         initDeviceCache();
 
         // Browser-devtools handle: window.opentalk.state() / toggleMic() etc.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).opentalk = {
+        window.opentalk = {
             state: debugState,
             toggleMic,
             toggleCam,
@@ -127,27 +149,25 @@ export default class Plugin {
             },
         };
 
-        registry.registerReducer?.(reducer);
-        registry.registerWebSocketEventHandler?.(
+        registry.registerReducer(reducer);
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_user_connected_state`,
             (msg: ConnectedStateMessage) => {
                 store.dispatch(setConnected(msg.data.connected === true, msg.data.email));
             },
         );
 
-        registry.registerWebSocketEventHandler?.(
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_meeting_ended`,
             (msg: MeetingEndedMessage) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const session: any = (store.getState() as any)?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk']?.session;
-                if (session?.status !== 'idle' && session?.channelID === msg.data.channel_id) {
+                if (activeConferenceChannelID() === msg.data.channel_id) {
                     leaveActiveConference();
                 }
                 store.dispatch(incomingCallCleared({channelID: msg.data.channel_id}));
                 store.dispatch(activeMeetingEnded({channelID: msg.data.channel_id}));
             },
         );
-        registry.registerWebSocketEventHandler?.(
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_meeting_started`,
             (msg: MeetingStartedMessage) => {
                 store.dispatch(activeMeetingStarted({
@@ -160,20 +180,18 @@ export default class Plugin {
                 }));
             },
         );
-        registry.registerWebSocketEventHandler?.(
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_incoming_call`,
             (msg: IncomingCallMessage) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const myId: string | undefined = (store.getState() as any)?.entities?.users?.currentUserId;
+                const myId = selectCurrentUserId(store.getState());
 
                 const ownCall = Boolean(myId && msg.data.host_user_id === myId);
 
                 // Re-ring for the channel this session is already connected to:
                 // the SwitchCallModal would surface and its Cancel would flip
                 // the live meeting to MISSED. Never ring for your own live call.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const ownSession: any = (store.getState() as any)?.['plugins-com.github.morzan1001.mattermost-plugin-opentalk']?.session;
-                const alreadyHere = ownSession?.status !== 'idle' && ownSession?.channelID === msg.data.channel_id;
+                const ownSession = selectSession(store.getState());
+                const alreadyHere = ownSession.status !== 'idle' && ownSession.channelID === msg.data.channel_id;
 
                 // Verbose-level only; visible when devtools is set to Verbose.
                 // eslint-disable-next-line no-console
@@ -203,12 +221,10 @@ export default class Plugin {
         // Server-side ringtone changes (/opentalk ring on|off, other tabs)
         // arrive here as authoritative echoes; applying them locally must not
         // POST again or the broadcast would loop forever.
-        registry.registerWebSocketEventHandler?.(
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_ring_setting_changed`,
             (msg: RingSettingChangedMessage) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const myId = (store.getState() as any)?.entities?.users?.currentUserId;
-                if (msg.data.mm_user_id !== myId) {
+                if (msg.data.mm_user_id !== selectCurrentUserId(store.getState())) {
                     return;
                 }
                 applyRingtoneLocal(msg.data.enabled);
@@ -216,49 +232,39 @@ export default class Plugin {
         );
 
         // Sync dismissals across tabs of the same user.
-        registry.registerWebSocketEventHandler?.(
+        registry.registerWebSocketEventHandler(
             `custom_${pluginId}_incoming_call_dismissed`,
             (msg: IncomingCallDismissedMessage) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const myId = (store.getState() as any)?.entities?.users?.currentUserId;
-                if (msg.data.mm_user_id === myId) {
+                if (msg.data.mm_user_id === selectCurrentUserId(store.getState())) {
                     store.dispatch(incomingCallCleared({channelID: msg.data.channel_id}));
                 }
             },
         );
         registerOpenTalkUserSettings(registry);
 
-        // Leave the local call when the current user is removed from the
-        // meeting's channel, so a kicked/removed user is not left in a ghost
-        // session in a channel they can no longer access.
-        registry.registerWebSocketEventHandler?.(
+        // A user removed from the meeting's channel must not stay in a ghost session.
+        registry.registerWebSocketEventHandler(
             'user_removed',
-            (msg: {data?: {channel_id?: string; user_id?: string}}) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const s: any = store.getState();
-                const myId = s?.entities?.users?.currentUserId;
-                const removedUserId = msg?.data?.user_id;
-                const channelID = msg?.data?.channel_id;
-                const session = s?.[PLUGIN_STATE_KEY]?.session;
-                if (removedUserId === myId && session?.status !== 'idle' && session?.channelID === channelID) {
+            (msg: UserRemovedMessage) => {
+                if (msg.broadcast.user_id === selectCurrentUserId(store.getState()) && activeConferenceChannelID() === msg.data.channel_id) {
                     leaveActiveConference();
                 }
             },
         );
 
-        registry.registerPostTypeComponent?.('custom_opentalk_meeting', PostTypeMeeting);
-        registry.registerRootComponent?.(MeetingMiniBar);
-        registry.registerRootComponent?.(AudioRenderer);
-        registry.registerRootComponent?.(ExpandedView);
-        registry.registerRootComponent?.(IncomingCallModal);
-        registry.registerRootComponent?.(SwitchCallModal);
-        registry.registerRootComponent?.(ChannelCallToast);
-        registry.registerRootComponent?.(ReconnectingBanner);
-        registry.registerRootComponent?.(ScreenPickerModal);
-        registry.registerRootComponent?.(NoticeBanner);
+        registry.registerPostTypeComponent('custom_opentalk_meeting', PostTypeMeeting);
+        registry.registerRootComponent(MeetingMiniBar);
+        registry.registerRootComponent(AudioRenderer);
+        registry.registerRootComponent(ExpandedView);
+        registry.registerRootComponent(IncomingCallModal);
+        registry.registerRootComponent(SwitchCallModal);
+        registry.registerRootComponent(ChannelCallToast);
+        registry.registerRootComponent(ReconnectingBanner);
+        registry.registerRootComponent(ScreenPickerModal);
+        registry.registerRootComponent(NoticeBanner);
 
         const headerIcon = React.createElement(OpenTalkIcon);
-        registry.registerChannelHeaderButtonAction?.(
+        registry.registerChannelHeaderButtonAction(
             headerIcon,
             startMeetingAction(store),
             'OpenTalk',
@@ -281,16 +287,20 @@ export default class Plugin {
                 // Non-fatal: the header button falls back to "please connect first".
             }
         };
-        registry.registerReconnectHandler?.(() => {
+        registry.registerReconnectHandler(() => {
             seedConnectionStatus();
         });
 
         // Seed OAuth state immediately on load — the WS broadcast only delivers
-        // state changes, not the current snapshot on page load.
-        await seedConnectionStatus();
+        // state changes, not the current snapshot on page load. Not awaited:
+        // Mattermost holds its first render until every plugin's initialize settles.
+        seedConnectionStatus();
     }
 
+    // Mattermost unmounts our components on disable, upgrade or failed init, but module state such as a live call survives.
     public uninitialize(): void {
-        // no-op
+        leaveActiveConference();
+        disposeDeviceCache();
+        delete window.opentalk;
     }
 }

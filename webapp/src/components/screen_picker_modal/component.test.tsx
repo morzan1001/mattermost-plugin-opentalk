@@ -1,13 +1,19 @@
 import {render, screen, fireEvent, act} from '@testing-library/react';
-import React from 'react';
 import {Provider} from 'react-redux';
 import {createStore} from 'redux';
 
+import ScreenPickerModal from './component';
+
+import type {DesktopSource} from '../../conference/livekit/desktop_capturer';
+
+type PickerState = {open: boolean; sources: DesktopSource[]};
+type PickerMock = {resolveScreenPicker: jest.Mock; fireState: (state: PickerState) => void};
+
 // The screen_picker module uses module-level singletons. Reset between tests.
 jest.mock('../../conference/livekit/screen_picker', () => {
-    let mockCb: ((state: {open: boolean; sources: any[]}) => void) | null = null;
+    let mockCb: ((state: PickerState) => void) | null = null;
     return {
-        subscribeScreenPicker: jest.fn((listener: (state: {open: boolean; sources: any[]}) => void) => {
+        subscribeScreenPicker: jest.fn((listener: (state: PickerState) => void) => {
             mockCb = listener;
 
             // Immediately call with closed state, matching real behaviour.
@@ -19,7 +25,7 @@ jest.mock('../../conference/livekit/screen_picker', () => {
         resolveScreenPicker: jest.fn(),
 
         // Helper exposed only in tests to push state changes.
-        __fireState: (state: {open: boolean; sources: any[]}) => {
+        fireState: (state: PickerState) => {
             if (mockCb) {
                 mockCb(state);
             }
@@ -27,11 +33,8 @@ jest.mock('../../conference/livekit/screen_picker', () => {
     };
 });
 
-import ScreenPickerModal from './component';
-
-// Use requireMock to access the full mock including __fireState helper.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockPicker: any = jest.requireMock('../../conference/livekit/screen_picker');
+// Use requireMock to access the full mock including fireState helper.
+const mockPicker = jest.requireMock<PickerMock>('../../conference/livekit/screen_picker');
 
 function makeStore() {
     return createStore(() => ({
@@ -66,7 +69,7 @@ describe('ScreenPickerModal', () => {
     it('renders tiles when subscriber state opens with sources', () => {
         renderModal();
         act(() => {
-            mockPicker.__fireState({
+            mockPicker.fireState({
                 open: true,
                 sources: [
                     {id: 'screen:0:0', name: 'Entire Screen', thumbnailURL: ''},
@@ -83,7 +86,7 @@ describe('ScreenPickerModal', () => {
     it('clicking a tile calls resolveScreenPicker with the source id', () => {
         renderModal();
         act(() => {
-            mockPicker.__fireState({
+            mockPicker.fireState({
                 open: true,
                 sources: [{id: 'screen:0:0', name: 'Screen', thumbnailURL: ''}],
             });
@@ -96,7 +99,7 @@ describe('ScreenPickerModal', () => {
     it('pressing ESC calls resolveScreenPicker(null)', () => {
         renderModal();
         act(() => {
-            mockPicker.__fireState({
+            mockPicker.fireState({
                 open: true,
                 sources: [{id: 'screen:0:0', name: 'Screen', thumbnailURL: ''}],
             });

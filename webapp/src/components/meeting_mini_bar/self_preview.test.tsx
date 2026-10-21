@@ -1,5 +1,4 @@
 import {render, screen} from '@testing-library/react';
-import React from 'react';
 import {Provider} from 'react-redux';
 import {createStore} from 'redux';
 
@@ -14,7 +13,6 @@ const mockDetach = jest.fn();
 let mockGetImpl: (id: string) => unknown = (id) => ({attach: mockAttach, detach: mockDetach, sid: id});
 
 jest.mock('../../conference/livekit/track_registry', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const {makeTrackRegistryMock} = require('../../test/track_registry_mock');
     return makeTrackRegistryMock((id: string) => mockGetImpl(id));
 });

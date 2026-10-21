@@ -25,20 +25,27 @@ async function refresh(): Promise<void> {
     }
 }
 
+function onDeviceChange(): void {
+    refresh();
+}
+
 /** Initialize the device cache. Idempotent. Call once at plugin init. */
 export function initDeviceCache(): void {
     if (listenerInstalled) {
         return;
     }
     listenerInstalled = true;
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
     refresh();
     if (typeof navigator !== 'undefined' && navigator.mediaDevices?.addEventListener) {
-        navigator.mediaDevices.addEventListener('devicechange', () => {
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises
-            refresh();
-        });
+        navigator.mediaDevices.addEventListener('devicechange', onDeviceChange);
     }
+}
+
+export function disposeDeviceCache(): void {
+    navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange);
+    cachedAudio = [];
+    cachedVideo = [];
+    listenerInstalled = false;
 }
 
 export function getAudioDevices(): MediaDevice[] {
@@ -88,12 +95,4 @@ export function getMuteOnJoin(): boolean {
 }
 export function setMuteOnJoin(value: boolean): void {
     writeSetting(MUTE_ON_JOIN_KEY, value ? 'true' : 'false');
-}
-
-/** Test-only helper: reset module state. */
-// eslint-disable-next-line no-underscore-dangle, @typescript-eslint/naming-convention
-export function _resetDeviceCache(): void {
-    cachedAudio = [];
-    cachedVideo = [];
-    listenerInstalled = false;
 }

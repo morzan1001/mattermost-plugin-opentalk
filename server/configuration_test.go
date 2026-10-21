@@ -123,7 +123,7 @@ func TestPlugin_OnConfigurationChange(t *testing.T) {
 	oidcSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/.well-known/openid-configuration" {
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"issuer":                                oidcSrv.URL,
 				"authorization_endpoint":                oidcSrv.URL + "/auth",
 				"token_endpoint":                        oidcSrv.URL + "/token",
@@ -139,7 +139,7 @@ func TestPlugin_OnConfigurationChange(t *testing.T) {
 	t.Run("rejects invalid configuration", func(t *testing.T) {
 		api := &plugintest.API{}
 		api.On("LoadPluginConfiguration", mock.AnythingOfType("*main.Configuration")).
-			Return(func(dest interface{}) error {
+			Return(func(dest any) error {
 				cfg := dest.(*Configuration)
 				cfg.OpenTalkControllerURL = "" // invalid
 				return nil
@@ -155,7 +155,7 @@ func TestPlugin_OnConfigurationChange(t *testing.T) {
 	t.Run("stores valid configuration and initializes oidc client", func(t *testing.T) {
 		api := &plugintest.API{}
 		api.On("LoadPluginConfiguration", mock.AnythingOfType("*main.Configuration")).
-			Return(func(dest interface{}) error {
+			Return(func(dest any) error {
 				cfg := dest.(*Configuration)
 				cfg.OpenTalkControllerURL = "https://controller.example"
 				cfg.OpenTalkFrontendURL = "https://opentalk.example"

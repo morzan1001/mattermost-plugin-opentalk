@@ -8,7 +8,7 @@ class FakeWebSocket {
     public onclose?: (e: CloseEvent) => void;
     public onerror?: (e: Event) => void;
     public sent: string[] = [];
-    constructor(public url: string, _protocols?: string | string[]) {
+    constructor(public url: string) {
         FakeWebSocket.instances.push(this);
     }
     send(d: string) {
@@ -24,8 +24,8 @@ const mockFetch = jest.fn();
 
 beforeEach(() => {
     FakeWebSocket.instances = [];
-    (global as any).WebSocket = FakeWebSocket;
-    (global as any).fetch = mockFetch;
+    global.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    global.fetch = mockFetch;
     mockFetch.mockReset();
     window.localStorage.clear();
 });

@@ -9,6 +9,8 @@ jest.mock('livekit-client', () => ({
     createLocalVideoTrack: (...args: unknown[]) => mockCreateLocalVideoTrack(...args),
 }));
 
+import type {LocalAudioTrack, LocalVideoTrack, Room} from 'livekit-client';
+
 import {publishMic, unpublishMic, MicPermissionDeniedError, publishCam, unpublishCam, CamPermissionDeniedError} from './tracks';
 
 function makeFakeRoom() {
@@ -17,14 +19,14 @@ function makeFakeRoom() {
             publishTrack: mockPublishTrack,
             unpublishTrack: mockUnpublishTrack,
         },
-    } as any;
+    } as unknown as Room;
 }
 
 function makeFakeTrack() {
     return {
         stop: mockTrackStop,
         kind: 'audio',
-    } as any;
+    } as unknown as LocalAudioTrack;
 }
 
 beforeEach(() => {
@@ -121,7 +123,7 @@ describe('publishCam', () => {
 describe('unpublishCam', () => {
     it('unpublishes and stops the cam track', async () => {
         const room = makeFakeRoom();
-        const track = {stop: mockTrackStop, kind: 'video'} as any;
+        const track = {stop: mockTrackStop, kind: 'video'} as unknown as LocalVideoTrack;
         await unpublishCam(room, track);
         expect(mockUnpublishTrack).toHaveBeenCalledWith(track);
         expect(mockTrackStop).toHaveBeenCalled();

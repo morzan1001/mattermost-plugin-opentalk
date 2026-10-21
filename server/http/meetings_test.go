@@ -28,11 +28,11 @@ func stubOpenTalkServer(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == nethttp.MethodPost && r.URL.Path == "/v1/rooms":
-			w.Write([]byte(`{"id":"room-1","created_by":{"id":"u","email":"e","firstname":"f","lastname":"l","display_name":"alice"},"created_at":"2026-05-05T18:00:00Z","waiting_room":false}`))
+			_, _ = w.Write([]byte(`{"id":"room-1","created_by":{"id":"u","email":"e","firstname":"f","lastname":"l","display_name":"alice"},"created_at":"2026-05-05T18:00:00Z","waiting_room":false}`))
 		case r.Method == nethttp.MethodPost && strings.HasSuffix(r.URL.Path, "/invites"):
-			w.Write([]byte(`{"invite_code":"inv-1","room_id":"room-1","active":true,"created":"2026-05-05T18:00:00Z","updated":"2026-05-05T18:00:00Z"}`))
+			_, _ = w.Write([]byte(`{"invite_code":"inv-1","room_id":"room-1","active":true,"created":"2026-05-05T18:00:00Z","updated":"2026-05-05T18:00:00Z"}`))
 		case r.Method == nethttp.MethodPost && strings.HasSuffix(r.URL.Path, "/start"):
-			w.Write([]byte(`{"ticket":"room-1#xyz","resumption":"res-1"}`))
+			_, _ = w.Write([]byte(`{"ticket":"room-1#xyz","resumption":"res-1"}`))
 		default:
 			w.WriteHeader(nethttp.StatusNotFound)
 		}
@@ -153,7 +153,7 @@ func TestMeetingsJoin_HostUsesStartRoom(t *testing.T) {
 		if r.Method == nethttp.MethodPost && r.URL.Path == "/v1/rooms/room-1/start" {
 			receivedAuth = r.Header.Get("Authorization")
 			receivedPath = r.URL.Path
-			w.Write([]byte(`{"ticket":"room-1#abc","resumption":"res-1"}`))
+			_, _ = w.Write([]byte(`{"ticket":"room-1#abc","resumption":"res-1"}`))
 			return
 		}
 		w.WriteHeader(nethttp.StatusNotFound)
@@ -203,8 +203,8 @@ func TestMeetingsJoin_ConnectedNonHostUsesStartInvited(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == nethttp.MethodPost && r.URL.Path == "/v1/rooms/room-1/start_invited" {
 			receivedPath = r.URL.Path
-			json.NewDecoder(r.Body).Decode(&receivedBody)
-			w.Write([]byte(`{"ticket":"room-1#abc","resumption":"res-1"}`))
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&receivedBody))
+			_, _ = w.Write([]byte(`{"ticket":"room-1#abc","resumption":"res-1"}`))
 			return
 		}
 		w.WriteHeader(nethttp.StatusNotFound)
@@ -246,8 +246,8 @@ func TestMeetingsJoin_GuestPathUsesInvite(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == nethttp.MethodPost && r.URL.Path == "/v1/rooms/room-1/start_invited" {
 			receivedAuth = r.Header.Get("Authorization")
-			json.NewDecoder(r.Body).Decode(&receivedBody)
-			w.Write([]byte(`{"ticket":"room-1#guest","resumption":"res-g"}`))
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&receivedBody))
+			_, _ = w.Write([]byte(`{"ticket":"room-1#guest","resumption":"res-g"}`))
 			return
 		}
 	}))
@@ -641,7 +641,7 @@ func TestMeetingsJoin_ClearsOwnDismissal_PreventsFalseMissed(t *testing.T) {
 	otSrv := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == nethttp.MethodPost && strings.HasSuffix(r.URL.Path, "/start_invited") {
-			w.Write([]byte(`{"ticket":"room-1#t","resumption":"res-1"}`))
+			_, _ = w.Write([]byte(`{"ticket":"room-1#t","resumption":"res-1"}`))
 			return
 		}
 		w.WriteHeader(nethttp.StatusNotFound)

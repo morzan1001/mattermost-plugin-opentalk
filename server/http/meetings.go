@@ -133,7 +133,7 @@ func (h *Handlers) MeetingsCreate(w nethttp.ResponseWriter, r *nethttp.Request) 
 		LastHeartbeat: time.Now().UTC(),
 		EnableSIP:     h.Defaults.EnableSIP,
 	}
-	if err := h.Store.CreateActiveMeetingAtomic(h.EncryptionKey, am); err != nil {
+	if err = h.Store.CreateActiveMeetingAtomic(h.EncryptionKey, am); err != nil {
 		if errors.Is(err, store.ErrMeetingAlreadyActive) {
 			// Cross-node race: another caller created the meeting between our
 			// LoadActiveMeeting check and this write. Roll back the orphan room

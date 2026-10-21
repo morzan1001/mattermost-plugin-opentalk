@@ -10,7 +10,7 @@ import {JoinCancelledError} from './signaling/conference_room';
 import type {Participant} from './signaling/modules/core';
 import {clearOpenTalkStatus, setOpenTalkStatus} from './status';
 
-import {getOrCreateDeviceSecret, heartbeat} from '../client/rest';
+import {endMeeting, getOrCreateDeviceSecret, heartbeat} from '../client/rest';
 import {noticeSet} from '../store/slice_notice';
 import {
     participantAdded,
@@ -46,7 +46,7 @@ import {
     type TrackKind,
 } from '../store/slice_tracks';
 import {t} from '../util/i18n';
-import {PLUGIN_STATE_KEY} from '../util/selectors';
+import {PLUGIN_STATE_KEY, selectCamEnabled, selectChannelID, selectLocalParticipantId, selectMicEnabled, selectReconnectAttempt} from '../util/selectors';
 
 const ALLOWED_ROLES = new Set<string>(['moderator', 'user', 'guest']);
 
@@ -104,7 +104,7 @@ function stopHeartbeat(): void {
     }
 }
 
-// Root components don't have a Redux Provider; hold the store module-level.
+// The toggle, leave and end entry points take no store argument and dispatch through this one.
 let activeStore: AnyStore | null = null;
 
 async function tearDownActiveConference(): Promise<void> {
@@ -154,9 +154,8 @@ async function tearDownActiveConference(): Promise<void> {
 }
 
 function readLocalMediaState(store: AnyStore): LocalMediaState {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const session = store.getState()?.[PLUGIN_STATE_KEY]?.session ?? {};
-    return {mic: session.micEnabled === true, cam: session.camEnabled === true};
+    const state = store.getState();
+    return {mic: selectMicEnabled(state), cam: selectCamEnabled(state)};
 }
 
 function cancelPendingRejoin(): void {
@@ -234,7 +233,7 @@ export async function startConferenceConnection(
 ): Promise<void> {
     // A manual join supersedes an in-flight rejoin; its client must be torn
     // down first or the join below would silently no-op.
-    const rejoining = (store.getState()?.[PLUGIN_STATE_KEY]?.session?.reconnectAttempt ?? 0) > 0;
+    const rejoining = selectReconnectAttempt(store.getState()) > 0;
     cancelPendingRejoin();
     store.dispatch(setReconnectAttempt(0));
     if (rejoining && activeClient) {
@@ -336,8 +335,7 @@ async function establishConference(
     });
     client.on('role_updated', ({participantId, newRole}) => {
         store.dispatch(participantRoleChanged({id: participantId, role: newRole}));
-        const localId = store.getState()?.[PLUGIN_STATE_KEY]?.session?.localParticipantId;
-        if (participantId === localId) {
+        if (participantId === selectLocalParticipantId(store.getState())) {
             store.dispatch(setIsHost(newRole === 'moderator'));
         }
     });
@@ -567,6 +565,11 @@ function bringUpLiveKit(url: string, token: string, store: AnyStore, onMediaDrop
     });
 }
 
+// Between rejoin attempts the session slice is idle and has dropped the channel; the pending rejoin still holds it.
+export function activeConferenceChannelID(): string | undefined {
+    return pendingRejoin?.channelID ?? selectChannelID(activeStore?.getState());
+}
+
 export async function leaveActiveConference(): Promise<void> {
     cancelPendingRejoin();
     activeStore?.dispatch(setReconnectAttempt(0));
@@ -579,8 +582,7 @@ export async function endActiveMeeting(): Promise<void> {
         await leaveActiveConference();
         return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const channelID: string | undefined = store.getState()?.[PLUGIN_STATE_KEY]?.session?.channelID;
+    const channelID = selectChannelID(store.getState());
 
     // Kick everyone on the OpenTalk side first. Best-effort: never block teardown.
     activeClient?.sendDebrief();
@@ -590,18 +592,7 @@ export async function endActiveMeeting(): Promise<void> {
         return;
     }
     try {
-        const res = await fetch('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/end', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            credentials: 'include',
-            body: JSON.stringify({channel_id: channelID}),
-        });
-        if (!res.ok) {
-            throw new Error(`endMeeting failed: ${res.status}`);
-        }
+        await endMeeting(channelID);
     } catch (err) {
         // The server-side meeting stays "in progress" until the reaper; surface
         // it so the user knows the channel is still blocked for a restart.
@@ -819,7 +810,7 @@ export function muteAll(): void {
     if (!activeClient) {
         return;
     }
-    const selfId = activeStore?.getState()?.[PLUGIN_STATE_KEY]?.session?.localParticipantId;
+    const selfId = selectLocalParticipantId(activeStore?.getState());
     const others = activeClient.getParticipants().map((p) => p.id).filter((id) => id !== selfId);
     activeClient.forceMute(others);
 }

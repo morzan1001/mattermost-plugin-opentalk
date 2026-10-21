@@ -1,5 +1,7 @@
 import {useSelector} from 'react-redux';
 
+import {selectCurrentUserLocale} from './selectors';
+
 /**
  * A pair of translations for a single user-facing string.
  * Use as: t({de: '...', en: '...'}) — returns the matching variant
@@ -12,26 +14,19 @@ export interface Translatable {
 
 // Module-level locale cache, set once at plugin-init from the Redux store.
 // React components should prefer useT() so they re-render on locale changes.
-let _moduleLocale: 'de' | 'en' = 'en';
+let moduleLocale: 'de' | 'en' = 'en';
 
 export function setModuleLocale(locale: string | undefined): void {
-    _moduleLocale = isGermanLocale(locale) ? 'de' : 'en';
+    moduleLocale = isGermanLocale(locale) ? 'de' : 'en';
 }
 
 /** Imperative form — use only outside React renders. */
 export function t(m: Translatable): string {
-    return m[_moduleLocale];
+    return m[moduleLocale];
 }
 
 export function useT(): (m: Translatable) => string {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const locale = useSelector((s: any) => {
-        const id = s?.entities?.users?.currentUserId;
-        if (!id) {
-            return undefined;
-        }
-        return s?.entities?.users?.profiles?.[id]?.locale as string | undefined;
-    });
+    const locale = useSelector(selectCurrentUserLocale);
     const lang: 'de' | 'en' = isGermanLocale(locale) ? 'de' : 'en';
     return (m) => m[lang];
 }

@@ -1,6 +1,5 @@
 import {setRingtonePref} from './client/rest';
 import {OpenTalkSettingsSection} from './components/user_settings_section/component';
-import {initDeviceCache} from './conference/livekit/devices';
 import type {PluginRegistry} from './types/mattermost-webapp';
 import {t} from './util/i18n';
 
@@ -51,14 +50,7 @@ export function writeRingtone(enabled: boolean): void {
 }
 
 export function registerOpenTalkUserSettings(registry: PluginRegistry): void {
-    initDeviceCache();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const reg: any = registry;
-    if (typeof reg.registerUserSettings !== 'function') {
-        return;
-    }
-
-    reg.registerUserSettings({
+    registry.registerUserSettings({
         id: pluginID,
         uiName: 'OpenTalk',
         icon: 'icon-phone-outline',

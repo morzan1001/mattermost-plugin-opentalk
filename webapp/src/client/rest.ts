@@ -33,12 +33,26 @@ function pluginURL(path: string): string {
     return `/plugins/${pluginId}${path}`;
 }
 
+// Mirrors Client4: with strict CSRF enforcement Mattermost rejects cookie-authenticated writes lacking X-CSRF-Token.
+export function csrfHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {'X-Requested-With': 'XMLHttpRequest'};
+    const token = document.cookie.
+        split(';').
+        map((c) => c.trim()).
+        find((c) => c.startsWith('MMCSRF='))?.
+        slice('MMCSRF='.length);
+    if (token) {
+        headers['X-CSRF-Token'] = token;
+    }
+    return headers;
+}
+
 export async function createMeeting(channelID: string, deviceSecret: string): Promise<CreateMeetingResponse> {
     const r = await fetch(pluginURL('/api/v1/meetings'), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
+            ...csrfHeaders(),
         },
         credentials: 'include',
         body: JSON.stringify({channel_id: channelID, device_secret: deviceSecret}),
@@ -79,7 +93,7 @@ export async function joinMeeting(
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
+            ...csrfHeaders(),
         },
         credentials: 'include',
         body: JSON.stringify(body),
@@ -96,7 +110,7 @@ export async function heartbeat(channelID: string): Promise<void> {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
+            ...csrfHeaders(),
         },
         credentials: 'include',
         body: JSON.stringify({channel_id: channelID}),
@@ -109,12 +123,27 @@ export async function heartbeat(channelID: string): Promise<void> {
     }
 }
 
+export async function endMeeting(channelID: string): Promise<void> {
+    const r = await fetch(pluginURL('/api/v1/meetings/end'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...csrfHeaders(),
+        },
+        credentials: 'include',
+        body: JSON.stringify({channel_id: channelID}),
+    });
+    if (!r.ok) {
+        throw new Error(`endMeeting failed: ${r.status}`);
+    }
+}
+
 export async function dismissIncomingCall(channelID: string, roomID: string): Promise<void> {
     const r = await fetch(pluginURL('/api/v1/meetings/dismiss'), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
+            ...csrfHeaders(),
         },
         credentials: 'include',
         body: JSON.stringify({channel_id: channelID, room_id: roomID}),
@@ -129,7 +158,7 @@ export async function setRingtonePref(enabled: boolean): Promise<void> {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
+            ...csrfHeaders(),
         },
         credentials: 'include',
         body: JSON.stringify({enabled}),

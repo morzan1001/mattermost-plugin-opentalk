@@ -25,7 +25,7 @@ A Mattermost server plugin that deeply integrates the OpenTalk video-conferencin
 ## Build
 
 Prerequisites:
-- Go ≥ 1.26 (version pinned in `.go-version`; recommended: `goenv`)
+- Go ≥ 1.26.7 (version pinned in `.go-version`; recommended: `goenv`)
 - Node ≥ 24 (version pinned in `.nvmrc`; recommended: `nvm`)
 - GNU Make
 
@@ -33,7 +33,7 @@ Prerequisites:
 make dist
 ```
 
-This produces `dist/com.github.morzan1001.mattermost-plugin-opentalk-<version>.tar.gz`. Upload it in the Mattermost System Console under **Plugin Management → Upload Plugin**.
+This produces `dist/com.github.morzan1001.mattermost-plugin-opentalk-<version>.tar.gz`. Upload it in the Mattermost System Console under **Plugin Management → Upload Plugin**. The plugin requires Mattermost 12.0 or later.
 
 ## Keycloak setup
 

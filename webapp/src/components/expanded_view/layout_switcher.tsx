@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 
 import type {LayoutMode} from '../../hooks/use_layout_mode';
 import {useT} from '../../util/i18n';

@@ -1,5 +1,4 @@
 const exec = require('child_process').exec;
-
 const path = require('path');
 
 const PLUGIN_ID = require('../plugin.json').id;
@@ -55,23 +54,6 @@ const config = {
                 },
             },
             {
-                test: /\.(scss|css)$/,
-                use: [
-                    'style-loader',
-                    {
-                        loader: 'css-loader',
-                    },
-                    {
-                        loader: 'sass-loader',
-                        options: {
-                            sassOptions: {
-                                includePaths: ['node_modules/compass-mixins/lib', 'sass'],
-                            },
-                        },
-                    },
-                ],
-            },
-            {
                 test: /\.ogg$/,
                 type: 'asset/inline',
             },
@@ -80,6 +62,9 @@ const config = {
     externals: {
         react: 'React',
         'react-dom': 'ReactDOM',
+        'react-dom/client': 'ReactDOM',
+        'react/jsx-runtime': 'ReactJSXRuntime',
+        'react/jsx-dev-runtime': 'ReactJSXDevRuntime',
         redux: 'Redux',
         'react-redux': 'ReactRedux',
         'prop-types': 'PropTypes',
@@ -92,7 +77,7 @@ const config = {
         publicPath: '/',
         filename: 'main.js',
     },
-    mode: (isDev) ? 'eval-source-map' : 'production',
+    mode: (isDev) ? 'development' : 'production',
     plugins,
 };
 

@@ -30,12 +30,12 @@ func (h *Handlers) Me(w nethttp.ResponseWriter, r *nethttp.Request) {
 
 	info, err := h.Store.LoadUserInfo(h.EncryptionKey, mmUserID)
 	resp := meResponse{Connected: false}
-	switch {
-	case err == nil:
+	switch err {
+	case nil:
 		resp.Connected = true
 		resp.Email = info.OpenTalkEmail
 		resp.Sub = info.OpenTalkSub
-	case err == store.ErrNotFound:
+	case store.ErrNotFound:
 		// stay disconnected
 	default:
 		h.internalError(w, "Me: LoadUserInfo", err, nethttp.StatusInternalServerError, "lookup failed")

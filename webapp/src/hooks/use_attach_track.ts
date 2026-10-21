@@ -27,7 +27,7 @@ export function useAttachTrack<E extends HTMLMediaElement>(
         return () => {
             try {
                 track.detach(el);
-            } catch (e) {
+            } catch {
                 /* track might already be detached */
             }
         };

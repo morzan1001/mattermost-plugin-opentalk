@@ -1,4 +1,3 @@
-// eslint-disable-next-line import/order
 import {createStore} from 'redux';
 
 // ── shared registry for mock instances ───────────────────────────────────
@@ -20,7 +19,6 @@ jest.mock('./controller.test.helpers', () => {
 
 // ── mock: ./client ────────────────────────────────────────────────────────
 jest.mock('./client', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const helpers = require('./controller.test.helpers');
 
     // Minimal EventEmitter built entirely inside the factory.
@@ -73,7 +71,6 @@ jest.mock('./client', () => {
 
 // ── mock: ./livekit/room ──────────────────────────────────────────────────
 jest.mock('./livekit/room', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const helpers = require('./controller.test.helpers');
 
     class MockLiveKitRoom {
@@ -124,8 +121,10 @@ jest.mock('./livekit/room', () => {
 
 // ── other mocks ───────────────────────────────────────────────────────────
 jest.mock('../client/rest', () => ({
+    ...jest.requireActual('../client/rest'),
     getOrCreateDeviceSecret: jest.fn().mockReturnValue('device-secret-xyz'),
     heartbeat: jest.fn().mockResolvedValue(undefined),
+    endMeeting: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('./livekit/desktop_capturer', () => ({
@@ -153,6 +152,7 @@ jest.mock('./livekit/track_registry', () => ({
 
 // ── module under test ─────────────────────────────────────────────────────
 import {
+    activeConferenceChannelID,
     setActiveStore,
     startConferenceConnection,
     leaveActiveConference,
@@ -171,16 +171,17 @@ import {
     resetHand,
     grantScreenShare,
     revokeScreenShare,
-    _reset, // eslint-disable-line no-underscore-dangle
+    _reset,
 } from './controller';
 import {isElectron, getDesktopSources, captureDesktopStream} from './livekit/desktop_capturer';
 import {pickScreenSource} from './livekit/screen_picker';
 import * as trackRegistryMock from './livekit/track_registry';
 import {JoinCancelledError} from './signaling/conference_room';
 
+import {endMeeting} from '../client/rest';
 import {sessionReducer, setCamEnabled} from '../store/slice_session';
+import {selectSession} from '../util/selectors';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const helpers = require('./controller.test.helpers');
 
 // ── convenience accessors ─────────────────────────────────────────────────
@@ -252,7 +253,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-    _reset(); // eslint-disable-line no-underscore-dangle
+    _reset();
     helpers.reg.client = null;
     helpers.reg.lk = null;
     helpers.reg.livekitConnectError = null;
@@ -471,7 +472,6 @@ describe('"error" client event', () => {
         const store = makeTestStore();
         let rejectConnect!: (e: Error) => void;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => new Promise((_resolve, reject) => {
             rejectConnect = reject;
         });
@@ -530,7 +530,6 @@ describe('classified drop notices', () => {
     it('defers a close during the join to the connect rejection path', async () => {
         let rejectConnect!: (e: Error) => void;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => new Promise((_resolve, reject) => {
             rejectConnect = reject;
         });
@@ -611,7 +610,6 @@ describe('auto rejoin', () => {
         await connectActive();
         let failures = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             return Promise.reject(new Error('server down'));
@@ -639,7 +637,6 @@ describe('auto rejoin', () => {
         await connectActive();
         let failures = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             return Promise.reject(new Error('server down'));
@@ -666,7 +663,6 @@ describe('auto rejoin', () => {
         await connectActive();
         let failures = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             return Promise.reject(new Error('server down'));
@@ -694,7 +690,6 @@ describe('auto rejoin', () => {
         await connectActive();
         let failures = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             return Promise.reject(new Error('server down'));
@@ -763,7 +758,6 @@ describe('auto rejoin', () => {
         const droppedLk = lkRoom();
         let joins = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             joins += 1;
             return Promise.resolve();
@@ -783,7 +777,6 @@ describe('auto rejoin', () => {
         let failures = 0;
         const attemptSink: {reject?: (err: Error) => void} = {};
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             if (failures === 1) {
@@ -816,7 +809,6 @@ describe('auto rejoin', () => {
         dispatched = [];
         let failures = 0;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             return Promise.reject(new Error('server down'));
@@ -846,7 +838,6 @@ describe('auto rejoin', () => {
         let failures = 0;
         const attemptSink: {reject?: (err: Error) => void} = {};
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             if (failures === 1) {
@@ -889,7 +880,6 @@ describe('auto rejoin', () => {
         let failures = 0;
         const attemptSink: {reject?: (err: Error) => void} = {};
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         helpers.reg.clientConnectFactory = (): Promise<void> => {
             failures += 1;
             if (failures === 1) {
@@ -909,7 +899,7 @@ describe('auto rejoin', () => {
         expect(failures).toBe(2);
 
         // The user joins another meeting while attempt 2 is still connecting.
-        helpers.reg.clientConnectFactory = (): Promise<void> => Promise.resolve(); // eslint-disable-line @typescript-eslint/no-explicit-any
+        helpers.reg.clientConnectFactory = (): Promise<void> => Promise.resolve();
         startConferenceConnection('room-2', 'ch-2', 'Bob', store);
         await flush();
 
@@ -1088,6 +1078,54 @@ describe('stale session events after teardown', () => {
     });
 });
 
+describe('activeConferenceChannelID', () => {
+    const flush = async () => {
+        for (let i = 0; i < 5; i++) {
+            // eslint-disable-next-line no-await-in-loop
+            await Promise.resolve();
+        }
+    };
+
+    async function connectActive() {
+        const store = makeTestStoreWithSession({});
+        startConferenceConnection('room-1', 'ch-1', 'Alice', store);
+        await Promise.resolve();
+        c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: false});
+        await Promise.resolve();
+        return store;
+    }
+
+    it('reports the channel of the connected conference', async () => {
+        await connectActive();
+
+        expect(activeConferenceChannelID()).toBe('ch-1');
+    });
+
+    it('keeps reporting the channel while a rejoin waits for its next attempt', async () => {
+        const store = await connectActive();
+        helpers.reg.clientConnectFactory = (): Promise<void> => Promise.reject(new Error('server down'));
+
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+
+        const session = selectSession(store.getState());
+        expect(session).toMatchObject({status: 'idle', reconnectAttempt: 1});
+        expect(session.channelID).toBeUndefined();
+        expect(activeConferenceChannelID()).toBe('ch-1');
+    });
+
+    it('reports no channel once the conference is left', async () => {
+        await connectActive();
+        helpers.reg.clientConnectFactory = (): Promise<void> => Promise.reject(new Error('server down'));
+        c().trigger('closed', {code: 1006, recoverable: true});
+        await flush();
+
+        await leaveActiveConference();
+
+        expect(activeConferenceChannelID()).toBeUndefined();
+    });
+});
+
 describe('"participant_joined" / "participant_left" client events', () => {
     it('dispatches participantsChanged + participantAdded on participant_joined', async () => {
         const store = makeTestStore();
@@ -1139,22 +1177,20 @@ describe('leaveActiveConference', () => {
 });
 
 describe('endActiveMeeting', () => {
-    it('calls leaveActiveConference then POSTs /api/v1/meetings/end', async () => {
+    it('leaves, then ends the meeting of the session channel', async () => {
         const store = makeTestStore('ch-end');
         setActiveStore(store);
 
         startConferenceConnection('room-1', 'ch-end', 'Alice', store);
         await Promise.resolve();
         c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: false});
+        const clientRef = c();
 
-        mockFetch.mockResolvedValue({ok: true});
         await endActiveMeeting();
 
-        const endCall = mockFetch.mock.calls.find(
-            ([url]: [string]) => String(url).includes('/api/v1/meetings/end'),
-        );
-        expect(endCall).toBeDefined();
-        expect(endCall![1].method).toBe('POST');
+        expect(endMeeting).toHaveBeenCalledTimes(1);
+        expect(endMeeting).toHaveBeenCalledWith('ch-end');
+        expect(clientRef.leave.mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(endMeeting).mock.invocationCallOrder[0]);
     });
 
     it('surfaces a notice and still leaves when the end REST call fails', async () => {
@@ -1166,7 +1202,7 @@ describe('endActiveMeeting', () => {
         c().trigger('connected', {participants: [{id: 'self', displayName: 'Alice'}], isHost: true});
 
         const clientRef = c();
-        mockFetch.mockResolvedValue({ok: false, status: 403, json: async () => ({})});
+        jest.mocked(endMeeting).mockRejectedValueOnce(new Error('endMeeting failed: 403'));
         dispatched = [];
 
         await endActiveMeeting();

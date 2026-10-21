@@ -8,10 +8,10 @@ import {setModuleLocale, t, useT} from './i18n';
 // Helper to build a minimal Redux store with a given locale for the current user.
 function makeStoreWithLocale(locale: string | undefined) {
     const profiles: Record<string, {locale?: string}> = {};
-    if (locale !== undefined) {
-        profiles.u1 = {locale};
-    } else {
+    if (locale === undefined) {
         profiles.u1 = {};
+    } else {
+        profiles.u1 = {locale};
     }
     return createStore(() => ({
         entities: {
@@ -24,7 +24,6 @@ function makeStoreWithLocale(locale: string | undefined) {
 }
 
 function wrapper(store: ReturnType<typeof makeStoreWithLocale>) {
-    // eslint-disable-next-line react/display-name
     return ({children}: {children: React.ReactNode}) =>
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         React.createElement(Provider, {store} as any, children);

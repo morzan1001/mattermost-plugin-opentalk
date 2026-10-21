@@ -9,7 +9,7 @@ class FakeWebSocket {
     public onclose?: (e: CloseEvent) => void;
     public onerror?: (e: Event) => void;
     public sent: string[] = [];
-    constructor(public url: string, _protocols?: string | string[]) {
+    constructor(public url: string) {
         FakeWebSocket.instances.push(this);
     }
     send(d: string) {
@@ -23,7 +23,7 @@ class FakeWebSocket {
 
 beforeEach(() => {
     FakeWebSocket.instances = [];
-    (global as any).WebSocket = FakeWebSocket;
+    global.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
 });
 
 function emitRaw(ws: FakeWebSocket, raw: object) {

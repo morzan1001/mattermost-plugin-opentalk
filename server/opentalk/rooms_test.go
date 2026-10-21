@@ -13,14 +13,14 @@ import (
 func TestCreateRoom_PostsAndParses(t *testing.T) {
 	var receivedBody CreateRoomRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
-		require.Equal(t, "/v1/rooms", r.URL.Path)
-		require.Equal(t, "Bearer access-jwt", r.Header.Get("Authorization"))
-		json.NewDecoder(r.Body).Decode(&receivedBody)
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/v1/rooms", r.URL.Path)
+		assert.Equal(t, "Bearer access-jwt", r.Header.Get("Authorization"))
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&receivedBody))
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
             "id": "ab123",
             "created_by": {
                 "id": "u1",
@@ -47,7 +47,7 @@ func TestCreateRoom_PostsAndParses(t *testing.T) {
 func TestCreateRoom_PropagatesAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error":"unauthorized"}`))
+		_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
 	}))
 	defer server.Close()
 
@@ -61,10 +61,10 @@ func TestCreateRoom_PropagatesAPIError(t *testing.T) {
 
 func TestStartRoom_RegisteredUser(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/rooms/room-1/start", r.URL.Path)
-		require.Equal(t, "Bearer tok", r.Header.Get("Authorization"))
+		assert.Equal(t, "/v1/rooms/room-1/start", r.URL.Path)
+		assert.Equal(t, "Bearer tok", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"ticket":"room-1#abc123","resumption":"res-456"}`))
+		_, _ = w.Write([]byte(`{"ticket":"room-1#abc123","resumption":"res-456"}`))
 	}))
 	defer server.Close()
 
@@ -81,10 +81,10 @@ func TestStartRoom_RegisteredUser(t *testing.T) {
 func TestStartInvited_GuestSendsNoAuth(t *testing.T) {
 	var receivedAuth string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/v1/rooms/room-1/start_invited", r.URL.Path)
+		assert.Equal(t, "/v1/rooms/room-1/start_invited", r.URL.Path)
 		receivedAuth = r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"ticket":"room-1#guest","resumption":"res-guest"}`))
+		_, _ = w.Write([]byte(`{"ticket":"room-1#guest","resumption":"res-guest"}`))
 	}))
 	defer server.Close()
 

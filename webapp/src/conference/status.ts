@@ -1,3 +1,4 @@
+import {csrfHeaders} from '../client/rest';
 import {t} from '../util/i18n';
 
 const PRIOR_STATUS_KEY = 'opentalk:prior-status:v1';
@@ -53,6 +54,9 @@ const OPENTALK_STATUS_EMOJI = 'phone';
 // overwrite a clear that ran while its GET was in flight (status stuck 4h).
 let statusEpoch = 0;
 
+// Teardown also follows failed joins and retries; a clear without our own set would wipe the user's status.
+let statusSet = false;
+
 async function setOpenTalkStatusAsync(epoch: number): Promise<void> {
     const prior = await fetchCurrentStatus();
     if (epoch !== statusEpoch) {
@@ -69,7 +73,7 @@ async function setOpenTalkStatusAsync(epoch: number): Promise<void> {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
+            ...csrfHeaders(),
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -83,17 +87,22 @@ async function setOpenTalkStatusAsync(epoch: number): Promise<void> {
 
 export function setOpenTalkStatus(): void {
     const epoch = ++statusEpoch;
+    statusSet = true;
     setOpenTalkStatusAsync(epoch).catch(() => { /* swallow */ });
 }
 
 export function clearOpenTalkStatus(): void {
+    if (!statusSet) {
+        return;
+    }
+    statusSet = false;
     statusEpoch++;
     const prior = readPriorStatus();
     writePriorStatus(null);
     if (!prior || !prior.emoji) {
         fetch('/api/v4/users/me/status/custom', {
             method: 'DELETE',
-            headers: {'X-Requested-With': 'XMLHttpRequest'},
+            headers: csrfHeaders(),
             credentials: 'include',
         }).catch(() => { /* swallow */ });
         return;
@@ -102,7 +111,7 @@ export function clearOpenTalkStatus(): void {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
+            ...csrfHeaders(),
         },
         credentials: 'include',
         body: JSON.stringify(prior),

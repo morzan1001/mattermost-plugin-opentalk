@@ -68,7 +68,7 @@ func (c *Client) doRequest(method, path, token string, body, out any) error {
 	if err != nil {
 		return fmt.Errorf("opentalk request %s %s: %w", method, url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

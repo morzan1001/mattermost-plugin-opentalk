@@ -9,8 +9,8 @@ class FakeWebSocket {
     public onerror?: (e: Event) => void;
     public sent: string[] = [];
     public protocols: string[];
-    constructor(public url: string, protocols?: string | string[]) {
-        this.protocols = Array.isArray(protocols) ? protocols : (protocols ? [protocols] : []);
+    constructor(public url: string, protocols: string | string[] = []) {
+        this.protocols = typeof protocols === 'string' ? [protocols] : protocols;
         FakeWebSocket.instances.push(this);
     }
     send(d: string) {
@@ -24,7 +24,7 @@ class FakeWebSocket {
 
 beforeEach(() => {
     FakeWebSocket.instances = [];
-    (global as any).WebSocket = FakeWebSocket;
+    global.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
 });
 
 describe('SignalingSocket', () => {

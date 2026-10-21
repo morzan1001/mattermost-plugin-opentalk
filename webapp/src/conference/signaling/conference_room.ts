@@ -189,14 +189,14 @@ export class ConferenceRoom {
 
                     // OpenTalk's joinSuccess lists only the OTHER participants;
                     // our own user info is at the top-level (id, display_name, role).
-                    const self = this.normalizeParticipant({
+                    const local = this.normalizeParticipant({
                         id: payload.id,
                         display_name: payload.displayName ?? payload.display_name,
                         role: payload.role,
                     });
-                    const list = [self, ...others];
+                    const list = [local, ...others];
                     this.participants = list;
-                    this.localId = self.id;
+                    this.localId = local.id;
                     this.state = 'connected';
 
                     // Normalize livekit bootstrap if present in joinSuccess.
@@ -350,7 +350,6 @@ export class ConferenceRoom {
                 // Only fatal before the join completes -- a moderation/control
                 // error mid-call (e.g. a rejected kick) must not tear down a
                 // live session.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const failIfConnecting = (msg: string) => {
                     if (this.state !== 'connected') {
                         this.emit('error', new Error(msg));

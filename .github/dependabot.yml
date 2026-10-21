@@ -21,8 +21,13 @@ updates:
       # Pinned via Mattermost; update on Mattermost-server bumps only.
       - dependency-name: react
       - dependency-name: react-dom
+      - dependency-name: "@types/react"
+      - dependency-name: "@types/react-dom"
       - dependency-name: redux
       - dependency-name: react-redux
+      # v4+ requires ESLint 9; @mattermost/eslint-plugin 1.x only ships eslintrc configs.
+      - dependency-name: "@stylistic/eslint-plugin"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /

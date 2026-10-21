@@ -1,42 +1,45 @@
+import type {Action, Store} from 'redux';
+
+import type {GlobalState} from '@mattermost/types/store';
+
 import {startMeetingAction} from './action';
 
 const mockFetch = jest.fn();
 const mockOpen = jest.fn();
 
 beforeEach(() => {
-    (global as any).fetch = mockFetch;
-    (global as any).open = mockOpen;
+    global.fetch = mockFetch;
+    global.open = mockOpen;
     mockFetch.mockReset();
     mockOpen.mockReset();
-
-    const store: Record<string, any> = {};
-    (global as any).localStorage = {
-        getItem: (k: string) => store[k] ?? null,
-        setItem: (k: string, v: string) => {
-            store[k] = v;
-        },
-    };
-    (global as any).crypto = {
-        getRandomValues: (arr: Uint8Array) => {
-            for (let i = 0; i < arr.length; i++) {
-                arr[i] = i;
-            }
-            return arr;
-        },
-    };
+    window.localStorage.clear();
 });
 
 function makeStore(connected: boolean) {
-    return {
+    const store = {
         getState: () => ({
             'plugins-com.github.morzan1001.mattermost-plugin-opentalk': {oauth: {connected}},
         }),
         dispatch: jest.fn(),
         subscribe: jest.fn(),
-    } as any;
+    };
+    return store as typeof store & Store<GlobalState, Action>;
 }
 
 describe('startMeetingAction', () => {
+    it('asks for a channel and skips fetch when the App Bar calls it without one', async () => {
+        const store = makeStore(true);
+        const action = startMeetingAction(store);
+        await action(undefined);
+        expect(mockFetch).not.toHaveBeenCalled();
+        expect(mockOpen).not.toHaveBeenCalled();
+        expect(store.dispatch).toHaveBeenCalledTimes(1);
+        expect(store.dispatch.mock.calls[0][0]).toEqual({
+            type: 'opentalk/notice/set',
+            payload: {kind: 'info', message: 'Open a channel first to start an OpenTalk meeting.'},
+        });
+    });
+
     it('opens the connect flow when not connected and skips fetch', async () => {
         const store = makeStore(false);
         const action = startMeetingAction(store);
@@ -74,7 +77,7 @@ describe('startMeetingAction', () => {
         const action = startMeetingAction(store);
         await action({id: 'ch-1'});
         const noticeCall = store.dispatch.mock.calls.find(
-            (c: any[]) => c[0]?.type === 'opentalk/notice/set',
+            (c) => c[0]?.type === 'opentalk/notice/set',
         );
         expect(noticeCall).toBeDefined();
         expect(noticeCall[0].payload.message).toContain('500');

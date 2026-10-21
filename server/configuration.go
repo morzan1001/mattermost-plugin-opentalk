@@ -85,7 +85,7 @@ func (p *Plugin) setConfigurationAndClient(configuration *Configuration, ot *ope
 }
 
 func (p *Plugin) OnConfigurationChange() error {
-	var configuration = new(Configuration)
+	configuration := new(Configuration)
 
 	if err := p.API.LoadPluginConfiguration(configuration); err != nil {
 		return fmt.Errorf("failed to load plugin configuration: %w", err)

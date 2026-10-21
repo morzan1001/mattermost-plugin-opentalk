@@ -1,9 +1,9 @@
-import {joinMeeting, setRingtonePref} from './rest';
+import {createMeeting, dismissIncomingCall, endMeeting, heartbeat, joinMeeting, setRingtonePref} from './rest';
 
 describe('joinMeeting', () => {
     const mockFetch = jest.fn();
     beforeEach(() => {
-        (global as any).fetch = mockFetch;
+        global.fetch = mockFetch;
         mockFetch.mockReset();
     });
 
@@ -68,8 +68,7 @@ describe('joinMeeting', () => {
 describe('setRingtonePref', () => {
     const mockFetch = jest.fn();
     beforeEach(() => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (global as any).fetch = mockFetch;
+        global.fetch = mockFetch;
         mockFetch.mockReset();
     });
 
@@ -91,5 +90,72 @@ describe('setRingtonePref', () => {
     it('throws on non-ok responses', async () => {
         mockFetch.mockResolvedValue({ok: false, status: 500, text: async () => 'save failed'});
         await expect(setRingtonePref(false)).rejects.toThrow(/500/);
+    });
+});
+
+describe('endMeeting', () => {
+    const mockFetch = jest.fn();
+    beforeEach(() => {
+        global.fetch = mockFetch;
+        mockFetch.mockReset();
+    });
+
+    it('POSTs the channel to /api/v1/meetings/end', async () => {
+        mockFetch.mockResolvedValue({ok: true});
+
+        await endMeeting('ch-1');
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const [url, init] = mockFetch.mock.calls[0];
+        expect(url).toBe('/plugins/com.github.morzan1001.mattermost-plugin-opentalk/api/v1/meetings/end');
+        expect(init.method).toBe('POST');
+        expect(init.credentials).toBe('include');
+        expect(init.headers['Content-Type']).toBe('application/json');
+        expect(JSON.parse(init.body)).toEqual({channel_id: 'ch-1'});
+    });
+
+    it('throws on non-ok responses', async () => {
+        mockFetch.mockResolvedValue({ok: false, status: 403});
+        await expect(endMeeting('ch-1')).rejects.toThrow('endMeeting failed: 403');
+    });
+});
+
+describe('state-changing requests', () => {
+    const mockFetch = jest.fn();
+    beforeEach(() => {
+        global.fetch = mockFetch;
+        mockFetch.mockReset();
+        mockFetch.mockResolvedValue({ok: true, status: 200, json: async () => ({})});
+    });
+
+    afterEach(() => {
+        document.cookie = 'MMUSERID=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        document.cookie = 'MMCSRF=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    });
+
+    it.each([
+        ['createMeeting', () => createMeeting('ch-1', 'dev')],
+        ['joinMeeting', () => joinMeeting('room-1', 'ch-1', 'dev')],
+        ['heartbeat', () => heartbeat('ch-1')],
+        ['dismissIncomingCall', () => dismissIncomingCall('ch-1', 'room-1')],
+        ['endMeeting', () => endMeeting('ch-1')],
+        ['setRingtonePref', () => setRingtonePref(true)],
+    ])('%s sends the MMCSRF cookie as X-CSRF-Token', async (_name, call) => {
+        document.cookie = 'MMUSERID=user-1';
+        document.cookie = 'MMCSRF=csrf-token';
+
+        await call();
+
+        const [, init] = mockFetch.mock.calls[0];
+        expect(init.headers['X-CSRF-Token']).toBe('csrf-token');
+        expect(init.headers['X-Requested-With']).toBe('XMLHttpRequest');
+    });
+
+    it('omits X-CSRF-Token without an MMCSRF cookie', async () => {
+        await heartbeat('ch-1');
+
+        const [, init] = mockFetch.mock.calls[0];
+        expect(init.headers).not.toHaveProperty('X-CSRF-Token');
+        expect(init.headers['X-Requested-With']).toBe('XMLHttpRequest');
     });
 });
