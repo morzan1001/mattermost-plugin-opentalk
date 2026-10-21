@@ -47,7 +47,7 @@
     "webpack-cli": "7.2.3"
   },
   "dependencies": {
-    "camelcase-keys": "10.0.2",
+    "camelcase-keys": "10.0.3",
     "core-js": "3.49.0",
     "livekit-client": "^2.22.3",
     "mitt": "^3.0.1",
