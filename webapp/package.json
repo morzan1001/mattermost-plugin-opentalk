@@ -48,7 +48,7 @@
   },
   "dependencies": {
     "camelcase-keys": "10.0.3",
-    "core-js": "3.49.0",
+    "core-js": "3.50.0",
     "livekit-client": "^2.22.3",
     "mitt": "^3.0.1",
     "react": "19.2.8",
